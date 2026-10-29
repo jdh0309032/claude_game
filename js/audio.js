@@ -97,6 +97,52 @@ export class Sound {
     this.tone(523, 0.4, { type: 'square', vol: 0.04 });
   }
 
+  // 스콜 빗소리: 루프 노이즈 (intensity 0~1)
+  rain(intensity) {
+    if (!this.ctx) return;
+    if (!this.rainNode && intensity > 0.01) {
+      const c = this.ctx;
+      const s = c.createBufferSource();
+      s.buffer = this.noiseBuf;
+      s.loop = true;
+      const hp = c.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 900;
+      const lp = c.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 6000;
+      const g = c.createGain();
+      g.gain.value = 0;
+      s.connect(hp).connect(lp).connect(g).connect(this.master);
+      s.start();
+      this.rainNode = { s, g };
+    }
+    if (this.rainNode) {
+      this.rainNode.g.gain.setTargetAtTime(intensity * 0.22, this.ctx.currentTime, 0.4);
+      if (intensity <= 0.01) {
+        const n = this.rainNode;
+        this.rainNode = null;
+        n.s.stop(this.ctx.currentTime + 1.5);
+      }
+    }
+  }
+  thunder() {
+    this.noise(2.2, { vol: 0.5, type: 'lowpass', freq: 400, to: 60, q: 0.5 });
+    this.noise(0.25, { vol: 0.3, type: 'lowpass', freq: 2000, to: 300 });
+  }
+  jump() {
+    this.tone(220, 0.45, { type: 'triangle', vol: 0.16, to: 880 });
+    this.noise(0.5, { vol: 0.3, freq: 600, to: 2500, q: 1 });
+  }
+  land() {
+    this.tone(140, 0.25, { type: 'sine', vol: 0.3, to: 50 });
+    this.noise(0.2, { vol: 0.35, type: 'lowpass', freq: 900, to: 150 });
+  }
+  splash() {
+    this.noise(0.45, { vol: 0.45, freq: 1800, to: 500, q: 0.7 });
+    this.noise(0.25, { vol: 0.25, type: 'highpass', freq: 3000, to: 6000, delay: 0.05 });
+  }
+
   engineStart() {
     if (!this.ctx || this.engine) return;
     const c = this.ctx;

@@ -1,6 +1,113 @@
 // 로우폴리 3D 모델(바이크, 자동차, 소품)과 캔버스 텍스처 생성
+// + 외부 .glb/.gltf 모델을 불러와 교체하는 ModelManager (없으면 절차적 모델로 fallback)
 import * as THREE from 'three';
-import { mergeGeometries } from '../vendor/BufferGeometryUtils.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MODEL_CONFIG } from './config.js';
+
+// ======================================================================
+// 외부 모델 관리자
+// ======================================================================
+const _box3 = new THREE.Box3();
+const _v3 = new THREE.Vector3();
+
+// 모델을 정면 -Z, 바닥 y=0, 중심 x/z=0 기준으로 정규화
+function normalizeModel(scene, cfg) {
+  const wrap = new THREE.Group();
+  wrap.add(scene);
+  if (cfg.rotateY) scene.rotation.y = cfg.rotateY;
+  scene.updateMatrixWorld(true);
+  _box3.setFromObject(scene);
+  if (cfg.fit && cfg.size) {
+    const axis = { length: 'z', height: 'y', width: 'x' }[cfg.fit] || 'z';
+    const cur = _box3.getSize(_v3)[axis];
+    if (cur > 0) scene.scale.multiplyScalar(cfg.size / cur);
+    scene.updateMatrixWorld(true);
+    _box3.setFromObject(scene);
+  }
+  const c = _box3.getCenter(_v3);
+  scene.position.x -= c.x;
+  scene.position.z -= c.z;
+  scene.position.y += -_box3.min.y + (cfg.offsetY || 0);
+  wrap.updateMatrixWorld(true);
+  return wrap;
+}
+
+export class ModelManager {
+  constructor(config = {}) {
+    this.config = { ...config };
+    this.models = new Map();
+    this.listeners = [];
+    this.loader = null;
+  }
+
+  // config 에 url 이 지정된 모든 모델을 비동기 로딩 (실패한 항목은 fallback 유지)
+  loadAll() {
+    const jobs = Object.entries(this.config)
+      .filter(([, cfg]) => cfg && (typeof cfg === 'string' || cfg.url))
+      .map(([key, cfg]) => this.load(key, cfg));
+    return Promise.all(jobs);
+  }
+
+  // 런타임에 모델 등록/교체: models.register('car.sedan', { url: '...', fit: 'length', size: 4.4 })
+  register(key, cfg) {
+    this.config[key] = cfg;
+    return this.load(key, cfg);
+  }
+
+  async load(key, cfg) {
+    if (typeof cfg === 'string') cfg = { url: cfg };
+    this.loader = this.loader || new GLTFLoader();
+    try {
+      const gltf = await this.loader.loadAsync(cfg.url);
+      this.models.set(key, normalizeModel(gltf.scene, cfg));
+      for (const fn of this.listeners) fn(key);
+      return true;
+    } catch (e) {
+      console.warn(`[ModelManager] '${key}' 로딩 실패 → 기본 로우폴리 모델 사용`, e);
+      return false;
+    }
+  }
+
+  has(key) { return this.models.has(key); }
+
+  // 씬에 배치할 복제본 (없으면 null → 호출측에서 절차적 모델 사용)
+  instantiate(key) {
+    const m = this.models.get(key);
+    return m ? m.clone(true) : null;
+  }
+
+  // 인스턴싱용: 모델의 모든 메시를 하나의 지오메트리(그룹별 재질)로 합침
+  instancedSource(key) {
+    const m = this.models.get(key);
+    if (!m) return null;
+    const geoms = [], mats = [];
+    m.traverse((o) => {
+      if (!o.isMesh) return;
+      let g = o.geometry.clone().applyMatrix4(o.matrixWorld);
+      if (g.index) g = g.toNonIndexed();
+      for (const name of Object.keys(g.attributes)) {
+        if (!['position', 'normal', 'uv'].includes(name)) g.deleteAttribute(name);
+      }
+      if (!g.attributes.normal) g.computeVertexNormals();
+      geoms.push(g);
+      mats.push(Array.isArray(o.material) ? o.material[0] : o.material);
+    });
+    if (!geoms.length) return null;
+    if (!geoms.every((g) => g.attributes.uv)) geoms.forEach((g) => g.deleteAttribute('uv'));
+    return { geometry: mergeGeometries(geoms, true), material: mats.length === 1 ? mats[0] : mats };
+  }
+
+  onLoad(fn) { this.listeners.push(fn); }
+}
+
+export const models = new ModelManager(MODEL_CONFIG);
+
+// 외부 모델이 있으면 감싸서 반환, 없으면 절차적 생성 함수 결과 반환
+export function modelOr(key, procedural) {
+  const ext = models.instantiate(key);
+  return ext || procedural();
+}
 
 // ---------- 공용 재질
 export const vcMat = new THREE.MeshLambertMaterial({ vertexColors: true });
@@ -59,6 +166,7 @@ export const CAR_DEFS = {
   suv:    { len: 4.8, w: 2.0, speed: [10, 16] },
   truck:  { len: 8.5, w: 2.4, speed: [8, 12] },
   bus:    { len: 11, w: 2.5, speed: [8, 11] },
+  ramp:   { len: 9.5, w: 2.4, speed: [7, 10] }, // 경사판 견인트럭 (뒤에서 올라타면 점프)
 };
 
 const GLASS = 0x1b2735;
@@ -80,7 +188,26 @@ function buildCar(type) {
   }
   let lightY, sirenR = null, sirenB = null;
 
-  if (type === 'truck') {
+  if (type === 'ramp') {
+    // 앞 캡 + 평판 적재함 + 후면 경사판 (뒤쪽 +Z 가 땅에 닿음)
+    body.push(box(W, 1.3, 2.3, 0, 1.25, -hl + 1.15));
+    body.push(box(W * 0.96, 0.9, 1.9, 0, 2.3, -hl + 1.25));
+    det.push(box(W * 0.9, 0.6, 0.05, 0, 2.35, -hl + 0.28, GLASS));
+    det.push(box(W, 0.3, L - 1.2, 0, 0.6, -0.6, 0x333333));
+    const bedLen = L - 2.6 - 2.6;
+    det.push(box(W, 0.15, bedLen, 0, 1.12, -hl + 2.4 + bedLen / 2, 0x8d939a));
+    det.push(box(0.1, 0.35, bedLen, -hw + 0.05, 1.3, -hl + 2.4 + bedLen / 2, 0xffc400));
+    det.push(box(0.1, 0.35, bedLen, hw - 0.05, 1.3, -hl + 2.4 + bedLen / 2, 0xffc400));
+    const rampLen = 2.9, ang = Math.atan2(1.15, 2.7);
+    const rz = hl - 1.35;
+    det.push(box(W * 0.86, 0.1, rampLen, 0, 0.6, rz, 0xffc400, ang));
+    for (let i = 0; i < 4; i++) {
+      const t = (i + 0.5) / 4 - 0.5;
+      det.push(box(W * 0.87, 0.11, 0.22, 0, 0.6 - Math.sin(ang) * t * rampLen + 0.01, rz + Math.cos(ang) * t * rampLen, 0x1a1a1a, ang));
+    }
+    det.push(box(1.2, 0.14, 0.3, 0, 2.82, -hl + 1.25, 0xff8800));
+    lightY = 0.95;
+  } else if (type === 'truck') {
     body.push(box(W, 1.3, 2.3, 0, 1.25, -hl + 1.15));
     body.push(box(W * 0.96, 0.9, 1.9, 0, 2.3, -hl + 1.25));
     det.push(box(W * 0.9, 0.6, 0.05, 0, 2.35, -hl + 0.28, GLASS));
@@ -137,6 +264,14 @@ const carCache = {};
 
 export function createCar(type) {
   const d = CAR_DEFS[type];
+  const ext = models.instantiate('car.' + type);
+  if (ext) {
+    // 외부 모델: 색상/깜빡이는 더미 재질로 받아서 무시
+    const group = new THREE.Group();
+    group.add(ext, shadow(d.w * 1.35, d.len * 1.15));
+    const dummyMat = () => new THREE.MeshLambertMaterial();
+    return { group, bodyMat: dummyMat(), blinkMatL: dummyMat(), blinkMatR: dummyMat(), sirenR: null, sirenB: null, type, len: d.len, w: d.w, active: false, external: true };
+  }
   const g = carCache[type] || (carCache[type] = buildCar(type));
   const group = new THREE.Group();
   const bodyMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
@@ -161,15 +296,60 @@ export function createCar(type) {
 }
 
 // ---------- 바이크 + 라이더
-export function createBike(color) {
+export const BOX_STYLES = {
+  basic:     { base: 0x00b14f, band: 0xffffff, lid: 0x00873c },
+  neon:      { base: 0x161a2e, band: 0x00f0ff, lid: 0xff2fd6, glow: true },
+  styrofoam: { base: 0xf4f4ee, band: 0x2f7fe0, lid: 0xe2e2da },
+  treasure:  { base: 0x7a4a22, band: 0xf5c518, lid: 0x5c3517, lock: true },
+};
+export const OUTFIT_STYLES = {
+  jacket:     { top: 0x00b14f, trim: 0xffffff, pants: 0x23272b },
+  raincoat:   { top: 0xffd21f, trim: 0xf2f2f2, pants: 0xffd21f, poncho: true },
+  raincoat_p: { top: 0xff6fae, trim: 0xffffff, pants: 0xff6fae, poncho: true },
+};
+export const HELMET_STYLES = {
+  basic:  { shell: 0x00b14f, visor: 0x0c0c0c },
+  full:   { shell: 0x15171a, visor: 0x3a6ea5, full: true },
+  retro:  { shell: 0xf3efe6, visor: 0x0c0c0c, stripe: 0xe63946 },
+  gold:   { shell: 0xe6b422, visor: 0x2a1f00, shine: true },
+};
+
+function deliveryBox(det, glow, style) {
+  const st = BOX_STYLES[style] || BOX_STYLES.basic;
+  det.push(box(0.34, 0.05, 0.4, 0, 1.03, 0.66, 0x333333));
+  det.push(box(0.56, 0.5, 0.5, 0, 1.31, 0.68, st.base));
+  (st.glow ? glow : det).push(box(0.575, 0.06, 0.515, 0, 1.4, 0.68, st.band));
+  (st.glow ? glow : det).push(box(0.585, 0.04, 0.525, 0, 1.57, 0.68, st.lid));
+  if (st.glow) {
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) glow.push(box(0.03, 0.5, 0.03, sx * 0.28, 1.31, 0.68 + sz * 0.25, st.band));
+  }
+  if (st.lock) {
+    det.push(box(0.12, 0.14, 0.04, 0, 1.42, 0.94, 0xf5c518));
+    for (const sx of [-1, 1]) det.push(box(0.04, 0.52, 0.52, sx * 0.2, 1.31, 0.68, 0xf5c518));
+  }
+  if (style === 'styrofoam') det.push(box(0.1, 0.51, 0.52, 0, 1.31, 0.68, 0x2f7fe0));
+}
+
+// opts: { box, outfit, helmet } — 차고에서 고른 커스텀 파츠
+export function createBike(color, opts = {}) {
   const root = new THREE.Group();
   const lean = new THREE.Group();
   root.add(lean);
+  const ext = models.instantiate('bike');
+  if (ext) {
+    // 외부 바이크 모델(라이더 포함)을 통째로 사용
+    lean.add(ext);
+    const flame = makeFlame();
+    lean.add(flame);
+    root.add(shadow(0.9, 2.2));
+    return { root, lean, bodyMat: new THREE.MeshLambertMaterial({ color }), flame };
+  }
   const bodyMat = new THREE.MeshLambertMaterial({ color });
-  const body = [], det = [], head = [], tail = [];
-  const JACKET = 0x00b14f;   // 라이더 재킷 (그랩 그린)
-  const PANTS = 0x23272b;
-  const BRAND = 0x00b14f;
+  const body = [], det = [], head = [], tail = [], glow = [];
+  const out = OUTFIT_STYLES[opts.outfit] || OUTFIT_STYLES.jacket;
+  const hel = HELMET_STYLES[opts.helmet] || HELMET_STYLES.basic;
+  const JACKET = out.top;
+  const PANTS = out.pants;
 
   for (const z of [-0.72, 0.7]) {
     const t = new THREE.TorusGeometry(0.3, 0.1, 8, 18);
@@ -195,24 +375,32 @@ export function createBike(color) {
   body.push(box(0.34, 0.22, 0.5, 0, 0.96, -0.06, null, 0.1));
   body.push(box(0.28, 0.16, 0.5, 0, 0.94, 0.52, null, -0.25));
 
-  // 라이더 (그린 재킷 + 그린 헬멧)
+  // 라이더 (의상 + 헬멧)
   det.push(box(0.38, 0.5, 0.26, 0, 1.3, 0.02, JACKET, -0.75));
-  det.push(box(0.39, 0.06, 0.27, 0, 1.2, 0.08, 0xffffff, -0.75));
+  det.push(box(0.39, 0.06, 0.27, 0, 1.2, 0.08, out.trim, -0.75));
+  if (out.poncho) {
+    // 우비: 어깨에서 퍼지는 판초 + 후드
+    const pon = new THREE.CylinderGeometry(0.2, 0.36, 0.62, 8, 1, true);
+    pon.rotateX(-0.75);
+    pon.translate(0, 1.27, 0.05);
+    det.push(paint(pon, JACKET));
+  }
   const helmet = new THREE.SphereGeometry(0.18, 12, 10);
   helmet.translate(0, 1.58, -0.2);
-  det.push(paint(helmet, BRAND));
-  det.push(box(0.22, 0.08, 0.06, 0, 1.58, -0.37, 0x0c0c0c));
+  det.push(paint(helmet, hel.shell));
+  if (hel.full) det.push(box(0.26, 0.12, 0.1, 0, 1.52, -0.36, hel.shell));
+  det.push(box(0.22, hel.full ? 0.1 : 0.08, 0.06, 0, 1.58, -0.37, hel.visor));
+  if (hel.stripe) det.push(box(0.05, 0.05, 0.36, 0, 1.75, -0.2, hel.stripe));
+  if (hel.shine) glow.push(box(0.04, 0.04, 0.3, 0.09, 1.71, -0.2, 0xfff3b0));
   for (const s of [-1, 1]) {
     det.push(box(0.1, 0.1, 0.46, s * 0.21, 1.28, -0.3, JACKET, 0.35));
     det.push(box(0.13, 0.13, 0.46, s * 0.18, 1.02, 0.12, PANTS, 0.25));
     det.push(box(0.12, 0.42, 0.12, s * 0.21, 0.74, 0.3, PANTS, 0.3));
   }
 
-  // 배달 박스 (뒷좌석 랙 위)
-  det.push(box(0.34, 0.05, 0.4, 0, 1.03, 0.66, 0x333333));
-  det.push(box(0.56, 0.5, 0.5, 0, 1.31, 0.68, BRAND));
-  det.push(box(0.57, 0.07, 0.51, 0, 1.4, 0.68, 0xffffff));
-  det.push(box(0.58, 0.04, 0.52, 0, 1.57, 0.68, 0x00873c));
+  // 배달 박스 (뒷좌석 랙 위) — 외부 'box' 모델이 있으면 그것으로 교체
+  const extBox = models.instantiate('box');
+  if (!extBox) deliveryBox(det, glow, opts.box);
 
   head.push(box(0.18, 0.12, 0.05, 0, 0.92, -0.7));
   tail.push(box(0.16, 0.06, 0.04, 0, 1.0, 0.78));
@@ -223,7 +411,18 @@ export function createBike(color) {
     new THREE.Mesh(merge(head), headMat),
     new THREE.Mesh(merge(tail), tailMat),
   );
+  if (glow.length) lean.add(new THREE.Mesh(merge(glow), new THREE.MeshBasicMaterial({ vertexColors: true })));
+  if (extBox) {
+    extBox.position.set(0, 1.05, 0.68);
+    lean.add(extBox);
+  }
+  const flame = makeFlame();
+  lean.add(flame);
+  root.add(shadow(0.9, 2.2));
+  return { root, lean, bodyMat, flame };
+}
 
+function makeFlame() {
   const flameGeo = new THREE.ConeGeometry(0.11, 0.9, 8);
   flameGeo.rotateX(Math.PI / 2);
   flameGeo.translate(0, 0, 0.45);
@@ -232,10 +431,15 @@ export function createBike(color) {
   }));
   flame.position.set(0.2, 0.47, 0.85);
   flame.visible = false;
-  lean.add(flame);
+  return flame;
+}
 
-  root.add(shadow(0.9, 2.2));
-  return { root, lean, bodyMat, flame };
+// 멀티플레이 상대 고스트: 반투명 단색 라이더
+export function createGhost(color = 0x7ad7ff) {
+  const b = createBike(color, {});
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.38, depthWrite: false });
+  b.root.traverse((o) => { if (o.isMesh) o.material = mat; });
+  return b;
 }
 
 // ---------- 도로변 소품 (인스턴싱용 단일 지오메트리)
@@ -281,13 +485,173 @@ export function coinGeometry() {
 }
 
 export function createRails(len, zCenter) {
+  // 인도 경계석(연석) + 보도블록 띠
   const parts = [];
   for (const s of [-1, 1]) {
-    parts.push(box(0.12, 0.32, len, s * 8.6, 0.62, zCenter, 0xb9bec5));
-    parts.push(box(0.1, 0.06, len, s * 8.6, 0.45, zCenter, 0x8a9098));
+    parts.push(box(0.35, 0.22, len, s * 8.7, 0.11, zCenter, 0xd9d9d9));
+    parts.push(box(4.6, 0.12, len, s * 11.2, 0.06, zCenter, 0xa9a39a));
   }
   return new THREE.Mesh(merge(parts), vcMat);
 }
+
+// ---------- 인도네시아 도심 배경 (인스턴싱용)
+export function palmGeometry() {
+  const parts = [];
+  // 살짝 휘어진 줄기 (마디 6개)
+  let x = 0, y = 0;
+  for (let i = 0; i < 6; i++) {
+    const seg = new THREE.CylinderGeometry(0.15 - i * 0.01, 0.19 - i * 0.01, 1.05, 7);
+    const nx = x + 0.08 + i * 0.03;
+    seg.rotateZ(-Math.atan2(nx - x, 1));
+    seg.translate((x + nx) / 2, y + 0.5, 0);
+    parts.push(paint(seg, i % 2 ? 0x8b6b47 : 0x7a5c3c));
+    x = nx;
+    y += 1.0;
+  }
+  // 잎 9장: 아래로 처지는 납작한 박스
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2;
+    const leaf = new THREE.BoxGeometry(2.6, 0.05, 0.5);
+    leaf.translate(1.3, 0, 0);
+    leaf.rotateZ(-0.45 - (i % 3) * 0.12);
+    leaf.rotateY(a);
+    leaf.translate(x, y + 0.05, 0);
+    parts.push(paint(leaf, i % 2 ? 0x2f8f3a : 0x3fa14a));
+  }
+  for (let i = 0; i < 3; i++) {
+    const nut = new THREE.SphereGeometry(0.16, 6, 5);
+    nut.translate(x + Math.cos(i * 2.1) * 0.2, y - 0.2, Math.sin(i * 2.1) * 0.2);
+    parts.push(paint(nut, 0x5b4022));
+  }
+  return merge(parts);
+}
+
+// Ruko(상가주택): 정면이 +X 를 향함. 인스턴스 색으로 외벽 색 변화
+export function rukoGeometry() {
+  const W = 6, L = 10, H = 8.5; // x 깊이, z 폭, 높이
+  const p = [];
+  p.push(box(W, H, L, 0, H / 2, 0, 0xf4efe6));
+  const roof = new THREE.BoxGeometry(W + 0.6, 0.25, L + 0.4);
+  roof.rotateZ(0.22);
+  roof.translate(0, H + 0.55, 0);
+  p.push(paint(roof, 0xd07a4a));
+  for (let k = 0; k < 3; k++) {
+    const z = -L / 2 + L / 6 + (k * L) / 3;
+    // 1층 셔터 + 간판
+    p.push(box(0.1, 2.6, 2.7, W / 2 + 0.04, 1.3, z, 0x9aa2ab));
+    for (let r = 0; r < 3; r++) p.push(box(0.12, 0.05, 2.7, W / 2 + 0.06, 0.5 + r * 0.75, z, 0x7f8790));
+    p.push(box(0.2, 0.75, 3.0, W / 2 + 0.12, 3.15, z, [0xe63946, 0x2a9df4, 0xffc400][k]));
+    p.push(box(0.12, 0.3, 2.0, W / 2 + 0.24, 3.15, z, 0xffffff));
+    // 2층 창 + 발코니
+    p.push(box(0.08, 1.4, 1.1, W / 2 + 0.04, 5.2, z - 0.7, 0x2b3a4a));
+    p.push(box(0.08, 1.4, 1.1, W / 2 + 0.04, 5.2, z + 0.7, 0x2b3a4a));
+    p.push(box(0.7, 0.12, 3.0, W / 2 + 0.35, 4.2, z, 0xbfb6a8));
+    // 처마
+    const eave = new THREE.BoxGeometry(1.4, 0.08, 3.2);
+    eave.rotateZ(-0.25);
+    eave.translate(W / 2 + 0.65, 2.75, z);
+    p.push(paint(eave, 0x8a5a3c));
+  }
+  return merge(p);
+}
+
+// Warung(간이 식당/구멍가게): 정면 +X
+export function warungGeometry() {
+  const p = [];
+  p.push(box(2.6, 1.0, 3.2, 0, 0.5, 0, 0x9c6b3e));
+  p.push(box(2.7, 0.1, 3.3, 0, 1.05, 0, 0xd9c6a5));
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.push(box(0.1, 2.4, 0.1, sx * 1.25, 1.2, sz * 1.55, 0x5a4632));
+  const roof = new THREE.BoxGeometry(3.4, 0.08, 3.8);
+  roof.rotateZ(-0.18);
+  roof.translate(0.2, 2.5, 0);
+  p.push(paint(roof, 0x2a7fd4));
+  p.push(box(0.06, 0.55, 3.0, 1.32, 1.95, 0, 0xffc400));
+  // 진열 병/과자
+  for (let i = 0; i < 6; i++) p.push(box(0.18, 0.3, 0.18, 0.9, 1.25, -1.2 + i * 0.48, [0xe63946, 0x2ec27e, 0xff8800][i % 3]));
+  return merge(p);
+}
+
+// ---------- 갓길 장애물: 노점상(Kaki Lima 수레 + 파라솔) / 천막
+export const STALL_DEFS = {
+  cart: { hw: 0.55, hl: 0.9 },
+  tent: { hw: 0.75, hl: 1.2 },
+};
+
+export function createStall(kind) {
+  const ext = models.instantiate('obstacle.stall');
+  if (ext) return ext;
+  const p = [];
+  if (kind === 'cart') {
+    p.push(box(1.0, 0.75, 1.6, 0, 0.75, 0, 0x2a9df4));
+    p.push(box(1.02, 0.12, 1.62, 0, 1.18, 0, 0xffffff));
+    p.push(box(0.9, 0.5, 1.2, 0, 1.5, 0, 0xcfe8ff));
+    for (const sz of [-1, 1]) p.push(cylX(0.28, 0.08, 0.5, 0.28, sz * 0.5, 0x222222, 10));
+    p.push(box(0.06, 0.06, 0.8, 0, 0.9, 1.15, 0x444444));
+    const pole = new THREE.CylinderGeometry(0.03, 0.03, 1.4, 6);
+    pole.translate(0, 2.2, 0);
+    p.push(paint(pole, 0x666666));
+    const umb = new THREE.ConeGeometry(1.15, 0.5, 8, 1, true);
+    umb.translate(0, 2.95, 0);
+    p.push(paint(umb, 0xe63946));
+    const umb2 = new THREE.ConeGeometry(1.16, 0.5, 8, 1, true);
+    umb2.rotateY(Math.PI / 8);
+    umb2.translate(0, 2.94, 0);
+    p.push(paint(umb2, 0xf5f5f5));
+    p.push(box(0.95, 0.12, 0.05, 0, 1.0, -0.82, 0xffc400));
+  } else {
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.push(box(0.07, 2.2, 0.07, sx * 0.72, 1.1, sz * 1.15, 0x888888));
+    const roof = new THREE.BoxGeometry(1.7, 0.06, 2.6);
+    roof.rotateZ(0.12);
+    roof.translate(0, 2.25, 0);
+    p.push(paint(roof, 0xff8800));
+    p.push(box(1.72, 0.3, 0.04, 0, 2.0, -1.3, 0xffffff));
+    p.push(box(1.3, 0.75, 1.8, 0, 0.38, 0, 0x7a5c3c));
+    for (let i = 0; i < 4; i++) p.push(box(0.3, 0.25, 0.3, -0.3 + (i % 2) * 0.6, 0.88, -0.5 + (i >> 1) * 1.0, [0xffd21f, 0x2ec27e, 0xe63946, 0xff8800][i]));
+  }
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(merge(p), vcMat), shadow(kind === 'cart' ? 1.4 : 1.9, kind === 'cart' ? 2.0 : 2.8));
+  return g;
+}
+
+// ---------- 중앙선 공사 표지판 (바리케이드)
+export function signGeometry() {
+  const p = [];
+  for (const sx of [-1, 1]) {
+    p.push(box(0.08, 1.1, 0.08, sx * 0.55, 0.55, 0, 0x555555));
+    p.push(box(0.3, 0.06, 0.5, sx * 0.55, 0.03, 0, 0x333333));
+  }
+  for (let i = 0; i < 6; i++) p.push(box(0.2, 0.4, 0.06, -0.5 + i * 0.2, 0.85, 0, i % 2 ? 0xffffff : 0xff6a00));
+  p.push(box(0.5, 0.3, 0.06, 0, 1.25, 0, 0xffc400));
+  p.push(box(0.16, 0.16, 0.08, 0, 1.25, -0.01, 0x222222));
+  return merge(p);
+}
+
+// ---------- 도로 위 물웅덩이 (반투명 평면)
+export function createPuddleMaterial() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(64, 64, 10, 64, 64, 62);
+  g.addColorStop(0, 'rgba(160,190,220,0.95)');
+  g.addColorStop(0.7, 'rgba(120,150,185,0.8)');
+  g.addColorStop(1, 'rgba(120,150,185,0)');
+  x.fillStyle = g;
+  x.beginPath();
+  for (let i = 0; i <= 16; i++) {
+    const a = (i / 16) * Math.PI * 2, r = 46 + Math.sin(i * 2.7) * 12;
+    x.lineTo(64 + Math.cos(a) * r, 64 + Math.sin(a) * r);
+  }
+  x.fill();
+  x.strokeStyle = 'rgba(255,255,255,0.5)';
+  x.lineWidth = 2;
+  x.beginPath();
+  x.ellipse(52, 50, 18, 6, -0.4, 0, Math.PI * 2);
+  x.stroke();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, opacity: 0.85 });
+}
+export const puddleGeometry = () => new THREE.PlaneGeometry(2.6, 3.8).rotateX(-Math.PI / 2);
 
 // ---------- 파워업
 const POWER_STYLE = {
