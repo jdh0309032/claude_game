@@ -1,0 +1,10 @@
+{
+  "name": "모토 러시 - 3D 바이크 러너",
+  "short_name": "모토러시",
+  "start_url": ".",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0b1030",
+  "theme_color": "#0b1030",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
