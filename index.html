@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#0b1030">
+  <meta name="theme-color" content="#00b14f">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>모토 러시 - 3D 바이크 러너</title>
+  <title>그랩 라이더 - 3D 배달 러너</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Nunito:wght@800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   <script type="importmap">
     {
@@ -63,32 +63,39 @@
     <div id="toast"></div>
 
     <!-- 메인 메뉴 -->
-    <section id="menu" class="screen">
-      <div class="title">
-        <h1>MOTO<span>RUSH</span></h1>
-        <p>차들 사이를 비집고 끝까지 질주하라!</p>
-      </div>
-      <div class="menu-stats">
-        <div>🏆 최고점수 <b id="menuBest">0</b></div>
-        <div>🪙 <b id="menuCoins">0</b></div>
-      </div>
-      <button id="btnPlay" class="btn primary big">▶ 출발!</button>
-      <div class="menu-grid">
-        <button id="btnGarage" class="btn">🏍️ 차고</button>
-        <button id="btnRanking" class="btn">🏆 랭킹</button>
-        <button id="btnMissions" class="btn">🎯 미션</button>
-        <button id="btnSettings" class="btn">⚙️ 설정</button>
-      </div>
-      <div class="help" id="menuHelp">
-        <span class="kbd-only">⌨️ ←→ / A D 조향 · ↑ 가속 · ↓ 브레이크 · Space 니트로 · P 일시정지</span>
-        <span class="touch-only">👆 화면 왼쪽/오른쪽을 눌러 조향 · 하단 버튼으로 브레이크 / 니트로</span>
+    <section id="menu" class="screen app">
+      <header class="app-header">
+        <div class="app-top">
+          <span class="brand">Grab<b>Rider</b></span>
+          <span class="coin-pill">🪙 <b id="menuCoins">0</b></span>
+        </div>
+        <p class="greet">안녕하세요, <b id="menuName">라이더</b>님 👋</p>
+      </header>
+      <div class="app-sheet">
+        <div class="app-card hero">
+          <div class="hero-info">
+            <small>🏆 최고 기록</small>
+            <div id="menuBest" class="hero-score">0</div>
+          </div>
+          <button id="btnPlay" class="btn primary big">🛵 배달 시작</button>
+        </div>
+        <div class="service-grid">
+          <button id="btnGarage" class="svc"><i>🏍️</i><span>차고</span></button>
+          <button id="btnRanking" class="svc"><i>🏆</i><span>랭킹</span></button>
+          <button id="btnMissions" class="svc"><i>📦</i><span>미션</span></button>
+          <button id="btnSettings" class="svc"><i>⚙️</i><span>설정</span></button>
+        </div>
+        <div class="help" id="menuHelp">
+          <span class="kbd-only">⌨️ ←→ / A D 조향 · ↑ 가속 · ↓ 브레이크 · Space 니트로 · P 일시정지</span>
+          <span class="touch-only">👆 화면 왼쪽/오른쪽을 눌러 조향 · 하단 버튼으로 브레이크 / 니트로</span>
+        </div>
       </div>
     </section>
 
     <!-- 차고 -->
     <section id="garage" class="screen hidden">
       <div class="panel">
-        <div class="panel-head"><h2>🏍️ 차고</h2><div class="coin-pill">🪙 <span id="garageCoins">0</span></div></div>
+        <div class="panel-head"><h2>🏍️ 내 차고</h2><div class="coin-pill">🪙 <span id="garageCoins">0</span></div></div>
         <p class="muted">빠른 바이크일수록 거리 점수가 더 빨리 오릅니다.</p>
         <div id="bikeList"></div>
         <button class="btn back" data-back>← 돌아가기</button>
@@ -98,7 +105,7 @@
     <!-- 랭킹 -->
     <section id="ranking" class="screen hidden">
       <div class="panel">
-        <div class="panel-head"><h2>🏆 랭킹 TOP 10</h2></div>
+        <div class="panel-head"><h2>🏆 라이더 랭킹 TOP 10</h2></div>
         <div id="rankList"></div>
         <button class="btn back" data-back>← 돌아가기</button>
       </div>
@@ -107,7 +114,7 @@
     <!-- 미션 -->
     <section id="missions" class="screen hidden">
       <div class="panel">
-        <div class="panel-head"><h2>🎯 미션</h2></div>
+        <div class="panel-head"><h2>📦 배달 미션</h2></div>
         <p class="muted">한 판 안에 달성하면 즉시 코인 보상! 완료한 미션은 다음 판에 더 어려운 미션으로 교체됩니다.</p>
         <div id="missionList"></div>
         <button class="btn back" data-back>← 돌아가기</button>
@@ -149,7 +156,7 @@
     <!-- 게임 오버 -->
     <section id="gameover" class="screen hidden">
       <div class="panel center">
-        <h2 class="crash">CRASH!</h2>
+        <h2 class="crash">💥 사고 발생!</h2>
         <div id="goScore" class="final-score">0</div>
         <div id="goNew" class="new-record hidden">🎉 NEW RECORD!</div>
         <div id="goStats" class="go-stats"></div>
@@ -164,15 +171,13 @@
         <div id="rankDone" class="rank-entry hidden"></div>
         <button id="btnContinue" class="btn gold">🪙 <span id="contCost">150</span> 이어달리기</button>
         <div class="row">
-          <button id="btnRetry" class="btn primary">다시 하기</button>
+          <button id="btnRetry" class="btn primary">다시 배달하기</button>
           <button id="btnHome" class="btn">메뉴</button>
         </div>
       </div>
     </section>
 
-    <div id="loading" class="screen">
-      <div class="title"><h1>MOTO<span>RUSH</span></h1><p>로딩 중...</p></div>
-    </div>
+    <div id="loading" class="screen"><span class="brand big">Grab<b>Rider</b></span></div>
   </div>
 
   <script type="module" src="js/main.js"></script>

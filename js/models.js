@@ -167,7 +167,9 @@ export function createBike(color) {
   root.add(lean);
   const bodyMat = new THREE.MeshLambertMaterial({ color });
   const body = [], det = [], head = [], tail = [];
-  const SUIT = 0x1d1d26;
+  const JACKET = 0x00b14f;   // 라이더 재킷 (그랩 그린)
+  const PANTS = 0x23272b;
+  const BRAND = 0x00b14f;
 
   for (const z of [-0.72, 0.7]) {
     const t = new THREE.TorusGeometry(0.3, 0.1, 8, 18);
@@ -193,17 +195,24 @@ export function createBike(color) {
   body.push(box(0.34, 0.22, 0.5, 0, 0.96, -0.06, null, 0.1));
   body.push(box(0.28, 0.16, 0.5, 0, 0.94, 0.52, null, -0.25));
 
-  // 라이더
-  det.push(box(0.38, 0.5, 0.26, 0, 1.3, 0.02, SUIT, -0.75));
+  // 라이더 (그린 재킷 + 그린 헬멧)
+  det.push(box(0.38, 0.5, 0.26, 0, 1.3, 0.02, JACKET, -0.75));
+  det.push(box(0.39, 0.06, 0.27, 0, 1.2, 0.08, 0xffffff, -0.75));
   const helmet = new THREE.SphereGeometry(0.18, 12, 10);
   helmet.translate(0, 1.58, -0.2);
-  body.push(helmet);
+  det.push(paint(helmet, BRAND));
   det.push(box(0.22, 0.08, 0.06, 0, 1.58, -0.37, 0x0c0c0c));
   for (const s of [-1, 1]) {
-    det.push(box(0.1, 0.1, 0.46, s * 0.21, 1.28, -0.3, SUIT, 0.35));
-    det.push(box(0.13, 0.13, 0.46, s * 0.18, 1.02, 0.12, SUIT, 0.25));
-    det.push(box(0.12, 0.42, 0.12, s * 0.21, 0.74, 0.3, SUIT, 0.3));
+    det.push(box(0.1, 0.1, 0.46, s * 0.21, 1.28, -0.3, JACKET, 0.35));
+    det.push(box(0.13, 0.13, 0.46, s * 0.18, 1.02, 0.12, PANTS, 0.25));
+    det.push(box(0.12, 0.42, 0.12, s * 0.21, 0.74, 0.3, PANTS, 0.3));
   }
+
+  // 배달 박스 (뒷좌석 랙 위)
+  det.push(box(0.34, 0.05, 0.4, 0, 1.03, 0.66, 0x333333));
+  det.push(box(0.56, 0.5, 0.5, 0, 1.31, 0.68, BRAND));
+  det.push(box(0.57, 0.07, 0.51, 0, 1.4, 0.68, 0xffffff));
+  det.push(box(0.58, 0.04, 0.52, 0, 1.57, 0.68, 0x00873c));
 
   head.push(box(0.18, 0.12, 0.05, 0, 0.92, -0.7));
   tail.push(box(0.16, 0.06, 0.04, 0, 1.0, 0.78));

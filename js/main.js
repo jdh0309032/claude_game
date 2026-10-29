@@ -611,7 +611,12 @@ let camX = 0;
 function updateCamera(rdt) {
   const p = clamp((1.35 - camera.aspect) / 0.8, 0, 1); // 0 = 가로화면, 1 = 세로화면
   const camY = lerp(3.0, 5.4, p), camZ = lerp(6.2, 8.4, p);
-  const lookZ = lerp(-14, -24, p), lookY = lerp(1.2, 0.6, p);
+  let lookZ = lerp(-14, -24, p), lookY = lerp(1.2, 0.6, p);
+  if (G.state === 'menu') {
+    // 메뉴에서는 하단 시트에 가리지 않도록 라이더가 화면 가운데 오게
+    lookZ = lerp(-7, -6, p);
+    lookY = lerp(-1.6, -1.3, p);
+  }
   const sf = clamp((G.speed * 3.6 - 60) / 220, 0, 1);
   const fov = lerp(62, 72, p) + sf * 12 + (G.boostTime > 0 ? 8 : 0);
   if (Math.abs(camera.fov - fov) > 0.05) {
@@ -1180,6 +1185,7 @@ function goMenu() {
 }
 
 function refreshMenu() {
+  $('menuName').textContent = save.lastName || '라이더';
   $('menuBest').textContent = fmt(save.best);
   $('menuCoins').textContent = save.coins.toLocaleString();
 }

@@ -2,7 +2,7 @@
 const KEY = 'motorush.save.v1';
 
 export const BIKES = [
-  { id: 'rookie',  name: '루키 125',    price: 0,     maxKmh: 170, accel: 1.0,  handling: 1.0,  color: 0xe63946, desc: '입문용 경량 바이크' },
+  { id: 'rookie',  name: '루키 125',    price: 0,     maxKmh: 170, accel: 1.0,  handling: 1.0,  color: 0xf2f2f2, desc: '신입 라이더의 배달 스쿠터' },
   { id: 'street',  name: '스트리트 400', price: 600,   maxKmh: 200, accel: 1.1,  handling: 1.12, color: 0x2a9df4, desc: '균형 잡힌 도심형' },
   { id: 'racer',   name: '레이서 R6',    price: 2000,  maxKmh: 235, accel: 1.25, handling: 1.25, color: 0x2ec27e, desc: '날카로운 코너링' },
   { id: 'hyper',   name: '하이퍼 1000',  price: 5000,  maxKmh: 270, accel: 1.4,  handling: 1.38, color: 0xffb703, desc: '압도적인 최고속도' },
