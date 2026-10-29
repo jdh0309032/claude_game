@@ -1,0 +1,10 @@
+{
+  "name": "그랩 라이더 - 3D 배달 러너",
+  "short_name": "그랩라이더",
+  "start_url": ".",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#00b14f",
+  "theme_color": "#00b14f",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
