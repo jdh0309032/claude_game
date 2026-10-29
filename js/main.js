@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import * as M from './models.js';
 import { Sound } from './audio.js';
-import { net } from './net.js';
+import { net, describeError } from './net.js';
+import { icon, hydrateIcons } from './icons.js';
+import { ScreenRain } from './rainfx.js';
 import {
   save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, getBike, qualifies, addRanking, sortRanking,
   replaceDoneMissions, missionText, auth, leaderboard, getSession, ONLINE,
@@ -27,9 +29,10 @@ const SQUALL_TIME = 30;
 const GRAVITY = 16;
 const CAR_COLORS = [0xd62828, 0xf77f00, 0x2a9d8f, 0x264653, 0x8d99ae, 0xe9ecef, 0x1d3557, 0x6a4c93, 0x40916c, 0x151515, 0xbfc0c0, 0x7f5539, 0x3a86ff];
 const POWER_TYPES = ['shield', 'magnet', 'x2', 'slow'];
-const POWER_LABEL = { shield: '🛡️ 실드!', magnet: '🧲 자석!', x2: '✨ 점수 x2!', slow: '⏳ 슬로우모션!' };
+const POWER_LABEL = { shield: 'SHIELD', magnet: 'MAGNET', x2: 'x2 SCORE', slow: 'SLOW-MO' };
 
-// ---------- 시드 기반 월드 난수 (멀티플레이 시 두 기기의 도로/교통/날씨를 동일하게)
+// ---------- 시드 기반 월드 난수 (PRNG: mulberry32)
+// 멀티플레이 시 방장이 만든 시드로 두 기기의 도로/교통/날씨를 동일하게 생성.
 // 스폰 종류마다 별도 스트림을 써서 한쪽의 차이가 다른 스폰에 번지지 않게 함
 function mulberry32(a) {
   return () => {
@@ -46,10 +49,12 @@ function seedWorld(seed) {
 }
 const wr = (k) => W[k]();
 const wrand = (k, a, b) => a + W[k]() * (b - a);
-seedWorld((Math.random() * 2 ** 32) >>> 0);
+const newSeed = () => (Math.random() * 2 ** 32) >>> 0;
+seedWorld(newSeed());
 
 const sfx = new Sound();
 sfx.setEnabled(save.settings.sound);
+sfx.setMusic(save.settings.music);
 
 // ---------- 렌더러/씬
 const canvas = $('game');
@@ -76,6 +81,10 @@ function applyQuality() {
 }
 window.addEventListener('resize', resize);
 applyQuality();
+
+// 화면 빗물 오버레이 (설정에서 끌 수 있음)
+const screenRain = new ScreenRain($('rainFx'), canvas);
+screenRain.setEnabled(save.settings.wetFx);
 
 // ---------- 도로, 지면, 연석/보도
 const roadTex = M.makeRoadTexture(renderer.capabilities.getMaxAnisotropy());
@@ -217,7 +226,7 @@ scene.add(ghost.root);
 
 // ---------- 게임 상태
 const G = { state: 'loading' };
-const MP = { active: false, opp: null, oppName: '상대', oppDone: false, oppScore: 0, ready: false, oppReady: false, sendT: 0 };
+const MP = { active: false, opp: null, oppName: 'Rival', oppDone: false, oppScore: 0, ready: false, oppReady: false, roomSeed: null };
 
 // ---------- 차량(트래픽)
 const cars = [];
@@ -449,7 +458,8 @@ function makeInstanced(geo, mat, max) {
 
 const conePool = makeInstanced(M.coneGeometry(), M.vcMat, 48);
 const signPool = makeInstanced(M.signGeometry(), M.vcMat, 16);
-const puddlePool = makeInstanced(M.puddleGeometry(), M.createPuddleMaterial(), 18);
+const puddleMat = M.createPuddleMaterial();
+const puddlePool = makeInstanced(M.puddleGeometry(), puddleMat, 18);
 puddlePool.mesh.renderOrder = -1;
 
 function spawnInPool(pool, props) {
@@ -678,7 +688,7 @@ function applyPower(type) {
   popup(POWER_LABEL[type], 'power');
 }
 
-// ---------- 이펙트 (비, 스피드 라인)
+// ---------- 이펙트 (3D 빗줄기, 스피드 라인)
 function makeLines(n, color) {
   const pos = new Float32Array(n * 6);
   const geo = new THREE.BufferGeometry();
@@ -698,7 +708,6 @@ for (const d of streaks.drops) d.x = rand(-14, 14);
 function updateFx(rdt) {
   const cx = camera.position.x, cz = camera.position.z;
   const spd = G.speed;
-  // 비 (스콜일수록 굵고 많이)
   rain.lines.visible = G.rainAmt > 0.01;
   if (rain.lines.visible) {
     rain.lines.material.opacity = G.rainAmt * 0.6;
@@ -722,14 +731,16 @@ function updateFx(rdt) {
     });
     rain.lines.geometry.attributes.position.needsUpdate = true;
   }
-  // 스피드 라인
+  // 스피드 라인: 니트로 중엔 시안색 터보 라인
   const kmh = spd * 3.6;
-  const op = (G.state === 'playing' ? clamp((kmh - 150) / 120, 0, 0.45) : 0) + (G.boostTime > 0 ? 0.45 : 0);
+  const boosting = G.boostTime > 0 && G.state === 'playing';
+  const op = (G.state === 'playing' ? clamp((kmh - 150) / 120, 0, 0.45) : 0) + (boosting ? 0.55 : 0);
+  streaks.lines.material.color.setHex(boosting ? 0x00e5ff : 0xffffff);
   streaks.lines.visible = op > 0.01;
   if (streaks.lines.visible) {
     streaks.lines.material.opacity = op;
     const P = streaks.pos;
-    const len = spd * 0.08;
+    const len = spd * (boosting ? 0.14 : 0.08);
     streaks.drops.forEach((d, i) => {
       d.z += spd * 1.4 * rdt;
       if (d.z > cz + 2) {
@@ -759,6 +770,7 @@ const SKY_KEYS = [
 ];
 const CYCLE = 5000;
 const skyA = new THREE.Color(), skyB = new THREE.Color(), rainSky = new THREE.Color(0x4a525e);
+const WHITE = new THREE.Color(0xffffff);
 
 function updateEnvironment(rdt) {
   const t = ((G.distance + 400) % CYCLE) / CYCLE;
@@ -774,12 +786,16 @@ function updateEnvironment(rdt) {
   const ra = G.rainAmt;
   skyB.copy(rainSky).multiplyScalar(lerp(1, 0.3, night));
   skyA.lerp(skyB, ra * 0.8);
+  // 번개: 하늘·조명이 순간 밝아짐
+  G.lightning = Math.max(0, (G.lightning || 0) - rdt * 3);
+  const flash = G.lightning;
+  if (flash > 0) skyA.lerp(WHITE, flash * 0.6);
   scene.background.copy(skyA);
   scene.fog.color.copy(skyA);
   scene.fog.near = lerp(60, 22, ra);
   scene.fog.far = lerp(240, 130, ra);
-  hemi.intensity = lerp(a[2], b[2], f) * (1 - ra * 0.35);
-  sun.intensity = lerp(a[3], b[3], f) * (1 - ra * 0.65);
+  hemi.intensity = lerp(a[2], b[2], f) * (1 - ra * 0.4) + flash * 2.5;
+  sun.intensity = lerp(a[3], b[3], f) * (1 - ra * 0.7);
   M.lampHeadMat.emissiveIntensity = 0.1 + Math.max(night, ra * 0.6) * 2.2;
   buildingMat.emissiveIntensity = night * 1.1;
   M.tailMat.emissiveIntensity = 0.6 + Math.max(night, ra * 0.5) * 1.6;
@@ -787,7 +803,10 @@ function updateEnvironment(rdt) {
   M.coinMat.emissiveIntensity = 0.5 + night * 0.6;
   headlight.material.opacity = Math.max(night, ra * 0.5) * 0.55;
   headlight.visible = G.state !== 'crashing' && G.state !== 'over';
+  // 젖은 노면 + 하늘을 비추는 물웅덩이 반사
   roadMat.color.setScalar(1 - ra * 0.3);
+  puddleMat.color.copy(skyA).lerp(WHITE, 0.35 + flash * 0.5);
+  puddleMat.opacity = 0.7 + ra * 0.25;
   sfx.rain(G.state === 'playing' || G.state === 'crashing' ? ra : 0);
 }
 
@@ -943,8 +962,9 @@ function clearWorld() {
 }
 
 function resetRun(seed) {
-  seedWorld(seed ?? ((Math.random() * 2 ** 32) >>> 0));
+  seedWorld(seed ?? newSeed());
   clearWorld();
+  screenRain.reset();
   Object.assign(G, {
     speed: 21, x: 3.5, vx: 0, lean: 0, distance: 0, score: 0, mult: 1, time: 0,
     coinsRun: 0, nearMiss: 0, combo: 0, comboTimer: 0, maxCombo: 0, nitro: 0, boostTime: 0,
@@ -952,8 +972,8 @@ function resetRun(seed) {
     boostsUsed: 0, maxKmh: 0, smashed: 0, jumps: 0, continued: false, finalized: false, rankEntry: null,
     nextSpawn: 25, nextCoins: 60, nextPower: wrand('power', 450, 700), nextCones: wrand('cone', 350, 600),
     nextStall: wrand('stall', 300, 500), nextPuddle: wrand('puddle', 400, 700), nextSquall: wrand('weather', 1200, 2000),
-    squallT: 0, rain: false, rainAmt: 0, shake: 0, crashT: 0,
-    air: false, airY: 0, airVy: 0, slipT: 0, slipDir: 0,
+    squallT: 0, rain: false, rainAmt: 0, lightning: 0, boltT: 0, shake: 0, crashT: 0,
+    air: false, airY: 0, airVy: 0, slipT: 0, slipDir: 0, rpm: 0, braking: false,
     missionsDone: [], cd: 0, cdShown: 0, globalSubmitted: false,
   });
   for (let z = -60; z > SPAWN_Z; z -= wrand('car', 16, 26)) spawnCar(z);
@@ -990,8 +1010,8 @@ function startRun(opts = {}) {
   G.cdShown = 0;
   $('countdown').classList.remove('hidden');
   if (save.stats.runs === 0) {
-    toast(isTouchDevice ? '👆 왼손 ◀▶ 조향 · 오른손 THROTTLE/BRAKE' : '⌨️ ←→ 조향 · ↑ 가속 · ↓ 브레이크 · Space 니트로');
-    toast('💨 차 옆을 아슬아슬하게 스치면 니어미스 보너스!');
+    toast(isTouchDevice ? 'LEFT THUMB: STEER  ·  RIGHT THUMB: THROTTLE / BRAKE / NOS' : 'ARROWS STEER  ·  UP THROTTLE  ·  DOWN BRAKE  ·  SPACE NITRO');
+    toast('Brush past cars for NEAR MISS bonuses');
   }
 }
 
@@ -1062,15 +1082,21 @@ function runSpawners() {
   }
 }
 
-function startSquall() {
-  G.squallT = SQUALL_TIME;
-  G.rain = true;
-  toast('⛈️ 스콜 경보! 30초간 폭우 · 점수 x1.3');
+function lightningStrike() {
+  G.lightning = 1;
   sfx.thunder();
   const f = $('flash');
   f.classList.remove('go');
   void f.offsetWidth;
   f.classList.add('go');
+}
+
+function startSquall() {
+  G.squallT = SQUALL_TIME;
+  G.rain = true;
+  G.boltT = rand(4, 8);
+  toast('SQUALL WARNING  ·  30s HEAVY RAIN  ·  SCORE x1.3');
+  lightningStrike();
 }
 
 function updatePlaying(rdt) {
@@ -1085,9 +1111,14 @@ function updatePlaying(rdt) {
   G.slipT = Math.max(0, G.slipT - rdt);
   if (G.squallT > 0) {
     G.squallT -= rdt;
+    G.boltT -= rdt;
+    if (G.boltT <= 0 && G.squallT > 2) {
+      lightningStrike();
+      G.boltT = rand(4, 9);
+    }
     if (G.squallT <= 0) {
       G.rain = false;
-      toast('☀️ 스콜이 지나갔습니다');
+      toast('SQUALL HAS PASSED');
     }
   }
   if (G.combo > 0) {
@@ -1108,6 +1139,11 @@ function updatePlaying(rdt) {
   if (G.boostTime > 0) target = maxSpd * 1.35;
   const accel = target > G.speed ? (G.boostTime > 0 ? 30 : 7 * bk.accel) : brake ? 22 : manual ? 5 : 6;
   G.speed = approach(G.speed, target, accel * rdt);
+  G.braking = Boolean(brake);
+  // RPM: 스로틀을 감으면 빠르게 치솟고, 놓으면 떨어짐
+  const spdRatio = clamp(G.speed / (maxSpd * 1.35), 0, 1);
+  const rpmTarget = G.boostTime > 0 ? 1 : throttle ? clamp(0.72 + spdRatio * 0.25 + Math.sin(G.time * 40) * 0.03, 0, 1) : 0;
+  G.rpm = approach(G.rpm, rpmTarget, rdt * (rpmTarget > G.rpm ? 3.2 : 2.2));
 
   // 조향 (물웅덩이에 미끄러지면 반응이 둔해지고 옆으로 밀림)
   const steer = steerInput();
@@ -1164,6 +1200,7 @@ function updatePlaying(rdt) {
   checkMissions();
   poseBike();
   sfx.engineUpdate(G.speed / (maxSpd * 1.35), G.boostTime > 0);
+  sfx.setIntensity(spdRatio, G.boostTime > 0);
 }
 
 function startJump(c) {
@@ -1174,7 +1211,7 @@ function startJump(c) {
   c.passed = true;
   sfx.jump();
   vibrate(30);
-  popup('🛫 AIR!', 'big');
+  popup('AIRBORNE', 'big');
 }
 
 function land() {
@@ -1188,7 +1225,7 @@ function land() {
   G.shake = 0.5;
   sfx.land();
   vibrate(40);
-  popup(`AIR JUMP +${pts}`, 'perfect');
+  popup('AIR JUMP!', 'perfect', `+${pts}`);
 }
 
 function hitPuddle() {
@@ -1196,10 +1233,8 @@ function hitPuddle() {
   G.slipDir = Math.random() < 0.5 ? -1 : 1;
   sfx.splash();
   vibrate(20);
-  popup('💦 미끄러짐!', 'power');
-  const d = $('dropsFx');
-  d.classList.add('splash');
-  setTimeout(() => d.classList.remove('splash'), 900);
+  popup('SLIPPING!', 'power');
+  screenRain.splash(16);
 }
 
 function poseBike() {
@@ -1211,6 +1246,10 @@ function poseBike() {
   shieldBubble.visible = G.shield;
   shieldBubble.material.opacity = 0.18 + Math.sin(G.time * 6) * 0.06;
   bike.root.visible = G.invuln > 0 && G.boostTime <= 0 && !G.air ? Math.floor(G.time * 12) % 2 === 0 : true;
+  // 브레이크: 스톱램프 점등 + 노면 반사 글로우
+  const braking = G.braking && G.state === 'playing';
+  if (bike.tailMat) bike.tailMat.emissiveIntensity = braking ? 5 : M.tailMat.emissiveIntensity;
+  if (bike.brakeGlow) bike.brakeGlow.material.opacity = approach(bike.brakeGlow.material.opacity, braking ? 0.9 : 0, 0.2);
 }
 
 function updateAttract(rdt) {
@@ -1218,6 +1257,7 @@ function updateAttract(rdt) {
   G.speed = 24;
   G.x = Math.sin(G.time * 0.5) * 0.25;
   G.lean = -Math.cos(G.time * 0.5) * 0.1;
+  G.braking = false;
   scrollWorld(G.speed * rdt);
   if (G.distance > G.nextSpawn) {
     spawnCar();
@@ -1226,6 +1266,7 @@ function updateAttract(rdt) {
   updateCars(rdt, false);
   updateStalls(rdt, false);
   poseBike();
+  sfx.setIntensity(0.15, false);
 }
 
 function tryBoost() {
@@ -1236,7 +1277,7 @@ function tryBoost() {
   G.shake = 0.4;
   sfx.boost();
   vibrate(40);
-  popup('NITRO!!', 'big');
+  popup('NITRO!', 'big');
 }
 
 function nearMiss(c, gap) {
@@ -1250,9 +1291,9 @@ function nearMiss(c, gap) {
   pts = Math.round(pts);
   G.score += pts;
   addNitro(perfect ? 22 : 14);
-  const label = c.type === 'police' ? '🚓 ' : '';
-  popup(`${label}${perfect ? 'PERFECT! ' : 'NEAR MISS '}+${pts}`, perfect ? 'perfect' : '');
-  if (G.combo >= 2 && G.combo % 5 === 0) popup(`🔥 COMBO x${G.combo}`, 'combo');
+  const tag = c.type === 'police' ? 'POLICE x2  ' : '';
+  popup(perfect ? 'PERFECT!' : 'NEAR MISS!', perfect ? 'perfect' : '', `${tag}+${pts}`);
+  if (G.combo >= 2 && G.combo % 5 === 0) popup(`COMBO x${G.combo}`, 'combo');
   sfx.near(perfect);
   vibrate(perfect ? 25 : 12);
 }
@@ -1265,12 +1306,12 @@ function hitObstacle(o, kind = 'car') {
     if (G.boostTime <= 0) {
       G.shield = false;
       G.invuln = 1.2;
-      popup('🛡️ 실드 파괴!', 'power');
+      popup('SHIELD BROKEN', 'power');
     } else if (kind === 'car') {
       G.smashed++;
       const pts = 300 * (G.x2Time > 0 ? 2 : 1);
       G.score += pts;
-      popup(`💥 SMASH +${pts}`, 'combo');
+      popup('SMASH!', 'combo', `+${pts}`);
     }
     knockAway(o, kind);
     sfx.smash();
@@ -1301,6 +1342,7 @@ function crash(o) {
   G.shake = 1.3;
   G.combo = 0;
   G.air = false;
+  G.braking = false;
   const side = G.x - o.x >= 0 ? 1 : -1;
   G.cv = { vx: side * rand(3, 6), vy: 8, y: G.airY || 0, rx: rand(-6, -3), rz: -side * rand(4, 8) };
   sfx.crash();
@@ -1317,6 +1359,7 @@ function updateCrashing(rdt) {
   G.crashT += rdt;
   G.time += rdt;
   G.speed = Math.max(0, G.speed - 30 * dt);
+  G.rpm = Math.max(0, G.rpm - rdt * 2);
   scrollWorld(G.speed * dt);
   updateCars(dt, false);
   updatePool(conePool, dt, false, 0, 0, 'cone');
@@ -1370,7 +1413,7 @@ function checkMissions() {
     save.missionLevels[m.type] = (save.missionLevels[m.type] || 0) + 1;
     save.coins += m.reward;
     G.missionsDone.push(m);
-    toast(`🎯 미션 완료! ${missionText(m)}  +🪙${m.reward}`);
+    toast(`MISSION COMPLETE  ·  ${missionText(m)}  ·  +${m.reward} COINS`);
     sfx.mission();
     persist();
   }
@@ -1386,10 +1429,15 @@ function show(id) {
 function hideScreens() { show(null); }
 
 const popupsEl = $('popups');
-function popup(text, cls = '') {
+function popup(text, cls = '', sub = '') {
   const el = document.createElement('div');
   el.className = 'popup ' + cls;
   el.textContent = text;
+  if (sub) {
+    const s = document.createElement('small');
+    s.textContent = sub;
+    el.appendChild(s);
+  }
   popupsEl.appendChild(el);
   while (popupsEl.children.length > 4) popupsEl.firstChild.remove();
   setTimeout(() => el.remove(), 1250);
@@ -1418,14 +1466,16 @@ function nextToast() {
 }
 
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-const fmt = (n) => Math.floor(n).toLocaleString();
+const fmt = (n) => Math.floor(n).toLocaleString('en-US');
 
 const hud = {
   score: $('hudScore'), mult: $('hudMult'), combo: $('hudCombo'), best: $('hudBest'), tags: $('hudTags'),
   speed: $('hudSpeed'), dist: $('hudDist'), coins: $('hudCoins'), nitroBar: $('nitroBar'), nitroWrap: $('nitroWrap'),
-  btnNitro: $('btnNitro'), nitroFill: $('nitroFill'), boostFx: $('boostFx'), drops: $('dropsFx'), vs: $('hudVs'),
+  btnNitro: $('btnNitro'), nitroFill: $('nitroFill'), boostFx: $('boostFx'), vs: $('hudVs'),
+  speedArc: $('speedArc'), rpmArc: $('rpmArc'), brakeFx: $('brakeFx'),
 };
 let lastTags = '';
+const tagHtml = (ic, text, cls = '') => `<span class="tag ${cls}">${ic ? icon(ic) : ''}${text}</span>`;
 
 function updateHud() {
   hud.score.textContent = fmt(G.score);
@@ -1435,8 +1485,11 @@ function updateHud() {
   if (G.combo >= 2) hud.combo.textContent = `COMBO ${G.combo}`;
   hud.best.textContent = `BEST ${fmt(Math.max(save.best, G.score))}`;
   hud.speed.textContent = Math.round(G.speed * 3.6);
-  hud.dist.textContent = (G.distance / 1000).toFixed(2) + ' km';
-  hud.coins.textContent = save.coins;
+  hud.dist.textContent = `${fmt(G.distance)} m`;
+  hud.coins.textContent = fmt(save.coins);
+  const maxSpd = (getBike(save.bike).maxKmh / 3.6) * 1.35;
+  hud.speedArc.setAttribute('stroke-dasharray', `${(clamp(G.speed / maxSpd, 0, 1) * 100).toFixed(1)} 100`);
+  hud.rpmArc.setAttribute('stroke-dasharray', `${(G.rpm * 100).toFixed(1)} 100`);
   const boosting = G.boostTime > 0;
   const fill = boosting ? (G.boostTime / BOOST_TIME) * 100 : G.nitro;
   hud.nitroBar.style.width = fill + '%';
@@ -1444,30 +1497,30 @@ function updateHud() {
   hud.nitroWrap.classList.toggle('boost', boosting);
   hud.nitroFill.style.height = fill + '%';
   hud.btnNitro.classList.toggle('ready', G.nitro >= 100 && !boosting);
-  hud.btnNitro.classList.toggle('locked', boosting);
+  hud.btnNitro.classList.toggle('firing', boosting);
   hud.boostFx.classList.toggle('on', boosting);
   hud.boostFx.classList.toggle('slow', !boosting && G.slowTime > 0);
-  hud.drops.classList.toggle('on', G.rainAmt > 0.4);
+  hud.brakeFx.classList.toggle('on', G.braking && G.state === 'playing');
 
   if (MP.active) {
     if (MP.opp) {
       const diff = Math.round(MP.opp.d - G.distance);
-      const st = MP.oppDone ? '🏁' : diff >= 0 ? `▲${diff}m` : `▼${-diff}m`;
-      hud.vs.textContent = `👻 ${MP.oppName} ${fmt(MP.oppDone ? MP.oppScore : MP.opp.sc)} · ${st}`;
+      const st = MP.oppDone ? 'FINISHED' : diff >= 0 ? `+${diff} m` : `${diff} m`;
+      hud.vs.textContent = `GHOST ${MP.oppName}  ${fmt(MP.oppDone ? MP.oppScore : MP.opp.sc)}  ·  ${st}`;
     } else {
-      hud.vs.textContent = net.connected ? '👻 상대 대기 중' : '⚠️ 연결 끊김';
+      hud.vs.textContent = net.connected ? 'WAITING FOR RIVAL' : 'RIVAL DISCONNECTED';
     }
   }
 
   const tags = [];
-  if (G.onc) tags.push('<span class="tag onc">⚠️ 역주행 x2</span>');
-  if (G.air) tags.push('<span class="tag">🛫 AIR</span>');
-  if (G.shield) tags.push('<span class="tag">🛡️ 실드</span>');
-  if (G.magnetTime > 0) tags.push(`<span class="tag">🧲 ${Math.ceil(G.magnetTime)}s</span>`);
-  if (G.x2Time > 0) tags.push(`<span class="tag">✨ x2 ${Math.ceil(G.x2Time)}s</span>`);
-  if (G.slowTime > 0) tags.push(`<span class="tag">⏳ ${Math.ceil(G.slowTime)}s</span>`);
-  if (G.rain) tags.push(`<span class="tag">⛈️ 스콜 ${Math.ceil(Math.max(0, G.squallT))}s · x1.3</span>`);
-  if (G.slipT > 0) tags.push('<span class="tag onc">💦 미끄러짐</span>');
+  if (G.onc) tags.push(tagHtml('warn', 'WRONG WAY x2', 'onc'));
+  if (G.air) tags.push(tagHtml('jump', 'AIRBORNE'));
+  if (G.shield) tags.push(tagHtml('shield', 'SHIELD'));
+  if (G.magnetTime > 0) tags.push(tagHtml('magnet', `MAGNET ${Math.ceil(G.magnetTime)}s`));
+  if (G.x2Time > 0) tags.push(tagHtml('x2', `x2 SCORE ${Math.ceil(G.x2Time)}s`));
+  if (G.slowTime > 0) tags.push(tagHtml('clock', `SLOW-MO ${Math.ceil(G.slowTime)}s`));
+  if (G.rain) tags.push(tagHtml('rain', `SQUALL ${Math.ceil(Math.max(0, G.squallT))}s · x1.3`));
+  if (G.slipT > 0) tags.push(tagHtml('drop', 'SLIPPING', 'onc'));
   const html = tags.join('');
   if (html !== lastTags) {
     hud.tags.innerHTML = html;
@@ -1486,16 +1539,17 @@ function goMenu() {
   G.state = 'menu';
   $('hud').classList.add('hidden');
   $('countdown').classList.add('hidden');
+  $('brakeFx').classList.remove('on');
   refreshMenu();
   show('menu');
 }
 
 function refreshMenu() {
   const s = getSession();
-  $('menuName').textContent = s ? s.nickname : save.lastName || '라이더';
-  $('btnAccount').textContent = s ? `👤 ${s.nickname}` : '👤 로그인';
+  $('menuName').textContent = s ? s.nickname : save.lastName || 'Rider';
+  $('accountLabel').textContent = s ? s.nickname.toUpperCase() : 'SIGN IN';
   $('menuBest').textContent = fmt(save.best);
-  $('menuCoins').textContent = save.coins.toLocaleString();
+  $('menuCoins').textContent = fmt(save.coins);
 }
 
 let backTo = 'menu';
@@ -1535,9 +1589,9 @@ const SHOP = {
 };
 
 function shopButton(kind, item, owned, sel) {
-  if (sel) return '<button class="btn" disabled>장착 중</button>';
-  if (owned) return `<button class="btn primary" data-kind="${kind}" data-id="${item.id}" data-act="select">장착</button>`;
-  return `<button class="btn gold" data-kind="${kind}" data-id="${item.id}" data-act="buy" ${save.coins < item.price ? 'disabled' : ''}>🪙 ${item.price.toLocaleString()}</button>`;
+  if (sel) return '<button class="btn" disabled>EQUIPPED</button>';
+  if (owned) return `<button class="btn primary" data-kind="${kind}" data-id="${item.id}" data-act="select">EQUIP</button>`;
+  return `<button class="btn gold" data-kind="${kind}" data-id="${item.id}" data-act="buy" data-icon="coin" ${save.coins < item.price ? 'disabled' : ''}>${icon('coin')}${fmt(item.price)}</button>`;
 }
 
 function renderShopItems(kind) {
@@ -1545,35 +1599,35 @@ function renderShopItems(kind) {
   return list.map((it) => {
     const o = save[owned].includes(it.id), sel = save[cur] === it.id;
     return `<div class="bike-card ${sel ? 'selected' : ''}">
-      <div class="bike-icon" style="background:var(--green-soft)">${it.icon}</div>
+      <div class="swatch" style="background:${it.swatch}"></div>
       <div><h4>${it.name}</h4><p>${it.desc}</p></div>${shopButton(kind, it, o, sel)}</div>`;
   }).join('');
 }
 
 function renderGarage() {
-  $('garageCoins').textContent = save.coins.toLocaleString();
+  $('garageCoins').textContent = fmt(save.coins);
   for (const b of $('garageTabs').children) b.classList.toggle('on', b.dataset.tab === garageTab);
   const list = $('shopList');
   if (garageTab === 'bike') {
-    $('garageHint').textContent = '빠른 바이크일수록 거리 점수가 더 빨리 오릅니다.';
+    $('garageHint').textContent = 'Faster bikes rack up distance points faster.';
     list.innerHTML = BIKES.map((b) => {
       const owned = save.ownedBikes.includes(b.id);
       const sel = save.bike === b.id;
       const hex = '#' + b.color.toString(16).padStart(6, '0');
       return `<div class="bike-card ${sel ? 'selected' : ''}">
-        <div class="bike-icon" style="background:${hex}33;border:2px solid ${hex}">🏍️</div>
-        <div><h4>${b.name}</h4><p>${b.desc} · 최고 ${b.maxKmh}km/h</p>
-          <div class="stat">속도<i><b style="width:${(b.maxKmh / 300) * 100}%"></b></i></div>
-          <div class="stat">핸들링<i><b style="width:${(b.handling / 1.6) * 100}%"></b></i></div>
-          <div class="stat">가속<i><b style="width:${(b.accel / 1.6) * 100}%"></b></i></div>
+        <div class="bike-icon" style="background:${hex}33;border:2px solid ${hex};color:${hex === '#f2f2f2' ? '#5b6470' : hex}">${icon('bike')}</div>
+        <div><h4>${b.name}</h4><p>${b.desc} · TOP ${b.maxKmh} KM/H</p>
+          <div class="stat">SPEED<i><b style="width:${(b.maxKmh / 300) * 100}%"></b></i></div>
+          <div class="stat">HANDLING<i><b style="width:${(b.handling / 1.6) * 100}%"></b></i></div>
+          <div class="stat">ACCEL<i><b style="width:${(b.accel / 1.6) * 100}%"></b></i></div>
         </div>${shopButton('bike', b, owned, sel)}</div>`;
     }).join('');
   } else if (garageTab === 'box') {
-    $('garageHint').textContent = '뒷좌석 배달 상자 스킨 (외형만 바뀝니다)';
+    $('garageHint').textContent = 'Delivery box skins (cosmetic only).';
     list.innerHTML = renderShopItems('box');
   } else {
-    $('garageHint').textContent = '라이더 의상과 헬멧을 꾸며보세요';
-    list.innerHTML = `<div class="shop-section">🧥 의상</div>${renderShopItems('outfit')}<div class="shop-section">⛑️ 헬멧</div>${renderShopItems('helmet')}`;
+    $('garageHint').textContent = 'Customize your rider outfit and helmet.';
+    list.innerHTML = `<div class="shop-section">OUTFIT</div>${renderShopItems('outfit')}<div class="shop-section">HELMET</div>${renderShopItems('helmet')}`;
   }
 }
 
@@ -1598,7 +1652,7 @@ $('shopList').addEventListener('click', (e) => {
     save.coins -= item.price;
     save[ownedKey].push(id);
     sfx.power();
-    toast(`🎉 ${item.name} 구매 완료!`);
+    toast(`UNLOCKED  ·  ${item.name}`);
   } else {
     sfx.click();
   }
@@ -1611,12 +1665,11 @@ $('shopList').addEventListener('click', (e) => {
 
 // ---------- 랭킹 (글로벌 / 내 기기)
 let rankTab = 'global';
-const medals = ['🥇', '🥈', '🥉'];
 
 function rankTable(rows) {
-  return `<table class="rank-table"><thead><tr><th>#</th><th>닉네임</th><th class="num">최고 점수</th><th>바이크</th></tr></thead><tbody>${
+  return `<table class="rank-table"><thead><tr><th>#</th><th>RIDER</th><th class="num">BEST</th><th>BIKE</th></tr></thead><tbody>${
     rows.map((r, i) => `<tr class="${r.isMe ? 'me' : ''}">
-      <td>${medals[i] ? `<span class="medal">${medals[i]}</span>` : i + 1}</td>
+      <td>${i < 3 ? `<b class="medal m${i + 1}">${i + 1}</b>` : i + 1}</td>
       <td>${escapeHtml(r.nickname || r.name)}${r.date ? `<br><small class="muted">${escapeHtml(r.date)}</small>` : ''}</td>
       <td class="num"><b>${fmt(r.score)}</b></td>
       <td><small>${escapeHtml(getBike(r.bike).name)}</small></td></tr>`).join('')
@@ -1627,30 +1680,30 @@ async function renderRanking() {
   for (const b of $('rankTabs').children) b.classList.toggle('on', b.dataset.rtab === rankTab);
   const list = $('rankList'), me = $('rankMe'), mode = $('rankMode');
   if (rankTab === 'local') {
-    mode.textContent = '이 기기';
+    mode.textContent = 'THIS DEVICE';
     mode.className = 'badge local';
     list.innerHTML = save.ranking.length
       ? rankTable(save.ranking.map((r) => ({ ...r, isMe: r.id === save.lastRankId })))
-      : '<div class="empty">아직 기록이 없습니다.</div>';
+      : '<div class="empty">No records yet.</div>';
     me.innerHTML = '';
     return;
   }
-  mode.textContent = ONLINE ? '🟢 온라인' : '로컬 모드';
+  mode.textContent = ONLINE ? 'ONLINE' : 'LOCAL MODE';
   mode.className = ONLINE ? 'badge' : 'badge local';
-  list.innerHTML = '<div class="empty">불러오는 중...</div>';
+  list.innerHTML = '<div class="empty">Loading...</div>';
   me.innerHTML = '';
   const res = await leaderboard.fetchTop();
   if (rankTab !== 'global' || currentScreen !== 'ranking') return;
   if (!res.ok) {
-    list.innerHTML = `<div class="empty">랭킹을 불러오지 못했습니다<br><small>${escapeHtml(res.error)}</small></div>`;
+    list.innerHTML = `<div class="empty">Could not load the ranking<br><small>${escapeHtml(res.error)}</small></div>`;
     return;
   }
-  list.innerHTML = res.top.length ? rankTable(res.top) : '<div class="empty">아직 등록된 기록이 없습니다.<br>첫 번째 랭커가 되어보세요!</div>';
+  list.innerHTML = res.top.length ? rankTable(res.top) : '<div class="empty">No records yet.<br>Be the first rider on the board!</div>';
   const s = getSession();
-  if (!s) me.innerHTML = '로그인하면 내 순위가 표시됩니다 <button class="btn primary" id="rankLogin">로그인</button>';
-  else if (res.me) me.innerHTML = `🙋 내 순위: <b>${res.me.rank}위</b> · ${escapeHtml(res.me.nickname)} · <b>${fmt(res.me.score)}</b>점`;
-  else me.innerHTML = `🙋 ${escapeHtml(s.nickname)} 님은 아직 기록이 없습니다`;
-  if (!ONLINE) me.innerHTML += '<br><small class="muted">서버 미설정: 이 기기의 계정끼리만 순위가 공유됩니다 (js/config.js)</small>';
+  if (!s) me.innerHTML = 'Sign in to see your rank <button class="btn primary" id="rankLogin">SIGN IN</button>';
+  else if (res.me) me.innerHTML = `YOUR RANK <b>#${res.me.rank}</b> · ${escapeHtml(res.me.nickname)} · <b>${fmt(res.me.score)}</b>`;
+  else me.innerHTML = `${escapeHtml(s.nickname)} has no record yet`;
+  if (!ONLINE) me.innerHTML += '<br><small class="muted">No server configured: ranking is shared only between accounts on this device (js/config.js)</small>';
   const rl = $('rankLogin');
   if (rl) rl.addEventListener('click', () => { renderAuth(); openScreen('auth', 'menu'); });
 }
@@ -1667,20 +1720,20 @@ $('rankTabs').addEventListener('click', (e) => {
 let authTab = 'login';
 function renderAuth() {
   const s = getSession();
-  $('authMode').textContent = ONLINE ? '🟢 온라인 계정' : '로컬 계정';
+  $('authMode').textContent = ONLINE ? 'ONLINE' : 'LOCAL';
   $('authMode').className = ONLINE ? 'badge' : 'badge local';
   $('authForms').classList.toggle('hidden', Boolean(s));
   $('authLogged').classList.toggle('hidden', !s);
   if (s) $('authNick').textContent = s.nickname;
   for (const b of $('authTabs').children) b.classList.toggle('on', b.dataset.auth === authTab);
   $('authPw2Wrap').classList.toggle('hidden', authTab !== 'signup');
-  $('authSubmit').textContent = authTab === 'signup' ? '가입하고 시작하기' : '로그인';
+  $('authSubmit').textContent = authTab === 'signup' ? 'CREATE ACCOUNT' : 'SIGN IN';
   $('authPw').autocomplete = authTab === 'signup' ? 'new-password' : 'current-password';
   $('authMsg').textContent = '';
   $('authMsg').className = 'form-msg';
   $('authNote').textContent = ONLINE
-    ? '로그인 정보는 Supabase 서버에 저장되며, 이 기기에는 자동 로그인 토큰만 보관합니다.'
-    : '서버가 설정되지 않아 계정과 랭킹이 이 기기 브라우저에만 저장됩니다.';
+    ? 'Accounts are stored on the server. Only an auto sign-in token is kept on this device.'
+    : 'No server configured: accounts and ranking are saved in this browser only.';
 }
 $('authTabs').addEventListener('click', (e) => {
   const b = e.target.closest('[data-auth]');
@@ -1692,13 +1745,13 @@ $('authForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const id = $('authId').value, pw = $('authPw').value, msg = $('authMsg');
   if (authTab === 'signup' && pw !== $('authPw2').value) {
-    msg.textContent = '비밀번호 확인이 일치하지 않습니다';
+    msg.textContent = 'Passwords do not match';
     return;
   }
   const btn = $('authSubmit');
   btn.disabled = true;
   msg.className = 'form-msg ok';
-  msg.textContent = '처리 중...';
+  msg.textContent = 'Please wait...';
   const res = authTab === 'signup' ? await auth.signUp(id, pw) : await auth.signIn(id, pw);
   btn.disabled = false;
   if (!res.ok) {
@@ -1709,7 +1762,7 @@ $('authForm').addEventListener('submit', async (e) => {
   $('authPw').value = '';
   $('authPw2').value = '';
   sfx.mission();
-  toast(`👋 ${res.user.nickname} 님 환영합니다!`);
+  toast(`WELCOME, ${res.user.nickname.toUpperCase()}`);
   if (save.best > 0) leaderboard.submit(save.best, save.bike); // 기존 기록 반영
   refreshMenu();
   if (backTo === 'gameover') {
@@ -1724,7 +1777,7 @@ $('btnLogout').addEventListener('click', () => {
   auth.signOut();
   authTab = 'login';
   sfx.click();
-  toast('로그아웃되었습니다');
+  toast('SIGNED OUT');
   refreshMenu();
   renderAuth();
 });
@@ -1733,18 +1786,21 @@ $('btnLogout').addEventListener('click', () => {
 function renderMissions() {
   $('missionList').innerHTML = save.missions.map((m) => `
     <div class="mission ${m.done ? 'done' : ''}">
-      <span>${m.done ? '✅ ' : '🎯 '}${escapeHtml(missionText(m))}</span>
-      <span class="reward">🪙 ${m.reward}</span>
+      <span>${m.done ? icon('check') + ' ' : ''}${escapeHtml(missionText(m))}</span>
+      <span class="reward">${icon('coin')} ${m.reward}</span>
     </div>`).join('');
 }
 
 // ---------- 설정
+const onOff = (v) => (v ? 'ON' : 'OFF');
 const SETTING_LABELS = {
-  sound: (v) => (v ? 'ON' : 'OFF'),
-  vibrate: (v) => (v ? 'ON' : 'OFF'),
-  quality: (v) => (v === 'high' ? '고화질' : '저화질(빠름)'),
-  throttle: (v) => (v === 'auto' ? '자동 가속' : '수동 (THROTTLE)'),
-  touchMode: (v) => (v === 'buttons' ? '◀ ▶ 버튼' : '드래그 패드'),
+  sound: onOff,
+  music: onOff,
+  vibrate: onOff,
+  wetFx: onOff,
+  quality: (v) => (v === 'high' ? 'HIGH' : 'LOW (FAST)'),
+  throttle: (v) => (v === 'auto' ? 'AUTO' : 'MANUAL'),
+  touchMode: (v) => (v === 'buttons' ? 'BUTTONS' : 'DRAG PAD'),
 };
 function renderSettings() {
   for (const b of document.querySelectorAll('[data-setting]')) {
@@ -1762,7 +1818,9 @@ for (const b of document.querySelectorAll('[data-setting]')) {
     const k = b.dataset.setting;
     const s = save.settings;
     if (k === 'sound') { s.sound = !s.sound; sfx.setEnabled(s.sound); }
+    if (k === 'music') { s.music = !s.music; sfx.init(); sfx.setMusic(s.music); }
     if (k === 'vibrate') { s.vibrate = !s.vibrate; vibrate(30); }
+    if (k === 'wetFx') { s.wetFx = !s.wetFx; screenRain.setEnabled(s.wetFx); }
     if (k === 'quality') { s.quality = s.quality === 'high' ? 'low' : 'high'; applyQuality(); }
     if (k === 'throttle') s.throttle = s.throttle === 'auto' ? 'manual' : 'auto';
     if (k === 'touchMode') s.touchMode = s.touchMode === 'buttons' ? 'drag' : 'buttons';
@@ -1773,29 +1831,31 @@ for (const b of document.querySelectorAll('[data-setting]')) {
   });
 }
 $('btnReset').addEventListener('click', () => {
-  if (!confirm('코인, 바이크, 커스텀, 랭킹, 미션 등 모든 데이터를 초기화할까요? (계정은 유지됩니다)')) return;
+  if (!confirm('Reset coins, bikes, skins, ranking and missions? (Your account is kept)')) return;
   resetSave();
   sfx.setEnabled(save.settings.sound);
+  sfx.setMusic(save.settings.music);
+  screenRain.setEnabled(save.settings.wetFx);
   applyQuality();
   applyControlSettings();
   buildBike();
   resetBikePose();
   renderSettings();
-  toast('데이터가 초기화되었습니다');
+  toast('PROGRESS RESET');
 });
 
-// ---------- 일시정지 (배달 주문서)
+// ---------- 일시정지 (DELIVERY RECEIPT)
 function renderReceipt() {
   const s = getSession();
   $('rcOrder').textContent = `#GR-${String(Math.floor(G.distance * 7 + G.time * 13) % 100000).padStart(5, '0')}`;
-  $('rcRider').textContent = s ? s.nickname : save.lastName || '게스트 라이더';
-  $('rcBike').textContent = getBike(save.bike).name;
+  $('rcRider').textContent = (s ? s.nickname : save.lastName || 'Guest Rider').toUpperCase();
+  $('rcBike').textContent = getBike(save.bike).name.toUpperCase();
   const items = [
-    ['주행 거리', `${(G.distance / 1000).toFixed(2)} km`],
-    ['니어미스', `${G.nearMiss}회 (최대 콤보 ${G.maxCombo})`],
-    ['역주행 주행', `${Math.floor(G.oncomingDist)} m`],
-    ['에어 점프', `${G.jumps}회`],
-    ['획득 코인', `🪙 ${G.coinsRun}`],
+    ['DISTANCE', `${fmt(G.distance)} m`],
+    ['NEAR MISSES', `${G.nearMiss} (MAX COMBO ${G.maxCombo})`],
+    ['WRONG WAY', `${fmt(G.oncomingDist)} m`],
+    ['AIR JUMPS', `${G.jumps}`],
+    ['COINS', `${fmt(G.coinsRun)}`],
   ];
   $('rcItems').innerHTML = items.map(([k, v]) => `<div class="rc-item"><span>${k}</span><span>${v}</span></div>`).join('');
   $('rcMissions').innerHTML = save.missions.map((m) => {
@@ -1813,6 +1873,7 @@ function togglePause() {
     releaseAllInput();
     renderReceipt();
     show('pause');
+    $('brakeFx').classList.remove('on');
     sfx.suspend();
   } else if (G.state === 'paused') {
     resumeGame();
@@ -1835,24 +1896,33 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden && G.state === 'playing') togglePause();
 });
 
-// ---------- 게임 오버 / 랭킹 등록 / 이어달리기
+// ---------- 결과 / 랭킹 등록 / 이어달리기
+function setResultTitle(delivered) {
+  const t = $('goTitle');
+  t.textContent = delivered ? 'DELIVERED!' : 'CRASHED!';
+  t.className = `result-title ${delivered ? 'delivered' : 'crash'}`;
+}
+
 function showGameOver() {
   G.state = 'over';
   $('hud').classList.add('hidden');
+  $('brakeFx').classList.remove('on');
   const score = Math.floor(G.score);
-  $('goScore').textContent = score.toLocaleString();
-  $('goNew').classList.toggle('hidden', !(score > save.best && score > 0));
+  const isRecord = score > save.best && score > 0;
+  $('goScore').textContent = fmt(score);
+  $('goNew').classList.toggle('hidden', !isRecord);
+  setResultTitle(isRecord);
   save.best = Math.max(save.best, score);
   const stats = [
-    ['거리', (G.distance / 1000).toFixed(2) + 'km'],
-    ['니어미스', G.nearMiss],
-    ['최대 콤보', G.maxCombo],
-    ['최고속도', G.maxKmh + 'km/h'],
-    ['에어 점프', G.jumps],
-    ['코인', '🪙' + G.coinsRun],
+    ['DISTANCE', `${fmt(G.distance)} m`],
+    ['NEAR MISS', G.nearMiss],
+    ['MAX COMBO', G.maxCombo],
+    ['TOP SPEED', `${G.maxKmh} KM/H`],
+    ['AIR JUMPS', G.jumps],
+    ['COINS', fmt(G.coinsRun)],
   ];
   $('goStats').innerHTML = stats.map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join('');
-  $('goMissions').innerHTML = G.missionsDone.map((m) => `<div>✅ ${escapeHtml(missionText(m))} +🪙${m.reward}</div>`).join('');
+  $('goMissions').innerHTML = G.missionsDone.map((m) => `<div>${icon('check')} ${escapeHtml(missionText(m))} +${m.reward}</div>`).join('');
 
   // 내 기기 랭킹: 로그인 상태면 닉네임으로 자동 등록, 게스트는 이름 입력
   const s = getSession();
@@ -1862,11 +1932,11 @@ function showGameOver() {
     sortRanking();
     persist();
     const pos = save.ranking.indexOf(G.rankEntry) + 1;
-    $('rankDone').textContent = pos ? `📱 내 기기 랭킹 ${pos}위로 기록이 갱신되었습니다!` : '';
+    $('rankDone').textContent = pos ? `This device's ranking updated: #${pos}` : '';
   } else if (s && qualifies(score)) {
     G.rankEntry = rankRecord(s.nickname);
     const pos = addRanking(G.rankEntry);
-    $('rankDone').textContent = `📱 내 기기 랭킹 ${pos}위 등록!`;
+    $('rankDone').textContent = `This device's ranking: #${pos}`;
   }
   const canRank = !G.rankEntry && qualifies(score);
   $('rankForm').classList.toggle('hidden', !canRank);
@@ -1881,7 +1951,7 @@ function showGameOver() {
   $('contCost').textContent = CONTINUE_COST;
   cont.classList.toggle('hidden', G.continued || MP.active);
   cont.disabled = save.coins < CONTINUE_COST;
-  $('btnRetry').textContent = MP.active ? '🔁 재대결' : '다시 배달하기';
+  $('retryLabel').textContent = MP.active ? 'REMATCH' : 'RETRY';
 
   if (MP.active) {
     net.send({ t: 'over', sc: score });
@@ -1901,7 +1971,7 @@ async function submitGlobal() {
   const s = getSession();
   const score = Math.floor(G.score);
   if (!s) {
-    box.innerHTML = '🌏 로그인하면 글로벌 랭킹에 기록이 등록됩니다 <button class="btn primary" id="goLogin">로그인</button>';
+    box.innerHTML = `${icon('globe')} Sign in to post your score to the global ranking <button class="btn primary" id="goLogin">SIGN IN</button>`;
     $('goLogin').addEventListener('click', () => { renderAuth(); openScreen('auth', 'gameover'); });
     return;
   }
@@ -1911,16 +1981,16 @@ async function submitGlobal() {
   }
   if (G.globalSubmitted === score) return;
   G.globalSubmitted = score;
-  box.textContent = '🌏 글로벌 랭킹 전송 중...';
+  box.innerHTML = `${icon('globe')} Posting to the global ranking...`;
   const res = await leaderboard.submit(score, save.bike);
   if (!res.ok) {
-    box.textContent = `🌏 랭킹 전송 실패: ${res.error}`;
+    box.innerHTML = `${icon('globe')} Could not post score: ${escapeHtml(res.error)}`;
     G.globalSubmitted = false;
     return;
   }
   const top = await leaderboard.fetchTop();
-  const rank = top.ok && top.me ? `${top.me.rank}위` : '-';
-  box.innerHTML = `🌏 글로벌 랭킹 <b>${rank}</b> · 내 최고 <b>${fmt(res.best)}</b>점${ONLINE ? '' : ' <small class="muted">(로컬 모드)</small>'}`;
+  const rank = top.ok && top.me ? `#${top.me.rank}` : '-';
+  box.innerHTML = `${icon('globe')} GLOBAL RANK <b>${rank}</b> · BEST <b>${fmt(res.best)}</b>${ONLINE ? '' : ' <small class="muted">(local mode)</small>'}`;
 }
 
 function rankRecord(name) {
@@ -1940,7 +2010,7 @@ function submitName() {
   $('nameInput').blur();
   $('rankForm').classList.add('hidden');
   const done = $('rankDone');
-  done.textContent = `📱 ${name} 님, 내 기기 랭킹 ${pos}위에 등록되었습니다!`;
+  done.textContent = `${name} saved to this device's ranking at #${pos}`;
   done.classList.remove('hidden');
   sfx.mission();
 }
@@ -1998,7 +2068,7 @@ $('btnContinue').addEventListener('click', () => {
   G.state = 'playing';
   sfx.init();
   sfx.engineStart();
-  popup('🔥 이어달리기!', 'big');
+  popup('BACK ON THE ROAD', 'big');
 });
 
 // ======================================================================
@@ -2012,24 +2082,26 @@ function renderMulti() {
   $('btnMultiStart').classList.toggle('hidden', !(net.role === 'host' && net.connected));
   if (inRoom) {
     $('multiStatus').textContent = net.connected
-      ? (net.role === 'host' ? `✅ ${MP.oppName} 님 입장! 대결을 시작하세요` : '✅ 연결됨 · 방장이 시작하기를 기다리는 중...')
-      : (net.role === 'host' ? '상대를 기다리는 중... 코드를 알려주세요' : '연결 중...');
+      ? (net.role === 'host' ? `${MP.oppName} joined. Start the race!` : 'Connected. Waiting for the host to start...')
+      : (net.role === 'host' ? 'Waiting for a rival... share the code' : 'Connecting...');
   }
 }
 
-const myName = () => getSession()?.nickname || save.lastName || '라이더';
+const myName = () => getSession()?.nickname || save.lastName || 'Rider';
 const multiMsg = (t, ok = false) => {
   $('multiMsg').textContent = t;
   $('multiMsg').className = ok ? 'form-msg ok' : 'form-msg';
 };
 
 $('btnHost').addEventListener('click', async () => {
-  multiMsg('방을 만드는 중...', true);
+  multiMsg('Creating room...', true);
   try {
     await net.host();
+    MP.roomSeed = net.seed;
     multiMsg('');
   } catch (e) {
-    multiMsg(`방 만들기 실패: ${e.message || e.type || e}`);
+    console.warn('[net] host failed', e);
+    multiMsg(`Could not create room: ${describeError(e)}`);
     net.close();
   }
   renderMulti();
@@ -2037,15 +2109,16 @@ $('btnHost').addEventListener('click', async () => {
 $('btnJoin').addEventListener('click', async () => {
   const code = $('roomInput').value.trim();
   if (code.length < 5) {
-    multiMsg('5자리 Room Code 를 입력하세요');
+    multiMsg('Enter the 5-character room code');
     return;
   }
-  multiMsg('접속 중...', true);
+  multiMsg('Joining...', true);
   try {
     await net.join(code);
     multiMsg('');
   } catch (e) {
-    multiMsg(e.message || '접속 실패');
+    console.warn('[net] join failed', e);
+    multiMsg(describeError(e));
     net.close();
   }
   renderMulti();
@@ -2060,12 +2133,16 @@ function leaveRoom() {
   net.send({ t: 'bye' });
   net.close();
   MP.active = false;
+  MP.roomSeed = null;
   ghost.root.visible = false;
 }
 
+// 방장: 첫 판은 방 시드, 재대결부터는 새 시드를 만들어 참가자에게 전달
 function hostStartMatch() {
   if (net.role !== 'host' || !net.connected) return;
-  const seed = (Math.random() * 2 ** 32) >>> 0;
+  const seed = MP.roomSeed ?? newSeed();
+  MP.roomSeed = null;
+  net.seed = seed;
   net.send({ t: 'start', seed });
   if (G.state === 'over') finalizeRun();
   startRun({ mp: true, seed });
@@ -2073,50 +2150,53 @@ function hostStartMatch() {
 
 function requestRematch() {
   if (!net.connected) {
-    toast('상대와 연결이 끊겨 재대결할 수 없습니다');
+    toast('RIVAL DISCONNECTED  ·  CANNOT REMATCH');
     return;
   }
   MP.ready = true;
   if (net.role === 'host') {
     if (MP.oppReady) hostStartMatch();
-    else toast('상대의 재대결 수락을 기다리는 중...');
+    else toast('WAITING FOR RIVAL TO ACCEPT...');
   } else {
     net.send({ t: 'ready' });
-    toast('방장에게 재대결을 요청했습니다');
+    toast('REMATCH REQUESTED');
   }
 }
 
 net.on('connected', () => {
-  net.send({ t: 'hello', name: myName(), bike: save.bike });
+  // 방장은 접속 즉시 도로 시드를 넘겨줌
+  net.send({ t: 'hello', name: myName(), bike: save.bike, seed: net.role === 'host' ? net.seed : undefined });
   sfx.mission();
   renderMulti();
 });
 net.on('disconnected', () => {
-  toast('⚠️ 상대와 연결이 끊어졌습니다');
+  toast('RIVAL DISCONNECTED');
   MP.opp = null;
   ghost.root.visible = false;
   renderMulti();
   if (G.state === 'over' && MP.active) renderVsResult();
 });
 net.on('error', (e) => {
-  if (currentScreen === 'multi') multiMsg(`연결 오류: ${e.type || e.message || e}`);
+  if (currentScreen === 'multi') multiMsg(`Connection error: ${describeError(e)}`);
 });
 net.on('data', (m) => {
   if (!m || typeof m !== 'object') return;
   switch (m.t) {
     case 'hello':
-      MP.oppName = String(m.name || '상대').slice(0, 12);
+      MP.oppName = String(m.name || 'Rival').slice(0, 12);
+      if (net.role === 'guest' && m.seed != null) net.seed = m.seed >>> 0;
       renderMulti();
       break;
     case 'full':
-      multiMsg('방이 가득 찼습니다');
+      multiMsg('This room is full');
       net.close();
       renderMulti();
       break;
     case 'start':
       if (net.role !== 'guest') break;
+      net.seed = m.seed >>> 0;
       if (G.state === 'over') finalizeRun();
-      startRun({ mp: true, seed: m.seed >>> 0 });
+      startRun({ mp: true, seed: net.seed });
       break;
     case 's':
       if (!MP.active) break;
@@ -2131,11 +2211,11 @@ net.on('data', (m) => {
       MP.oppReady = true;
       if (net.role === 'host') {
         if (MP.ready) hostStartMatch();
-        else toast(`🔁 ${MP.oppName} 님이 재대결을 원합니다`);
+        else toast(`${MP.oppName.toUpperCase()} WANTS A REMATCH`);
       }
       break;
     case 'bye':
-      toast(`${MP.oppName} 님이 방을 나갔습니다`);
+      toast(`${MP.oppName.toUpperCase()} LEFT THE ROOM`);
       break;
     default:
       break;
@@ -2147,11 +2227,9 @@ function updateMultiplayer(rdt) {
     ghost.root.visible = false;
     return;
   }
-  // 내 상태 10Hz 전송
-  MP.sendT -= rdt;
-  if (MP.sendT <= 0 && (G.state === 'playing' || G.state === 'crashing' || G.state === 'paused')) {
-    MP.sendT = 0.1;
-    net.send({ t: 's', d: Math.round(G.distance * 10) / 10, x: +G.x.toFixed(2), y: +(G.airY || 0).toFixed(2), l: +G.lean.toFixed(2), v: +G.speed.toFixed(1), sc: Math.floor(G.score) });
+  // 내 상태 전송 (net.sendState 가 15 FPS 로 제한 + 버퍼 체크)
+  if (G.state === 'playing' || G.state === 'crashing' || G.state === 'paused') {
+    net.sendState({ t: 's', d: Math.round(G.distance * 10) / 10, x: +G.x.toFixed(2), y: +(G.airY || 0).toFixed(2), l: +G.lean.toFixed(2), v: +G.speed.toFixed(1), sc: Math.floor(G.score) });
   }
   // 상대 고스트: 수신 위치를 속도로 외삽해서 부드럽게
   const o = MP.opp;
@@ -2174,13 +2252,14 @@ function renderVsResult() {
   const me = Math.floor(G.score);
   if (!MP.oppDone) {
     el.innerHTML = net.connected
-      ? `<b>⏳ ${escapeHtml(MP.oppName)} 님이 아직 주행 중...</b>현재 상대 점수 ${fmt(MP.opp?.sc || 0)}`
-      : '<b>⚠️ 상대 연결 끊김</b>대결이 무효 처리되었습니다';
+      ? `<b>${escapeHtml(MP.oppName)} IS STILL RIDING...</b>Rival score ${fmt(MP.opp?.sc || 0)}`
+      : '<b>RIVAL DISCONNECTED</b>This race does not count';
     return;
   }
   const win = me > MP.oppScore, draw = me === MP.oppScore;
   if (!draw) el.classList.add(win ? 'win' : 'lose');
-  el.innerHTML = `<b>${win ? '🏆 승리!' : draw ? '🤝 무승부' : '😵 패배'}</b>나 ${fmt(me)} vs ${escapeHtml(MP.oppName)} ${fmt(MP.oppScore)}`;
+  el.innerHTML = `<b>${win ? 'YOU WIN' : draw ? 'DRAW' : 'YOU LOSE'}</b>YOU ${fmt(me)}  ·  ${escapeHtml(MP.oppName)} ${fmt(MP.oppScore)}`;
+  if (win) setResultTitle(true);
 }
 
 // ---------- 외부 3D 모델 교체 (로딩 완료 시 즉시 반영)
@@ -2210,7 +2289,7 @@ M.models.onLoad((key) => {
       if (key === 'prop.lamp') lampHead.visible = false;
     }
   }
-  console.info(`[ModelManager] '${key}' 외부 모델 적용`);
+  console.info(`[ModelManager] '${key}' external model applied`);
 });
 M.models.loadAll();
 
@@ -2233,15 +2312,23 @@ function frame(now) {
   updateCamera(rdt);
   updateFx(rdt);
   renderer.render(scene, camera);
+  // 화면 빗물은 렌더 직후 같은 프레임에서 그려야 굴절 스냅샷이 유효
+  if (G.state !== 'paused') {
+    const wet = G.state === 'playing' || G.state === 'crashing' ? G.rainAmt : 0;
+    screenRain.update(rdt, wet, G.speed);
+    screenRain.render();
+  }
 }
 
 // ---------- 시작
+hydrateIcons();
 if (new URLSearchParams(location.search).has('debug')) {
   window.__G = G;
   window.__MP = MP;
   window.__models = M.models;
   window.__cars = cars;
   window.__scene = scene;
+  window.__net = net;
   window.__dbg = {
     car: (type, lane, z) => spawnCar(z, { type, lane }),
     puddle: (x, z) => spawnInPool(puddlePool, { x, z }),
@@ -2263,6 +2350,6 @@ if (save.lastDaily !== today) {
   save.coins += 100;
   persist();
   refreshMenu();
-  toast('🎁 오늘의 출석 보상 +🪙100');
+  toast('DAILY BONUS  ·  +100 COINS');
 }
 requestAnimationFrame(frame);

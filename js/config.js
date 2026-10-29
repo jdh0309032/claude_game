@@ -15,6 +15,17 @@ export const ID_EMAIL_DOMAIN = 'grabrider.game';
 // 자체 서버를 쓰려면: { host: 'my-peer.example.com', port: 443, path: '/', secure: true }
 export const PEER_SERVER = null;
 
+// NAT/LTE 환경에서도 P2P 가 잘 맺어지도록 Google STUN 명시
+// + 직접 연결이 막힌 망을 위한 PeerJS 기본 TURN 릴레이 유지
+export const PEER_ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
+];
+// PeerJS 로그 레벨: 0 없음 · 1 에러 · 2 경고+에러 · 3 전체
+export const PEER_DEBUG = 2;
+
 // ---------- 외부 3D 모델 (.glb / .gltf)
 // 파일을 assets/models/ 에 넣고 url 을 지정하면 절차적 모델 대신 사용합니다.
 // 파일이 없거나 로딩 중이면 기존 로우폴리 모델이 그대로 보입니다(fallback).

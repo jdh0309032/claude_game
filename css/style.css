@@ -10,7 +10,10 @@
   --gold: #ffb800;
   --red: #ee3e3e;
   --boost: #00d4ff;
-  --display: 'Black Han Sans', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --display: 'Russo One', 'Arial Black', system-ui, sans-serif;
+  --hud: 'Rajdhani', 'Arial Narrow', system-ui, sans-serif;
+  --neon: #39ff88;
+  --cyan: #00e5ff;
   --brand: 'Nunito', 'Arial Rounded MT Bold', system-ui, sans-serif;
 }
 
@@ -22,7 +25,7 @@ html, body {
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+  font-family: var(--hud);
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -292,83 +295,96 @@ body:not(.touch) .touch-only { display: none; }
 }
 .hud-right .coin-pill { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); background: #fff; }
 
-/* 터치 컨트롤 — 왼손: 조향 + 니트로 / 오른손: 가속 + 브레이크 */
+/* ---------- 터치 조작계: 왼손 조향 / 오른손 클러스터 (NOS + 브레이크 레버 + 스로틀 그립) */
 #touchControls { position: absolute; inset: 0; pointer-events: none; }
-.thumb {
-  position: absolute;
-  bottom: max(18px, env(safe-area-inset-bottom));
-  display: flex;
-  gap: 12px;
-  pointer-events: none;
+.thumb { position: absolute; bottom: max(18px, env(safe-area-inset-bottom)); display: flex; gap: 12px; pointer-events: none; }
+.thumb.left { left: max(14px, env(safe-area-inset-left)); align-items: flex-end; }
+.thumb.right { right: max(12px, env(safe-area-inset-right)); flex-direction: column; align-items: flex-end; gap: 10px; }
+.cluster-row { display: flex; gap: 10px; align-items: flex-end; }
+.tbtn, .nos-btn, .brake-lever, .throttle-grip {
+  pointer-events: auto; touch-action: none; -webkit-user-select: none; border: none; font: inherit;
+  position: relative; overflow: hidden; cursor: pointer;
 }
-.thumb.left { left: max(14px, env(safe-area-inset-left)); flex-direction: column; align-items: flex-start; }
-.thumb.right { right: max(14px, env(safe-area-inset-right)); flex-direction: row; align-items: flex-end; }
-.tbtn {
-  pointer-events: auto;
-  touch-action: none;
-  border-radius: 50%;
-  border: none;
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
-  color: var(--text);
-  font: inherit;
-  font-weight: 900;
-  font-size: 11px;
-  letter-spacing: 0.3px;
-  position: relative;
-  overflow: hidden;
-  -webkit-user-select: none;
-  transition: transform 0.06s, background 0.1s;
-}
-.tbtn.active { transform: scale(0.92); }
 .steer-btns { display: flex; gap: 12px; pointer-events: none; }
-.tbtn.steer { width: 74px; height: 74px; font-size: 26px; color: var(--green-dark); }
-.tbtn.steer.active { background: var(--green); color: #fff; }
+.tbtn.steer {
+  width: 74px; height: 74px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #dfe3e6 70%);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3), inset 0 -3px 0 rgba(0, 0, 0, 0.08);
+  color: var(--green-dark); display: grid; place-items: center; transition: transform 0.06s;
+}
+.tbtn.steer .ic { width: 32px; height: 32px; stroke-width: 3; }
+.tbtn.steer.active { background: var(--green); color: #fff; transform: scale(0.92); }
 .steer-pad {
-  pointer-events: auto;
-  touch-action: none;
-  width: 172px;
-  height: 74px;
-  border-radius: 37px;
-  background: rgba(255, 255, 255, 0.7);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
-  position: relative;
-  display: none;
+  pointer-events: auto; touch-action: none; width: 172px; height: 74px; border-radius: 37px;
+  background: rgba(255, 255, 255, 0.75); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); position: relative; display: none;
 }
-.steer-pad small { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; color: var(--muted); font-size: 11px; }
-#steerKnob {
-  position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px;
-  border-radius: 50%; background: var(--green); box-shadow: 0 3px 10px rgba(0, 120, 50, 0.45); z-index: 1;
-}
+.steer-pad small { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 700; color: var(--muted); font-size: 11px; letter-spacing: 1px; }
+#steerKnob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; background: var(--green); box-shadow: 0 3px 10px rgba(0, 120, 50, 0.45); z-index: 1; }
 body.drag-mode .steer-btns { display: none; }
 body.drag-mode .steer-pad { display: block; }
-.tbtn.nitro { width: 70px; height: 70px; margin-left: 2px; }
-.tbtn.nitro i { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--green); opacity: 0.85; }
-.tbtn.nitro b { position: relative; }
-.tbtn.nitro.ready { color: #fff; box-shadow: 0 0 0 3px #fff, 0 0 20px var(--green); animation: pulse 0.8s infinite; }
-.tbtn.nitro.locked { opacity: 0.6; }
-.tbtn.brake { width: 72px; height: 72px; }
-.tbtn.brake.active { background: var(--red); color: #fff; }
-.tbtn.throttle { width: 96px; height: 96px; background: var(--green); color: #fff; font-size: 12px; box-shadow: 0 6px 18px rgba(0, 120, 50, 0.45); }
-.tbtn.throttle.active { background: var(--green-dark); }
-body.auto-throttle .tbtn.throttle { opacity: 0.85; }
+
+/* A. 스로틀: 우측 핸들 그립 (고무 리브 패턴, 누르면 아래로 감기는 회전 연출) */
+.throttle-grip {
+  width: 74px; height: 158px; border-radius: 22px 22px 30px 30px;
+  background: linear-gradient(90deg, #15181c, #2b3036 45%, #15181c);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45), inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+  transform-origin: 50% 100%; transition: transform 0.08s;
+}
+.grip-ribs {
+  position: absolute; left: 8px; right: 8px; top: 14px; bottom: 36px; border-radius: 12px;
+  background: repeating-linear-gradient(180deg, #3c434b 0 6px, #1a1e22 6px 11px);
+  box-shadow: inset 4px 0 6px rgba(0, 0, 0, 0.55), inset -4px 0 6px rgba(0, 0, 0, 0.55);
+  background-size: 100% 11px;
+}
+.grip-cap { position: absolute; left: 14px; right: 14px; top: 4px; height: 7px; border-radius: 4px; background: linear-gradient(#c9ced3, #8b9198); }
+.throttle-grip b { position: absolute; left: 0; right: 0; bottom: 10px; color: var(--neon); font-size: 11px; letter-spacing: 1px; text-shadow: 0 0 6px rgba(57, 255, 136, 0.7); }
+.throttle-grip.active { transform: perspective(300px) rotateX(14deg) scale(0.98); }
+.throttle-grip.active .grip-ribs { animation: gripRoll 0.35s linear infinite; }
+.throttle-grip.active b { color: #ff4040; text-shadow: 0 0 8px rgba(255, 64, 64, 0.9); }
+@keyframes gripRoll { from { background-position: 0 0; } to { background-position: 0 11px; } }
+
+/* B. 니트로: NOS 부스터 스위치 (100% 충전 시 시안 네온 펄스) */
+.nos-btn {
+  width: 78px; height: 78px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #1f2a38, #0b1118 75%);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.45), inset 0 0 0 3px #2c3746;
+  color: #8fa3b8; margin-right: 0;
+}
+.nos-btn i { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: linear-gradient(0deg, rgba(0, 229, 255, 0.55), rgba(0, 120, 255, 0.25)); }
+.nos-ring { position: absolute; inset: 6px; border-radius: 50%; border: 2px solid rgba(0, 229, 255, 0.25); }
+.nos-btn b { position: relative; font-family: var(--display); font-size: 16px; letter-spacing: 1px; }
+.nos-btn.ready { color: #e9fdff; box-shadow: 0 0 0 3px var(--cyan), 0 0 22px var(--cyan), inset 0 0 18px rgba(0, 229, 255, 0.5); animation: nosPulse 0.9s ease-in-out infinite; }
+.nos-btn.ready .nos-ring { border-color: var(--cyan); }
+.nos-btn.ready b { text-shadow: 0 0 10px var(--cyan); }
+.nos-btn.firing { color: #fff; background: radial-gradient(circle, #00e5ff, #0066ff); box-shadow: 0 0 30px var(--cyan); }
+@keyframes nosPulse { 50% { box-shadow: 0 0 0 5px var(--cyan), 0 0 34px var(--cyan), inset 0 0 22px rgba(0, 229, 255, 0.7); } }
+
+/* C. 브레이크: 디스크 브레이크 + 메탈 레버 패드 */
+.brake-lever {
+  width: 70px; height: 112px; border-radius: 16px 16px 26px 26px;
+  background:
+    repeating-linear-gradient(100deg, rgba(255, 255, 255, 0.07) 0 2px, rgba(0, 0, 0, 0.04) 2px 4px),
+    linear-gradient(160deg, #e9edf1, #9aa3ad 55%, #6f7882);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.6);
+  color: #2b3036; transition: transform 0.06s, box-shadow 0.1s;
+}
+.brake-lever .disc {
+  position: absolute; left: 50%; top: 14px; width: 46px; height: 46px; margin-left: -23px; border-radius: 50%;
+  background: radial-gradient(circle, #6f7882 0 6px, #c6ccd2 7px 12px, transparent 13px),
+    repeating-conic-gradient(#8d959e 0 12deg, #b3bac1 12deg 24deg);
+  box-shadow: inset 0 0 0 3px #59616a;
+}
+.brake-lever b { position: absolute; left: 0; right: 0; bottom: 12px; font-size: 12px; letter-spacing: 1px; }
+.brake-lever.active { transform: translateY(3px) scale(0.97); box-shadow: 0 0 0 3px #ff2a2a, 0 0 24px rgba(255, 42, 42, 0.9); color: #fff; background: linear-gradient(160deg, #ff6b6b, #c81e1e 60%, #8c0f0f); }
+.brake-lever.active .disc { box-shadow: inset 0 0 0 3px #ff2a2a, 0 0 12px rgba(255, 60, 60, 0.9); }
 
 /* 이펙트 */
-#dropsFx {
-  position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.8s;
-  background:
-    radial-gradient(circle at 12% 22%, rgba(255,255,255,0.35) 0 9px, transparent 11px),
-    radial-gradient(circle at 78% 14%, rgba(255,255,255,0.3) 0 6px, transparent 8px),
-    radial-gradient(circle at 64% 58%, rgba(255,255,255,0.25) 0 12px, transparent 14px),
-    radial-gradient(circle at 30% 70%, rgba(255,255,255,0.3) 0 7px, transparent 9px),
-    radial-gradient(circle at 88% 78%, rgba(255,255,255,0.28) 0 10px, transparent 12px),
-    radial-gradient(circle at 46% 36%, rgba(255,255,255,0.22) 0 5px, transparent 7px),
-    linear-gradient(180deg, rgba(40,60,90,0.25), rgba(40,60,90,0.05));
-  animation: drops 1.6s linear infinite;
+#rainFx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#brakeFx {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.15s;
+  background: radial-gradient(ellipse at 50% 60%, transparent 52%, rgba(255, 30, 30, 0.42) 100%);
 }
-#dropsFx.on { opacity: 1; }
-#dropsFx.splash { opacity: 1; background-size: 120% 120%; filter: blur(1.5px); }
-@keyframes drops { 0% { background-position: 0 -20px; } 100% { background-position: 0 40px; } }
+#brakeFx.on { opacity: 1; }
 
 #boostFx {
   position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.3s;
@@ -387,6 +403,7 @@ body.auto-throttle .tbtn.throttle { opacity: 0.85; }
 }
 .popup {
   font-family: var(--display);
+  letter-spacing: 1px;
   font-size: clamp(20px, 6vw, 28px);
   color: #fff;
   -webkit-text-stroke: 1px rgba(0, 90, 40, 0.6);
@@ -540,3 +557,85 @@ body.auto-throttle .tbtn.throttle { opacity: 0.85; }
   background: repeating-linear-gradient(90deg, #222 0 2px, transparent 2px 4px, #222 4px 7px, transparent 7px 9px, #222 9px 10px, transparent 10px 13px);
 }
 .receipt .btn { font-family: system-ui, -apple-system, 'Apple SD Gothic Neo', sans-serif; }
+
+/* ======================================================================
+   글로벌 영문 HUD / 미니멀 아이콘
+   ====================================================================== */
+.ic { width: 1.15em; height: 1.15em; flex: 0 0 auto; vertical-align: -0.2em; }
+.btn, .svc, .account-chip, .icon-btn { letter-spacing: 0.5px; }
+.btn[data-icon] { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.btn.big[data-icon] .ic { width: 22px; height: 22px; }
+.btn, .tabs button, .badge, .setting, .panel h2, .panel h3 { font-family: var(--hud); font-weight: 700; }
+.panel h2 { font-family: var(--display); font-weight: 400; font-size: 22px; letter-spacing: 1px; }
+.svc i { color: var(--green-dark); }
+.svc i .ic { width: 28px; height: 28px; }
+.svc span { font-size: 12px; letter-spacing: 1px; }
+.account-chip { display: inline-flex; align-items: center; gap: 6px; }
+.btn.multi { flex-wrap: wrap; }
+.btn.multi .ic { width: 22px; height: 22px; }
+.btn.multi small { width: 100%; font-weight: 600; letter-spacing: 0; }
+@media (min-width: 420px) { .btn.multi small { width: auto; } }
+.setting span { display: inline-flex; align-items: center; gap: 8px; }
+.setting .ic { color: var(--green-dark); }
+.hero-info small { letter-spacing: 1px; }
+.hero-score, .final-score, #hudScore, .rc-total b { font-family: var(--display); font-weight: 400; }
+
+/* 상단 스탯 필 (거리 / 코인) */
+.stat-pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94); color: var(--text); font-weight: 700; font-size: 15px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.stat-pill .ic { color: var(--green-dark); }
+.stat-pill.coin .ic { color: #d99a00; }
+.stat-pill.light { background: rgba(255, 255, 255, 0.2); color: #fff; box-shadow: none; }
+.stat-pill.light .ic { color: #ffd34d; }
+.pause-btn { width: auto; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; font-family: var(--hud); font-weight: 700; font-size: 13px; }
+
+/* 속도계: 반원 아크 + RPM 아크(스로틀 시 붉게 차오름) */
+.hud-center.speedo { padding: 6px 14px 8px; gap: 2px; min-width: 150px; position: relative; }
+.speedo-arc { width: 128px; height: 70px; display: block; margin-bottom: -40px; overflow: visible; }
+.speedo-arc path { fill: none; stroke-linecap: round; }
+.arc-bg { stroke: #e6e9ec; stroke-width: 7; }
+.arc-speed { stroke: var(--green); stroke-width: 7; transition: stroke-dasharray 0.08s linear; }
+.arc-rpm { stroke: #ff2d2d; stroke-width: 3.5; opacity: 0.95; filter: drop-shadow(0 0 3px rgba(255, 45, 45, 0.8)); transition: stroke-dasharray 0.06s linear; }
+.speedo-read { font-family: var(--display); line-height: 1; display: flex; align-items: baseline; gap: 4px; position: relative; }
+.speedo-read #hudSpeed { font-size: clamp(26px, 7vw, 36px); font-variant-numeric: tabular-nums; }
+.speedo-read small { font-family: var(--hud); font-weight: 700; font-size: 12px; color: var(--muted); letter-spacing: 1px; }
+.speedo #nitroWrap { margin-top: 6px; }
+#nitroBar { background: linear-gradient(90deg, #0077ff, var(--cyan)); }
+#nitroWrap.ready { box-shadow: 0 0 10px var(--cyan); }
+
+/* 네온 팝업 텍스트 */
+.popup { color: #fff; -webkit-text-stroke: 0; text-shadow: 0 0 6px var(--neon), 0 0 16px rgba(57, 255, 136, 0.8), 0 2px 0 rgba(0, 0, 0, 0.45); }
+.popup small { display: block; text-align: center; font-family: var(--hud); font-weight: 700; font-size: 0.55em; letter-spacing: 1px; }
+.popup.perfect { color: #fff7c2; text-shadow: 0 0 6px #ffd23d, 0 0 18px rgba(255, 170, 0, 0.9), 0 2px 0 rgba(0, 0, 0, 0.45); }
+.popup.combo { color: #ffd6dd; text-shadow: 0 0 6px #ff3b5c, 0 0 18px rgba(255, 59, 92, 0.9); }
+.popup.power { color: #e2fbff; text-shadow: 0 0 6px var(--cyan), 0 0 18px rgba(0, 229, 255, 0.85); }
+.popup.big { color: #e2fbff; text-shadow: 0 0 8px var(--cyan), 0 0 24px rgba(0, 229, 255, 0.9), 0 3px 0 rgba(0, 0, 0, 0.4); }
+
+/* HUD 태그 */
+.tag { display: inline-flex; align-items: center; gap: 5px; font-family: var(--hud); font-weight: 700; letter-spacing: 0.5px; }
+.tag .ic { width: 14px; height: 14px; }
+.tag.onc { font-family: var(--display); font-weight: 400; letter-spacing: 1px; }
+
+/* 결과 화면 */
+.result-title { font-family: var(--display) !important; font-weight: 400 !important; font-size: 34px !important; letter-spacing: 2px; }
+.result-title.crash { color: var(--red); }
+.result-title.delivered { color: var(--green); text-shadow: 0 0 18px rgba(0, 177, 79, 0.35); }
+.new-record { font-family: var(--display); font-weight: 400; letter-spacing: 2px; }
+
+/* 상점 스와치 */
+.swatch { width: 54px; height: 54px; border-radius: 14px; border: 2px solid rgba(0, 0, 0, 0.08); box-shadow: inset 0 -8px 0 rgba(0, 0, 0, 0.12); }
+.bike-icon .ic { width: 30px; height: 30px; }
+.shop-section { font-family: var(--hud); letter-spacing: 1px; }
+
+/* 영수증 */
+.receipt { font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; }
+.receipt .btn { font-family: var(--hud); }
+.rc-head small { letter-spacing: 2px; }
+.medal { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-family: var(--display); font-weight: 400; font-size: 12px; color: #fff; }
+.medal.m1 { background: linear-gradient(135deg, #ffd34d, #e0a100); }
+.medal.m2 { background: linear-gradient(135deg, #d9dee3, #9aa3ad); }
+.medal.m3 { background: linear-gradient(135deg, #e3a36b, #b06a2c); }
+.mission .ic, #goMissions .ic, .rank-entry .ic { color: var(--green-dark); }

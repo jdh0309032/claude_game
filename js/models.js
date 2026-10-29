@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MODEL_CONFIG } from './config.js';
+import { icon as svgIcon } from './icons.js';
 
 // ======================================================================
 // 외부 모델 관리자
@@ -345,6 +346,7 @@ export function createBike(color, opts = {}) {
     return { root, lean, bodyMat: new THREE.MeshLambertMaterial({ color }), flame };
   }
   const bodyMat = new THREE.MeshLambertMaterial({ color });
+  const bikeTail = tailMat.clone(); // 내 바이크 전용 (브레이크 시 밝아짐)
   const body = [], det = [], head = [], tail = [], glow = [];
   const out = OUTFIT_STYLES[opts.outfit] || OUTFIT_STYLES.jacket;
   const hel = HELMET_STYLES[opts.helmet] || HELMET_STYLES.basic;
@@ -409,7 +411,7 @@ export function createBike(color, opts = {}) {
     new THREE.Mesh(merge(body), bodyMat),
     new THREE.Mesh(merge(det), vcMat),
     new THREE.Mesh(merge(head), headMat),
-    new THREE.Mesh(merge(tail), tailMat),
+    new THREE.Mesh(merge(tail), bikeTail),
   );
   if (glow.length) lean.add(new THREE.Mesh(merge(glow), new THREE.MeshBasicMaterial({ vertexColors: true })));
   if (extBox) {
@@ -418,8 +420,29 @@ export function createBike(color, opts = {}) {
   }
   const flame = makeFlame();
   lean.add(flame);
+  // 브레이크 시 후미등(스톱램프) 글로우
+  const brakeGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xff2a2a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  brakeGlow.position.set(0, 1.0, 0.82);
+  brakeGlow.scale.set(1.6, 1.0, 1);
+  lean.add(brakeGlow);
   root.add(shadow(0.9, 2.2));
-  return { root, lean, bodyMat, flame };
+  return { root, lean, bodyMat, flame, tailMat: bikeTail, brakeGlow };
+}
+
+let _glowTex = null;
+function glowTexture() {
+  if (_glowTex) return _glowTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.5)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g;
+  x.fillRect(0, 0, 64, 64);
+  _glowTex = new THREE.CanvasTexture(c);
+  return _glowTex;
 }
 
 function makeFlame() {
@@ -655,10 +678,10 @@ export const puddleGeometry = () => new THREE.PlaneGeometry(2.6, 3.8).rotateX(-M
 
 // ---------- 파워업
 const POWER_STYLE = {
-  shield: { color: 0x4cc9f0, icon: '🛡️' },
-  magnet: { color: 0xff4d6d, icon: '🧲' },
+  shield: { color: 0x4cc9f0, icon: 'shield' },
+  magnet: { color: 0xff4d6d, icon: 'magnet' },
   x2:     { color: 0xffd60a, icon: 'x2' },
-  slow:   { color: 0x80ed99, icon: '⏳' },
+  slow:   { color: 0x80ed99, icon: 'clock' },
 };
 
 export function createPowerUp(type) {
@@ -691,13 +714,17 @@ export function createPowerUp(type) {
   x.beginPath();
   x.arc(64, 64, 58, 0, Math.PI * 2);
   x.fill();
-  x.font = 'bold 64px sans-serif';
-  x.textAlign = 'center';
-  x.textBaseline = 'middle';
-  x.fillStyle = '#fff';
-  x.fillText(icon, 64, 68);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  // 라인 아이콘 SVG 를 캔버스에 그려서 스프라이트 라벨로 사용
+  const img = new Image();
+  img.onload = () => {
+    x.drawImage(img, 28, 28, 72, 72);
+    tex.needsUpdate = true;
+  };
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+    svgIcon(icon).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" ').replace(/currentColor/g, '#ffffff'),
+  );
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
   sprite.scale.set(1.1, 1.1, 1);
   sprite.position.y = 2.5;

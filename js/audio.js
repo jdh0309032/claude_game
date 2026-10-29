@@ -1,9 +1,26 @@
-// WebAudio로 즉석 합성하는 효과음 (외부 음원 파일 없음)
+// WebAudio로 즉석 합성하는 효과음 + 아케이드 BGM (외부 음원 파일 없음)
+const ENGINE_VOL = 0.022; // 이전 0.06 대비 약 37% — 플레이 방해 안 되게
+const MUSIC_VOL = 0.32;
+const BPM = 128;
+
+// A minor 진행: Am - F - C - G (마디당 한 코드)
+const CHORDS = [
+  { root: 110.0, tones: [220.0, 261.63, 329.63, 440.0] },
+  { root: 87.31, tones: [174.61, 220.0, 261.63, 349.23] },
+  { root: 130.81, tones: [196.0, 261.63, 329.63, 392.0] },
+  { root: 98.0, tones: [196.0, 246.94, 293.66, 392.0] },
+];
+const BASS_STEPS = [0, 2, 3, 6, 8, 10, 11, 14];
+const ARP_ORDER = [0, 1, 2, 3, 2, 1, 2, 3];
+
 export class Sound {
   constructor() {
     this.ctx = null;
     this.enabled = true;
+    this.musicOn = true;
     this.engine = null;
+    this.music = null;
+    this.intensity = 0;
   }
 
   init() {
@@ -18,8 +35,121 @@ export class Sound {
       this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
       const d = this.noiseBuf.getChannelData(0);
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      // 음악 버스: 부스트 때 필터가 열리는 로우패스 → 마스터
+      this.musicFilter = this.ctx.createBiquadFilter();
+      this.musicFilter.type = 'lowpass';
+      this.musicFilter.frequency.value = 5200;
+      this.musicGain = this.ctx.createGain();
+      this.musicGain.gain.value = this.musicOn ? MUSIC_VOL : 0;
+      this.musicFilter.connect(this.musicGain).connect(this.master);
+      this.startMusic();
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
+  }
+
+  setMusic(on) {
+    this.musicOn = on;
+    if (this.musicGain) this.musicGain.gain.setTargetAtTime(on ? MUSIC_VOL : 0, this.ctx.currentTime, 0.1);
+  }
+
+  // 0~1: 속도가 오르면 하이햇·리드가 커지고, 니트로 때 필터 개방
+  setIntensity(v, boost = false) {
+    this.intensity = v;
+    if (this.musicFilter) this.musicFilter.frequency.setTargetAtTime(boost ? 12000 : 3200 + v * 4000, this.ctx.currentTime, 0.2);
+  }
+
+  // ---------- BGM 스텝 시퀀서 (16분음표, lookahead 스케줄링)
+  startMusic() {
+    if (!this.ctx || this.music) return;
+    const stepDur = 60 / BPM / 4;
+    this.music = { step: 0, next: this.ctx.currentTime + 0.1, stepDur };
+    this.music.timer = setInterval(() => {
+      const m = this.music;
+      if (!m || this.ctx.state !== 'running') return;
+      while (m.next < this.ctx.currentTime + 0.12) {
+        this.playStep(m.step, m.next, stepDur);
+        m.step = (m.step + 1) % 64;
+        m.next += stepDur;
+      }
+    }, 25);
+  }
+
+  playStep(step, t, sd) {
+    const c = this.ctx, out = this.musicFilter, lvl = this.intensity;
+    const s = step % 16, chord = CHORDS[(step >> 4) % 4];
+    // 킥 (4 on the floor)
+    if (s % 4 === 0) {
+      const o = c.createOscillator(), g = c.createGain();
+      o.frequency.setValueAtTime(150, t);
+      o.frequency.exponentialRampToValueAtTime(42, t + 0.18);
+      g.gain.setValueAtTime(0.9, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+      o.connect(g).connect(out);
+      o.start(t);
+      o.stop(t + 0.3);
+    }
+    // 클랩 (2, 4박)
+    if (s === 4 || s === 12) this.noiseAt(t, 0.16, 0.35, 'bandpass', 1700, 1.2, out);
+    // 하이햇: 오프비트 오픈 + 16비트 클로즈 (속도 오를수록 촘촘)
+    if (s % 4 === 2) this.noiseAt(t, 0.09, 0.16 + lvl * 0.08, 'highpass', 7500, 0.7, out);
+    else if (s % 2 === 1 && lvl > 0.25) this.noiseAt(t, 0.03, 0.05 + lvl * 0.06, 'highpass', 9000, 0.7, out);
+    // 베이스: 루트/옥타브 펌핑
+    if (BASS_STEPS.includes(s)) {
+      const f = chord.root * (s % 4 === 2 ? 2 : 1);
+      const o = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f, t);
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(900, t);
+      lp.frequency.exponentialRampToValueAtTime(220, t + sd * 1.6);
+      g.gain.setValueAtTime(0.32, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + sd * 1.8);
+      o.connect(lp).connect(g).connect(out);
+      o.start(t);
+      o.stop(t + sd * 2);
+    }
+    // 리드 아르페지오 (16분음표, 속도 오를수록 커짐)
+    const arpVol = 0.035 + lvl * 0.06;
+    if (step % 2 === 0 || lvl > 0.5) {
+      const f = chord.tones[ARP_ORDER[s % 8]] * (step >= 32 && s >= 8 ? 2 : 1);
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = 'square';
+      o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(arpVol, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + sd * 0.9);
+      o.connect(g).connect(out);
+      o.start(t);
+      o.stop(t + sd);
+    }
+    // 패드: 마디 시작에 코드 깔기
+    if (s === 0) {
+      for (const f of chord.tones.slice(0, 3)) {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = 'triangle';
+        o.frequency.setValueAtTime(f, t);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(0.035, t + 0.08);
+        g.gain.exponentialRampToValueAtTime(0.001, t + sd * 15);
+        o.connect(g).connect(out);
+        o.start(t);
+        o.stop(t + sd * 16);
+      }
+    }
+  }
+
+  noiseAt(t, dur, vol, type, freq, q, out) {
+    const s = this.ctx.createBufferSource();
+    s.buffer = this.noiseBuf;
+    const f = this.ctx.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = freq;
+    f.Q.value = q;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    s.connect(f).connect(g).connect(out);
+    s.start(t, Math.random() * 0.5);
+    s.stop(t + dur + 0.02);
   }
 
   setEnabled(on) {
@@ -163,7 +293,7 @@ export class Sound {
     o2.frequency.value = 60;
     o1.start();
     o2.start();
-    g.gain.setTargetAtTime(0.06, c.currentTime, 0.2);
+    g.gain.setTargetAtTime(ENGINE_VOL, c.currentTime, 0.2);
     this.engine = { o1, o2, f, g };
   }
 

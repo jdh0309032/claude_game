@@ -7,43 +7,43 @@ const SESSION_KEY = 'grabrider.session.v1';
 const LOCAL_DB_KEY = 'grabrider.localdb.v1';
 
 export const BIKES = [
-  { id: 'rookie',  name: '루키 125',    price: 0,     maxKmh: 170, accel: 1.0,  handling: 1.0,  color: 0xf2f2f2, desc: '신입 라이더의 배달 스쿠터' },
-  { id: 'street',  name: '스트리트 400', price: 600,   maxKmh: 200, accel: 1.1,  handling: 1.12, color: 0x2a9df4, desc: '균형 잡힌 도심형' },
-  { id: 'racer',   name: '레이서 R6',    price: 2000,  maxKmh: 235, accel: 1.25, handling: 1.25, color: 0x2ec27e, desc: '날카로운 코너링' },
-  { id: 'hyper',   name: '하이퍼 1000',  price: 5000,  maxKmh: 270, accel: 1.4,  handling: 1.38, color: 0xffb703, desc: '압도적인 최고속도' },
-  { id: 'phantom', name: '팬텀 X',      price: 12000, maxKmh: 300, accel: 1.6,  handling: 1.55, color: 0x9b5de5, desc: '전설의 하이퍼바이크' },
+  { id: 'rookie',  name: 'Rookie 125',   price: 0,     maxKmh: 170, accel: 1.0,  handling: 1.0,  color: 0xf2f2f2, desc: 'Starter delivery scooter' },
+  { id: 'street',  name: 'Street 400',   price: 600,   maxKmh: 200, accel: 1.1,  handling: 1.12, color: 0x2a9df4, desc: 'Balanced city commuter' },
+  { id: 'racer',   name: 'Racer R6',     price: 2000,  maxKmh: 235, accel: 1.25, handling: 1.25, color: 0x2ec27e, desc: 'Razor-sharp handling' },
+  { id: 'hyper',   name: 'Hyper 1000',   price: 5000,  maxKmh: 270, accel: 1.4,  handling: 1.38, color: 0xffb703, desc: 'Brutal top speed' },
+  { id: 'phantom', name: 'Phantom X',    price: 12000, maxKmh: 300, accel: 1.6,  handling: 1.55, color: 0x9b5de5, desc: 'Legendary hyperbike' },
 ];
 
 // 차고 커스텀 파츠 (모델 모양은 models.js 의 *_STYLES 와 id 로 매칭)
 export const BOXES = [
-  { id: 'basic',     name: '기본 배달 상자', price: 0,    icon: '🟩', desc: '그린 컬러 기본 상자' },
-  { id: 'styrofoam', name: '스티로폼 박스', price: 300,  icon: '⬜', desc: '신선식품 배달 전용' },
-  { id: 'neon',      name: '네온 박스',     price: 1500, icon: '🟦', desc: '밤에 빛나는 네온 라인' },
-  { id: 'treasure',  name: '보물상자',      price: 4000, icon: '🧰', desc: '황금 장식 나무 상자' },
+  { id: 'basic',     name: 'Classic Box',   price: 0,    swatch: '#00b14f', desc: 'Standard green delivery box' },
+  { id: 'styrofoam', name: 'Cooler Box',    price: 300,  swatch: '#f4f4ee', desc: 'Styrofoam box for fresh food' },
+  { id: 'neon',      name: 'Neon Box',      price: 1500, swatch: '#00f0ff', desc: 'Glowing neon trim at night' },
+  { id: 'treasure',  name: 'Treasure Chest', price: 4000, swatch: '#7a4a22', desc: 'Wooden chest with gold trim' },
 ];
 export const OUTFITS = [
-  { id: 'jacket',     name: '라이더 재킷',  price: 0,    icon: '🧥', desc: '그린 라이더 재킷' },
-  { id: 'raincoat',   name: '옐로 우비',    price: 500,  icon: '🟨', desc: '스콜에도 끄떡없는 판초 우비' },
-  { id: 'raincoat_p', name: '핑크 우비',    price: 800,  icon: '🩷', desc: '눈에 띄는 핑크 판초' },
+  { id: 'jacket',     name: 'Rider Jacket', price: 0,    swatch: '#00b14f', desc: 'Signature green jacket' },
+  { id: 'raincoat',   name: 'Yellow Poncho', price: 500,  swatch: '#ffd21f', desc: 'Squall-proof rain poncho' },
+  { id: 'raincoat_p', name: 'Pink Poncho',  price: 800,  swatch: '#ff6fae', desc: 'High-visibility pink poncho' },
 ];
 export const HELMETS = [
-  { id: 'basic', name: '그린 헬멧',   price: 0,    icon: '🟢', desc: '기본 하프 헬멧' },
-  { id: 'full',  name: '풀페이스',    price: 700,  icon: '⚫', desc: '블루 미러 바이저' },
-  { id: 'retro', name: '레트로',      price: 1200, icon: '⚪', desc: '레드 스트라이프 클래식' },
-  { id: 'gold',  name: '골드 헬멧',   price: 6000, icon: '🟡', desc: '랭커의 상징' },
+  { id: 'basic', name: 'Green Half',  price: 0,    swatch: '#00b14f', desc: 'Standard half helmet' },
+  { id: 'full',  name: 'Full Face',   price: 700,  swatch: '#15171a', desc: 'Blue mirrored visor' },
+  { id: 'retro', name: 'Retro',       price: 1200, swatch: '#f3efe6', desc: 'Classic red stripe' },
+  { id: 'gold',  name: 'Gold Helmet', price: 6000, swatch: '#e6b422', desc: 'Mark of a top ranker' },
 ];
 
 export const MISSION_DEFS = {
-  near:     { label: (n) => `한 판에 니어미스 ${n}회`,          targets: [5, 10, 20, 35, 50, 80] },
-  dist:     { label: (n) => `한 판에 ${n.toLocaleString()}m 주행`, targets: [1000, 2500, 5000, 8000, 12000, 20000] },
-  score:    { label: (n) => `한 판에 ${n.toLocaleString()}점 달성`, targets: [3000, 10000, 25000, 50000, 100000, 200000] },
-  coins:    { label: (n) => `한 판에 코인 ${n}개 획득`,          targets: [10, 25, 50, 80, 120, 200] },
-  oncoming: { label: (n) => `역주행 차선에서 ${n.toLocaleString()}m 달리기`, targets: [200, 500, 1000, 2000, 3500, 5000] },
-  boost:    { label: (n) => `니트로 ${n}회 사용`,               targets: [1, 2, 3, 5, 7, 10] },
-  combo:    { label: (n) => `니어미스 콤보 x${n} 달성`,          targets: [3, 5, 8, 12, 16, 20] },
-  speed:    { label: (n) => `최고속도 ${n}km/h 돌파`,            targets: [120, 150, 180, 210, 240, 280] },
-  smash:    { label: (n) => `니트로로 차량 ${n}대 날려버리기`,     targets: [1, 3, 5, 10, 15, 25] },
-  jump:     { label: (n) => `견인트럭 경사판 점프 ${n}회`,         targets: [1, 2, 3, 5, 8, 12] },
+  near:     { label: (n) => `Get ${n} near misses in one run`,          targets: [5, 10, 20, 35, 50, 80] },
+  dist:     { label: (n) => `Ride ${n.toLocaleString()} m in one run`, targets: [1000, 2500, 5000, 8000, 12000, 20000] },
+  score:    { label: (n) => `Score ${n.toLocaleString()} in one run`, targets: [3000, 10000, 25000, 50000, 100000, 200000] },
+  coins:    { label: (n) => `Collect ${n} coins in one run`,          targets: [10, 25, 50, 80, 120, 200] },
+  oncoming: { label: (n) => `Ride ${n.toLocaleString()} m in the wrong way lane`, targets: [200, 500, 1000, 2000, 3500, 5000] },
+  boost:    { label: (n) => `Fire nitro ${n} times`,               targets: [1, 2, 3, 5, 7, 10] },
+  combo:    { label: (n) => `Reach a x${n} near-miss combo`,          targets: [3, 5, 8, 12, 16, 20] },
+  speed:    { label: (n) => `Hit ${n} KM/H`,            targets: [120, 150, 180, 210, 240, 280] },
+  smash:    { label: (n) => `Smash ${n} cars with nitro`,     targets: [1, 3, 5, 10, 15, 25] },
+  jump:     { label: (n) => `Air jump off ${n} ramp trucks`,         targets: [1, 2, 3, 5, 8, 12] },
 };
 
 function defaults() {
@@ -64,7 +64,7 @@ function defaults() {
     lastRankId: 0,
     missions: [],
     missionLevels: {},
-    settings: { sound: true, vibrate: true, quality: 'high', touchMode: 'buttons', throttle: 'auto' },
+    settings: { sound: true, music: true, vibrate: true, quality: 'high', touchMode: 'buttons', throttle: 'auto', wetFx: true },
     stats: { runs: 0, totalDist: 0, totalNear: 0 },
   };
 }
@@ -223,16 +223,17 @@ const localDB = () => readJSON(LOCAL_DB_KEY, { users: {}, board: {} });
 
 const friendly = (e) => {
   const m = String(e?.message || e);
-  if (/already registered|already exists/i.test(m)) return '이미 사용 중인 아이디입니다';
-  if (/invalid login|invalid credentials/i.test(m)) return '아이디 또는 비밀번호가 올바르지 않습니다';
-  if (/failed to fetch|network/i.test(m)) return '서버에 연결할 수 없습니다';
+  if (/already registered|already exists/i.test(m)) return 'That ID is already taken';
+  if (/invalid login|invalid credentials/i.test(m)) return 'Wrong ID or password';
+  if (/failed to fetch|network/i.test(m)) return 'Cannot reach the server';
+  if (/rate limit/i.test(m)) return 'Too many attempts, try again later';
   return m;
 };
 
 export const auth = {
   validate(id, pw) {
-    if (!ID_RULE.test(id)) return '아이디는 영문 소문자/숫자/_ 3~12자로 입력하세요';
-    if (!pw || pw.length < 6) return '비밀번호는 6자 이상이어야 합니다';
+    if (!ID_RULE.test(id)) return 'ID must be 3-12 lowercase letters, numbers or _';
+    if (!pw || pw.length < 6) return 'Password must be at least 6 characters';
     return null;
   },
 
@@ -243,11 +244,11 @@ export const auth = {
     try {
       if (ONLINE) {
         const t = await sb('/auth/v1/signup', { method: 'POST', body: { email: `${id}@${ID_EMAIL_DOMAIN}`, password: pw, data: { nickname: id } } });
-        if (!t.access_token) return { ok: false, error: 'Supabase 이메일 확인(Confirm email)을 꺼주세요' };
+        if (!t.access_token) return { ok: false, error: 'Turn off "Confirm email" in Supabase Auth settings' };
         setSession(sessionFromToken(t, id));
       } else {
         const db = localDB();
-        if (db.users[id]) return { ok: false, error: '이미 사용 중인 아이디입니다' };
+        if (db.users[id]) return { ok: false, error: 'That ID is already taken' };
         const salt = randomToken();
         db.users[id] = { salt, hash: await hashPassword(pw, salt), created: Date.now() };
         writeJSON(LOCAL_DB_KEY, db);
@@ -261,14 +262,14 @@ export const auth = {
 
   async signIn(id, pw) {
     id = id.trim().toLowerCase();
-    if (!id || !pw) return { ok: false, error: '아이디와 비밀번호를 입력하세요' };
+    if (!id || !pw) return { ok: false, error: 'Enter your ID and password' };
     try {
       if (ONLINE) {
         const t = await sb('/auth/v1/token?grant_type=password', { method: 'POST', body: { email: `${id}@${ID_EMAIL_DOMAIN}`, password: pw } });
         setSession(sessionFromToken(t, id));
       } else {
         const u = localDB().users[id];
-        if (!u || (await hashPassword(pw, u.salt)) !== u.hash) return { ok: false, error: '아이디 또는 비밀번호가 올바르지 않습니다' };
+        if (!u || (await hashPassword(pw, u.salt)) !== u.hash) return { ok: false, error: 'Wrong ID or password' };
         setSession({ mode: 'local', id, nickname: id, token: randomToken() });
       }
       return { ok: true, user: session };
@@ -304,7 +305,7 @@ export const auth = {
 export const leaderboard = {
   // 게임 오버 시 최고 점수 전송 (서버/로컬 모두 본인 최고점만 유지)
   async submit(score, bike) {
-    if (!session) return { ok: false, error: '로그인이 필요합니다' };
+    if (!session) return { ok: false, error: 'Sign in required' };
     score = Math.floor(score);
     try {
       if (session.mode === 'online') {
