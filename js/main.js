@@ -1894,6 +1894,7 @@ $('btnQuit').addEventListener('click', () => {
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && G.state === 'playing') togglePause();
+  if (!document.hidden) net.resume();
 });
 
 // ---------- 결과 / 랭킹 등록 / 이어달리기
@@ -2083,7 +2084,7 @@ function renderMulti() {
   if (inRoom) {
     $('multiStatus').textContent = net.connected
       ? (net.role === 'host' ? `${MP.oppName} joined. Start the race!` : 'Connected. Waiting for the host to start...')
-      : (net.role === 'host' ? 'Waiting for a rival... share the code' : 'Connecting...');
+      : (net.role === 'host' ? 'Waiting for a rival... Share the code, then come back and keep this screen open.' : 'Connecting...');
   }
 }
 
@@ -2175,6 +2176,9 @@ net.on('disconnected', () => {
   ghost.root.visible = false;
   renderMulti();
   if (G.state === 'over' && MP.active) renderVsResult();
+});
+net.on('status', (t) => {
+  if (currentScreen === 'multi') multiMsg(t, true);
 });
 net.on('error', (e) => {
   if (currentScreen === 'multi') multiMsg(`Connection error: ${describeError(e)}`);

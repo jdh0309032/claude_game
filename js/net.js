@@ -84,22 +84,71 @@ class Net {
 
   async join(code) {
     const Peer = await loadPeerJS();
-    this.close();
-    this.role = 'guest';
     code = code.trim().toUpperCase();
+    // 모바일은 첫 시도에서 ICE 경로를 못 찾는 경우가 있어 한 번 자동 재시도
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      this.close();
+      this.role = 'guest';
+      try {
+        await this._joinOnce(Peer, code, attempt);
+        return;
+      } catch (e) {
+        log(`join attempt ${attempt} failed:`, e.message);
+        if (e.code === 'not-found' || attempt === 2) {
+          this.close();
+          throw e;
+        }
+        this.emit('status', 'Retrying connection...');
+      }
+    }
+  }
+
+  async _joinOnce(Peer, code, attempt) {
+    this.emit('status', attempt > 1 ? 'Retrying: finding room...' : 'Finding room...');
     await this._open(Peer);
-    log('joining room', code);
+    log('joining room', code, 'attempt', attempt);
     const conn = this.peer.connect(PREFIX + code, { reliable: true });
     this.code = code;
     // 방장이 open 직후 보내는 hello(이름·시드)를 놓치지 않도록 수신 핸들러를 먼저 연결
     this._bind(conn);
     await new Promise((resolve, reject) => {
-      const fail = (msg) => { clearTimeout(timer); reject(new Error(msg)); };
-      const timer = setTimeout(() => fail('Room not found (timed out)'), 15000);
-      conn.on('open', () => { clearTimeout(timer); resolve(); });
-      conn.on('error', (e) => { log('conn error', e); fail('Connection failed'); });
-      this.peer.on('error', (e) => { if (e.type === 'peer-unavailable') fail('Room not found'); });
+      let stage = 'signal'; // signal: 방장 응답 대기 / ice: 네트워크 경로 탐색
+      const done = (err) => {
+        clearTimeout(timer);
+        clearInterval(poll);
+        if (err) reject(err);
+        else resolve();
+      };
+      const fail = (msg, codeName) => done(Object.assign(new Error(msg), { code: codeName }));
+      const timer = setTimeout(() => {
+        if (stage === 'signal') fail("The host isn't responding. The host must keep the game screen open (not in the background).", 'no-answer');
+        else fail('Found the host, but your networks blocked the P2P link. Try the same Wi-Fi, or switch Wi-Fi/LTE.', 'ice');
+      }, 25000);
+      // 연결 단계 추적: 방장 응답(answer) 수신 → ICE 경로 탐색 → 연결
+      const poll = setInterval(() => {
+        const pc = conn.peerConnection;
+        if (!pc) return;
+        if (stage === 'signal' && pc.signalingState === 'stable' && pc.remoteDescription) {
+          stage = 'ice';
+          this.emit('status', 'Host found. Connecting...');
+        }
+        if (pc.iceConnectionState === 'failed' || pc.connectionState === 'failed') {
+          fail('Found the host, but your networks blocked the P2P link. Try the same Wi-Fi, or switch Wi-Fi/LTE.', 'ice');
+        }
+      }, 300);
+      conn.on('open', () => done());
+      conn.on('error', (e) => { log('conn error', e); fail('Connection failed', 'conn'); });
+      this.peer.on('error', (e) => { if (e.type === 'peer-unavailable') fail('Room not found. Check the code.', 'not-found'); });
     });
+  }
+
+  // 앱이 백그라운드에서 돌아왔을 때 중개 서버 재연결 (방장이 코드 공유하러 앱 전환한 경우)
+  resume() {
+    const p = this.peer;
+    if (p && !p.destroyed && p.disconnected) {
+      log('resumed: reconnecting to signaling server');
+      p.reconnect();
+    }
   }
 
   _open(Peer, id) {
