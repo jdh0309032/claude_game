@@ -49,10 +49,31 @@ python3 -m http.server 8000
   저사양 기기는 설정에서 *SCREEN WET EFFECT* 를 끄면 되고, 이때도 어두워지는 조명·번개 플래시·하늘을 비추는 물웅덩이로 폭우가 표현됩니다. 물웅덩이를 밟으면 핸들이 둔해지고 미끄러집니다.
 - **위험 요소** — 갓길 노점상(Kaki Lima 수레·천막) 충돌, 중앙선 라바콘·공사 표지판, 깜빡이 차선 변경, 중앙선을 침범하는 차량.
 - **파워업** — 🛡️ 실드, 🧲 자석, ✨ 점수 x2, ⏳ 슬로우모션.
-- **인도네시아 도심 배경** — Ruko(상가주택) 줄, Warung, 야자수, 가로등, 보도. 낮/노을/밤 사이클.
-- **차고** — 바이크 5종 + 배달 상자 스킨(기본·스티로폼·네온·보물상자) + 라이더 의상(재킷·우비)·헬멧(그린·풀페이스·레트로·골드).
-- **미션 / 이어달리기 / 출석 보상** — 한 판 미션 3개, 코인 150개로 부활, 하루 1회 코인 100개.
+- **글로벌 국가 구간** — 1,000m마다 인도네시아(자카르타) → 베트남(하노이) → 태국(방콕) → 한국(서울) → 일본(도쿄) → 싱가포르 → 미국(뉴욕) → 프랑스(파리) 순으로 바뀌고 다시 처음으로 돌아갑니다(`js/themes.js`).
+  나라마다 건물 양식(Ruko·튜브하우스·네온·고층·브라운스톤·오스만), 가로수(야자·벚꽃·은행·활엽), 노점·자판기·카페, 원경 랜드마크, 특수 교통(툭툭·스쿠터 떼·옐로캡)이 다릅니다.
+  국경 150m 전부터 가로등에 국기가 걸리고 국경에는 환영 문구 게이트가 서며, 팝업 없이 하늘·안개 색이 부드럽게 바뀝니다.
+- **3D 광고판** — 나라별 패러디 포스터(`js/config.js` 의 `BILLBOARD_POSTERS`) + **CURRENT CITY #1** 대형 LED 전광판(그 지역 1위 닉네임·점수·국기·3D 라이더 스냅샷).
+- **라이벌 마커** — 도로 위에 내 최고 거리(PB)와 지역 1위 기록 위치가 표시되고, 넘어서면 *NEW RECORD* 불꽃 연출.
+- **HOT DELIVERY** — 400m마다 20% 확률로 돌발 퀘스트: 15초 안에 400m를 달리면 +250 코인.
+- **슬립스트림 / 슬링샷** — 앞차 바로 뒤(6m 이내, 같은 차선)에 붙으면 최대 10% 가속, 0.6초 이상 붙어 있다가 옆으로 빠지면 *SLINGSHOT* 부스트.
+- **FEVER 모드** — 5연속 니어미스 시 5초간 점수 x3, 시야각 확대, 네온 트레일, 코인 자석, 차량 날려버리기.
+- **낮/노을/밤 사이클** + 국가별 색조.
+- **차고 360° 쇼룸** — 드래그로 돌려보는 3D 미리보기. 바이크 8종(0 / 1,500 / 2,500 / 4,000 / 6,000 / 8,000 / 12,000 / 15,000 코인),
+  배달 상자·의상·헬멧 각각 기본 + 유료 6종(500–3,000 코인). **MYSTERY BOX**(1,000 코인) 가챠: 미보유 아이템 랜덤, 전부 보유 시 400 코인 환급.
+- **7일 연속 출석** — 200 → 300 → 400 → 600 → 800 → 1,000 → 1,500 코인, 7일차엔 한정 *Crown* 헬멧. 하루 빠지면 1일차부터.
+- **미션 / 이어달리기** — 한 판 미션 3개, 코인 150개로 부활.
 - **일시정지 = 배달 주문서** — 영수증 스타일로 주행 기록과 미션 진행률(%)을 보여줍니다.
+
+## 보상형 광고 (배너 없음)
+
+- 결과 화면: **WATCH AD TO REVIVE**(한 판 1회), **WATCH AD TO DOUBLE COINS**. 차고: **WATCH AD FOR 300 COINS**(3분 쿨타임).
+- 기본값은 테스트용 가짜 광고(`ADS.provider: 'mock'`, 5초 카운트다운)입니다. 실제 광고는 Google H5 Games Ads(AdSense) 승인 후
+  `js/config.js` 에서 `ADS.provider: 'h5'`, `adClient: 'ca-pub-...'` 를 넣고 `testMode: false` 로 바꾸세요. 광고를 끄려면 `'none'`.
+
+## 공유 · 챌린지
+
+- 결과 화면 **CHALLENGE ON WHATSAPP** — 내 점수와 `?seed=` 링크를 WhatsApp으로 공유. 링크로 들어온 친구는 메뉴에 *CHALLENGE ROAD* 칩이 뜨고 똑같은 도로(교통·장애물)를 달립니다.
+- 링크 주소는 기본적으로 현재 페이지 주소이며, 배포 주소를 고정하려면 `js/config.js` 의 `SHARE_BASE_URL` 을 지정하세요.
 
 ## 계정 · 글로벌 랭킹 (Supabase)
 
@@ -62,10 +83,14 @@ python3 -m http.server 8000
 1. [Supabase](https://supabase.com) 프로젝트 생성
 2. Authentication → Providers → Email 에서 **Confirm email 끄기** (아이디를 `아이디@grabrider.game` 가상 이메일로 가입시킴)
 3. SQL Editor 에서 [`supabase/schema.sql`](supabase/schema.sql) 실행 (랭킹 테이블 + RLS + `submit_score`/`my_rank` 함수)
-4. `js/config.js` 에 `SUPABASE_URL`, `SUPABASE_ANON_KEY` 입력
+4. 이어서 [`supabase/migrations/002_regions_flex.sql`](supabase/migrations/002_regions_flex.sql) 실행 (지역 랭킹·거리·라이더 파츠 컬럼 + `submit_score_v2`/`my_rank_v2`).
+   실행 전에도 게임은 기존 v1 함수로 자동 폴백해 동작하지만, 지역 탭·전광판 1위·Flex View 파츠는 이 마이그레이션이 필요합니다.
+5. `js/config.js` 에 `SUPABASE_URL`, `SUPABASE_ANON_KEY` 입력 (publishable/anon 키만 사용, service_role 키는 절대 넣지 마세요)
 
 - 로그인 토큰은 localStorage 에 저장되어 자동 로그인되며, 만료 시 refresh token 으로 갱신합니다.
 - 게임 오버 시 로그인 상태면 최고 점수가 자동 전송되고 TOP 10 + 내 순위를 표시합니다.
+- 랭킹 탭: **GLOBAL / REGION / DEVICE**. 1위 옆에 국기 배지가 붙고, 위쪽 **Flex View** 에 3/4 정면 각도의 3D 라이더가 표시됩니다.
+  지역은 IP 조회 없이 기기 시간대로 추정하며 설정의 *REGION* 에서 바꿀 수 있습니다.
 - 점수는 클라이언트에서 계산되므로 조작을 완전히 막을 수는 없습니다 (서버 함수에서 범위만 검증).
 
 ## 1v1 멀티플레이 (PeerJS)
@@ -73,7 +98,8 @@ python3 -m http.server 8000
 - 메뉴 → **1v1 멀티플레이** → 방 만들기(5자리 Room Code) / 코드 입력 후 참가 → 방장이 *대결 시작*.
 - 방장이 보낸 **난수 시드**로 두 기기가 같은 교통·라바콘·노점상·물웅덩이·스콜을 생성합니다.
 - 방장의 도로 시드는 참가자가 접속하는 즉시 전달되고, 대결 시작 시 다시 확정됩니다(mulberry32 PRNG, 스폰 종류별 스트림).
-- 위치·속도·점수는 **최대 15 FPS(≈66ms)** 로 제한해 보내고, DataChannel 버퍼가 64KB 넘게 쌓이면 상태 패킷을 건너뜁니다. 상대는 **반투명 고스트**로 그리고, 둘 다 끝나면 점수로 승패. 재대결 지원.
+- 위치·속도·점수는 **최대 15 FPS(≈66ms)** 로 제한해 보내고, DataChannel 버퍼가 64KB 넘게 쌓이면 상태 패킷을 건너뜁니다.
+  받는 쪽은 스냅샷 버퍼를 100ms 늦게 재생하며 사이를 보간(lerp)해 **60 FPS로 부드럽게** 그립니다. 상대는 **반투명 고스트**, 둘 다 끝나면 점수로 승패. 재대결 지원.
 - ICE 서버: Google STUN 3개 + PeerJS 기본 TURN 릴레이(`js/config.js` 의 `PEER_ICE_SERVERS`). 로그 레벨은 `PEER_DEBUG`(기본 2).
   브라우저 콘솔의 `[net]` 로그로 피어 오픈, ICE 상태, 연결 종료, 오류를 확인할 수 있습니다.
 - 중개는 PeerJS 공개 브로커(0.peerjs.com)를 씁니다. 자체 서버는 `js/config.js` 의 `PEER_SERVER` 로 지정하세요.
@@ -86,17 +112,21 @@ python3 -m http.server 8000
 ## 파일 구조
 
 ```
-index.html            화면/HUD/모달 마크업 (로그인, 랭킹, 멀티, 차고 탭, 주문서 일시정지)
+index.html            화면/HUD/모달 마크업 (로그인, 랭킹, 멀티, 차고, 출석, 가챠, 주문서 일시정지)
 css/style.css         앱 스타일 UI + 터치 조작계 레이아웃
-js/config.js          Supabase / PeerJS / 외부 3D 모델 설정
-js/main.js            게임 루프, 입력, 교통·기믹, 시드 동기화, 멀티플레이, UI 흐름
-js/models.js          ModelManager(GLTF 로더) + 로우폴리 모델·텍스처
-js/storage.js         저장 데이터, 커스텀 파츠, 미션, 계정 인증, 글로벌 랭킹 API
+js/config.js          Supabase / PeerJS / 3D 모델 / 상점 카탈로그·가격 / 광고판 포스터 / 광고 설정
+js/main.js            게임 루프, 입력, 교통·기믹, 국가 구간, 시드 동기화, 멀티플레이, UI 흐름
+js/themes.js          8개국 테마, 국기 그리기, 지역 추정
+js/models.js          ModelManager(GLTF 로더) + 로우폴리 모델·건물·랜드마크·광고판·텍스처
+js/preview.js         3D 쇼룸 / Flex View / 전광판 라이더 스냅샷
+js/ads.js             보상형 광고 (mock / Google H5 Games Ads)
+js/storage.js         저장 데이터, 커스텀 파츠, 미션, 계정 인증, 글로벌·지역 랭킹 API
 js/net.js             1v1 연결 (PeerJS)
 js/audio.js           WebAudio 합성 효과음 + 128 BPM BGM 시퀀서
 js/rainfx.js          화면 빗물 오버레이 (Canvas 2D 굴절)
 js/icons.js           미니멀 라인 아이콘 (SVG)
 supabase/schema.sql   글로벌 랭킹 DB 스키마
+supabase/migrations/  지역 랭킹·Flex View 마이그레이션 (002)
 assets/models/        외부 3D 모델 폴더
 vendor/               Three.js r160 + GLTFLoader (MIT), PeerJS 1.5.4 (MIT)
 ```

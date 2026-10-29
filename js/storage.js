@@ -6,32 +6,13 @@ const KEY = 'motorush.save.v1';
 const SESSION_KEY = 'grabrider.session.v1';
 const LOCAL_DB_KEY = 'grabrider.localdb.v1';
 
-export const BIKES = [
-  { id: 'rookie',  name: 'Rookie 125',   price: 0,     maxKmh: 170, accel: 1.0,  handling: 1.0,  color: 0xf2f2f2, desc: 'Starter delivery scooter' },
-  { id: 'street',  name: 'Street 400',   price: 600,   maxKmh: 200, accel: 1.1,  handling: 1.12, color: 0x2a9df4, desc: 'Balanced city commuter' },
-  { id: 'racer',   name: 'Racer R6',     price: 2000,  maxKmh: 235, accel: 1.25, handling: 1.25, color: 0x2ec27e, desc: 'Razor-sharp handling' },
-  { id: 'hyper',   name: 'Hyper 1000',   price: 5000,  maxKmh: 270, accel: 1.4,  handling: 1.38, color: 0xffb703, desc: 'Brutal top speed' },
-  { id: 'phantom', name: 'Phantom X',    price: 12000, maxKmh: 300, accel: 1.6,  handling: 1.55, color: 0x9b5de5, desc: 'Legendary hyperbike' },
-];
+// 상점 가격표는 config.js 에서 관리
+export { BIKES, BOXES, OUTFITS, HELMETS } from './config.js';
+import { BIKES } from './config.js';
+import { guessRegion } from './themes.js';
 
-// 차고 커스텀 파츠 (모델 모양은 models.js 의 *_STYLES 와 id 로 매칭)
-export const BOXES = [
-  { id: 'basic',     name: 'Classic Box',   price: 0,    swatch: '#00b14f', desc: 'Standard green delivery box' },
-  { id: 'styrofoam', name: 'Cooler Box',    price: 300,  swatch: '#f4f4ee', desc: 'Styrofoam box for fresh food' },
-  { id: 'neon',      name: 'Neon Box',      price: 1500, swatch: '#00f0ff', desc: 'Glowing neon trim at night' },
-  { id: 'treasure',  name: 'Treasure Chest', price: 4000, swatch: '#7a4a22', desc: 'Wooden chest with gold trim' },
-];
-export const OUTFITS = [
-  { id: 'jacket',     name: 'Rider Jacket', price: 0,    swatch: '#00b14f', desc: 'Signature green jacket' },
-  { id: 'raincoat',   name: 'Yellow Poncho', price: 500,  swatch: '#ffd21f', desc: 'Squall-proof rain poncho' },
-  { id: 'raincoat_p', name: 'Pink Poncho',  price: 800,  swatch: '#ff6fae', desc: 'High-visibility pink poncho' },
-];
-export const HELMETS = [
-  { id: 'basic', name: 'Green Half',  price: 0,    swatch: '#00b14f', desc: 'Standard half helmet' },
-  { id: 'full',  name: 'Full Face',   price: 700,  swatch: '#15171a', desc: 'Blue mirrored visor' },
-  { id: 'retro', name: 'Retro',       price: 1200, swatch: '#f3efe6', desc: 'Classic red stripe' },
-  { id: 'gold',  name: 'Gold Helmet', price: 6000, swatch: '#e6b422', desc: 'Mark of a top ranker' },
-];
+// 이전 버전 바이크 id → 새 라인업으로 이전
+const LEGACY_BIKES = { street: 'city', racer: 'sport', hyper: 'phantom' };
 
 export const MISSION_DEFS = {
   near:     { label: (n) => `Get ${n} near misses in one run`,          targets: [5, 10, 20, 35, 50, 80] },
@@ -58,6 +39,10 @@ function defaults() {
     ownedOutfits: ['jacket'],
     outfit: 'jacket',
     ownedHelmets: ['basic'],
+    region: guessRegion(),
+    bestDist: 0,
+    streak: 0,
+    adCooldownUntil: 0,
     helmet: 'basic',
     lastName: '',
     lastDaily: '',
@@ -83,6 +68,8 @@ function load() {
         missionLevels: { ...(d.missionLevels || {}) },
       };
       if (merged.settings.touchMode === 'zones') merged.settings.touchMode = 'buttons';
+      merged.ownedBikes = [...new Set(merged.ownedBikes.map((id) => LEGACY_BIKES[id] || id))];
+      merged.bike = LEGACY_BIKES[merged.bike] || merged.bike;
       return merged;
     }
   } catch (e) { /* 저장소 사용 불가 시 기본값 */ }
@@ -302,52 +289,91 @@ export const auth = {
   },
 };
 
+// 새 스키마(supabase/migrations/002_regions_flex.sql) 적용 여부. 없으면 기존 컬럼만 사용
+let schemaV2 = true;
+const V2_COLS = 'user_id,nickname,score,bike,dist,region,box,outfit,helmet';
+const V1_COLS = 'user_id,nickname,score,bike';
+const isMissingSchema = (e) => e && (e.status === 400 || e.status === 404) && /column|function|schema cache|does not exist/i.test(e.message);
+
+// entry: { score, dist, bike, box, outfit, helmet, region }
 export const leaderboard = {
   // 게임 오버 시 최고 점수 전송 (서버/로컬 모두 본인 최고점만 유지)
-  async submit(score, bike) {
+  async submit(entry) {
     if (!session) return { ok: false, error: 'Sign in required' };
-    score = Math.floor(score);
+    const e = { ...entry, score: Math.floor(entry.score), dist: Math.floor(entry.dist || 0) };
     try {
       if (session.mode === 'online') {
         await ensureFreshToken();
-        const best = await sb('/rest/v1/rpc/submit_score', { method: 'POST', auth: true, body: { p_score: score, p_bike: bike, p_nickname: session.nickname } });
+        if (schemaV2) {
+          try {
+            const best = await sb('/rest/v1/rpc/submit_score_v2', {
+              method: 'POST', auth: true,
+              body: { p_score: e.score, p_dist: e.dist, p_bike: e.bike, p_box: e.box, p_outfit: e.outfit, p_helmet: e.helmet, p_region: e.region, p_nickname: session.nickname },
+            });
+            return { ok: true, best };
+          } catch (err) {
+            if (!isMissingSchema(err)) throw err;
+            schemaV2 = false;
+            console.warn('[leaderboard] v2 schema not found, using v1. Run supabase/migrations/002_regions_flex.sql');
+          }
+        }
+        const best = await sb('/rest/v1/rpc/submit_score', { method: 'POST', auth: true, body: { p_score: e.score, p_bike: e.bike, p_nickname: session.nickname } });
         return { ok: true, best };
       }
       const db = localDB();
       const cur = db.board[session.id];
-      if (!cur || score > cur.score) db.board[session.id] = { nickname: session.nickname, score, bike, updatedAt: Date.now() };
+      if (!cur || e.score > cur.score) db.board[session.id] = { nickname: session.nickname, ...e, updatedAt: Date.now() };
       writeJSON(LOCAL_DB_KEY, db);
       return { ok: true, best: db.board[session.id].score };
-    } catch (e) {
-      return { ok: false, error: friendly(e) };
+    } catch (err) {
+      return { ok: false, error: friendly(err) };
     }
   },
 
-  // TOP 10 + 내 순위
-  async fetchTop() {
+  // TOP 10 + 내 순위 (region 지정 시 지역 랭킹)
+  async fetchTop({ region = null } = {}) {
     try {
       if (ONLINE) {
-        const top = await sb('/rest/v1/leaderboard?select=user_id,nickname,score,bike&order=score.desc&limit=10');
+        const q = (cols) => `/rest/v1/leaderboard?select=${cols}&order=score.desc&limit=10${region ? `&region=eq.${encodeURIComponent(region)}` : ''}`;
+        let top;
+        try {
+          top = await sb(q(schemaV2 ? V2_COLS : V1_COLS));
+        } catch (err) {
+          if (!isMissingSchema(err)) throw err;
+          schemaV2 = false;
+          if (region) return { ok: false, error: 'Regional ranking needs the 002 database migration' };
+          top = await sb(q(V1_COLS));
+        }
         let me = null;
         if (session?.mode === 'online') {
           await ensureFreshToken();
-          const r = await sb('/rest/v1/rpc/my_rank', { method: 'POST', auth: true, body: {} });
+          let r;
+          try {
+            r = schemaV2
+              ? await sb('/rest/v1/rpc/my_rank_v2', { method: 'POST', auth: true, body: { p_region: region } })
+              : await sb('/rest/v1/rpc/my_rank', { method: 'POST', auth: true, body: {} });
+          } catch (err) {
+            if (!isMissingSchema(err)) throw err;
+            r = await sb('/rest/v1/rpc/my_rank', { method: 'POST', auth: true, body: {} });
+          }
           if (r && r[0]) me = { rank: Number(r[0].rank), score: r[0].score, nickname: session.nickname };
         }
-        return { ok: true, online: true, top: top.map((t) => ({ ...t, isMe: t.user_id === session?.userId })), me };
+        return { ok: true, online: true, v2: schemaV2, top: top.map((t) => ({ ...t, isMe: t.user_id === session?.userId })), me };
       }
       const all = Object.entries(localDB().board)
         .map(([id, v]) => ({ id, ...v }))
+        .filter((r) => !region || r.region === region)
         .sort((a, b) => b.score - a.score);
       const idx = session ? all.findIndex((r) => r.id === session.id) : -1;
       return {
         ok: true,
         online: false,
+        v2: true,
         top: all.slice(0, 10).map((r) => ({ ...r, isMe: r.id === session?.id })),
         me: idx >= 0 ? { rank: idx + 1, score: all[idx].score, nickname: all[idx].nickname } : null,
       };
-    } catch (e) {
-      return { ok: false, error: friendly(e) };
+    } catch (err) {
+      return { ok: false, error: friendly(err) };
     }
   },
 };

@@ -29,6 +29,7 @@
   <div id="ui">
     <canvas id="rainFx"></canvas>
     <div id="brakeFx"></div>
+    <div id="feverFx"></div>
 
     <!-- In-game HUD -->
     <div id="hud" class="hidden">
@@ -52,6 +53,9 @@
         </div>
       </div>
 
+      <div id="hotBanner" class="hot-banner hidden">
+        <b>HOT DELIVERY!</b><span id="hotText">15s · 400 m</span><i><em id="hotBar"></em></i>
+      </div>
       <div class="hud-top">
         <div class="hud-left">
           <div id="hudScore">0</div>
@@ -94,6 +98,7 @@
           </div>
         </div>
         <p class="greet">Hi, <b id="menuName">Rider</b>. Ready to deliver?</p>
+        <div id="challengeChip" class="challenge-chip hidden"><span data-icon="flag"></span><span id="challengeText">CHALLENGE ROAD</span><button id="btnClearChallenge" aria-label="Clear challenge">&times;</button></div>
       </header>
       <div class="app-sheet">
         <div class="app-card hero">
@@ -171,6 +176,11 @@
     <section id="garage" class="screen hidden">
       <div class="panel">
         <div class="panel-head"><h2>GARAGE</h2><span class="stat-pill coin"><i data-icon="coin"></i><span id="garageCoins">0</span></span></div>
+        <div id="garageStage" class="stage"><small class="stage-hint">DRAG TO ROTATE</small></div>
+        <div class="row garage-actions">
+          <button id="btnGacha" class="btn gold" data-icon="box"><span>MYSTERY BOX · 1,000</span></button>
+          <button id="btnAdCoins" class="btn ad-btn" data-icon="play"><span id="adCoinsLabel">WATCH AD FOR 300 COINS</span></button>
+        </div>
         <div class="tabs" id="garageTabs">
           <button data-tab="bike" class="on">BIKES</button>
           <button data-tab="box">BOXES</button>
@@ -186,10 +196,13 @@
     <section id="ranking" class="screen hidden">
       <div class="panel">
         <div class="panel-head"><h2>TOP 10 RANKING</h2><span id="rankMode" class="badge"></span></div>
+        <div id="rankStage" class="stage flex"><span id="flexLabel" class="flex-label"></span></div>
         <div class="tabs" id="rankTabs">
           <button data-rtab="global" class="on">GLOBAL</button>
-          <button data-rtab="local">THIS DEVICE</button>
+          <button data-rtab="region">REGION</button>
+          <button data-rtab="local">DEVICE</button>
         </div>
+        <select id="rankRegion" class="select hidden"></select>
         <div id="rankList"></div>
         <div id="rankMe" class="rank-me"></div>
         <button class="btn back" data-back data-icon="back"><span>BACK</span></button>
@@ -217,6 +230,7 @@
         <div class="setting"><span><i data-icon="drop"></i>SCREEN WET EFFECT</span><button class="btn toggle" data-setting="wetFx"></button></div>
         <div class="setting"><span><i data-icon="gauge"></i>THROTTLE</span><button class="btn toggle" data-setting="throttle"></button></div>
         <div class="setting"><span><i data-icon="hand"></i>TOUCH STEERING</span><button class="btn toggle" data-setting="touchMode"></button></div>
+        <div class="setting"><span><i data-icon="globe"></i>MY REGION</span><select id="regionSelect" class="select small"></select></div>
         <h3>HOW TO PLAY</h3>
         <ul class="howto">
           <li><b>NEAR MISS</b> — brush past cars for bonus points. Within 0.35 m is a <b class="gold">PERFECT</b> (x2).</li>
@@ -274,10 +288,37 @@
           </div>
         </div>
         <div id="rankDone" class="rank-entry hidden"></div>
+        <div class="row result-ads">
+          <button id="btnAdRevive" class="btn ad-btn" data-icon="play"><span>WATCH AD TO REVIVE</span></button>
+          <button id="btnAdDouble" class="btn ad-btn" data-icon="coin"><span>WATCH AD TO DOUBLE COINS</span></button>
+        </div>
         <button id="btnContinue" class="btn gold" data-icon="coin"><span><span id="contCost">150</span> CONTINUE</span></button>
+        <button id="btnWhatsApp" class="btn whatsapp" data-icon="users"><span>CHALLENGE ON WHATSAPP</span></button>
         <div class="row">
           <button id="btnRetry" class="btn primary" data-icon="retry"><span id="retryLabel">RETRY</span></button>
           <button id="btnHome" class="btn" data-icon="next"><span>NEXT</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7-day login streak -->
+    <section id="daily" class="screen hidden">
+      <div class="panel center">
+        <h2>DAILY REWARD</h2>
+        <p class="muted">Log in 7 days in a row for the Streak Crown helmet.</p>
+        <div id="streakGrid" class="streak-grid"></div>
+        <button id="btnClaimDaily" class="btn primary big" data-icon="check"><span>CLAIM</span></button>
+      </div>
+    </section>
+
+    <!-- Mystery box result -->
+    <section id="gacha" class="screen hidden">
+      <div class="panel center">
+        <h2>MYSTERY BOX</h2>
+        <div id="gachaReveal" class="gacha-reveal"></div>
+        <div class="row">
+          <button id="btnGachaEquip" class="btn primary">EQUIP</button>
+          <button id="btnGachaClose" class="btn">CLOSE</button>
         </div>
       </div>
     </section>

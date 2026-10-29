@@ -273,6 +273,25 @@ export class Sound {
     this.noise(0.25, { vol: 0.25, type: 'highpass', freq: 3000, to: 6000, delay: 0.05 });
   }
 
+  // 핫 배달 성공: 폭죽 (휘슬 상승 → 팡 + 반짝임)
+  fireworks() {
+    for (let i = 0; i < 4; i++) {
+      const d = i * 0.22;
+      this.tone(500 + i * 120, 0.35, { type: 'triangle', vol: 0.06, to: 1800 + i * 200, delay: d });
+      this.noise(0.5, { vol: 0.4, type: 'lowpass', freq: 3500, to: 300, delay: d + 0.33 });
+      this.noise(0.6, { vol: 0.12, type: 'highpass', freq: 6000, to: 9000, delay: d + 0.4 });
+    }
+    [1047, 1319, 1568, 2093].forEach((f, i) => this.tone(f, 0.18, { type: 'square', vol: 0.05, delay: 1.1 + i * 0.08 }));
+  }
+  slingshot() {
+    this.noise(0.6, { vol: 0.35, freq: 500, to: 5000, q: 1.2 });
+    this.tone(300, 0.4, { type: 'sawtooth', vol: 0.07, to: 1400 });
+  }
+  fever() {
+    [523, 784, 1047, 1568].forEach((f, i) => this.tone(f, 0.16, { type: 'square', vol: 0.07, delay: i * 0.06 }));
+    this.noise(0.8, { vol: 0.3, freq: 800, to: 6000, q: 0.8 });
+  }
+
   engineStart() {
     if (!this.ctx || this.engine) return;
     const c = this.ctx;

@@ -4,6 +4,10 @@ import { Sound } from './audio.js';
 import { net, describeError } from './net.js';
 import { icon, hydrateIcons } from './icons.js';
 import { ScreenRain } from './rainfx.js';
+import { THEMES, ZONE_LENGTH, themeAt, themeIndexAt, pickWeighted, REGIONS, flagBadge } from './themes.js';
+import { PreviewStage, renderRiderSnapshot } from './preview.js';
+import { showRewarded, adsEnabled } from './ads.js';
+import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, GACHA_PRICE, GACHA_REFUND, STREAK_REWARDS, STREAK_SPECIAL_HELMET } from './config.js';
 import {
   save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, getBike, qualifies, addRanking, sortRanking,
   replaceDoneMissions, missionText, auth, leaderboard, getSession, ONLINE,
@@ -52,6 +56,12 @@ const wrand = (k, a, b) => a + W[k]() * (b - a);
 const newSeed = () => (Math.random() * 2 ** 32) >>> 0;
 seedWorld(newSeed());
 
+// WhatsApp 챌린지 링크 (?seed=1234) → 같은 도로로 플레이
+let challengeSeed = (() => {
+  const v = new URLSearchParams(location.search).get('seed');
+  return v && /^\d{1,10}$/.test(v) ? Number(v) >>> 0 : null;
+})();
+
 const sfx = new Sound();
 sfx.setEnabled(save.settings.sound);
 sfx.setMusic(save.settings.music);
@@ -86,6 +96,9 @@ applyQuality();
 const screenRain = new ScreenRain($('rainFx'), canvas);
 screenRain.setEnabled(save.settings.wetFx);
 
+// ---------- 게임 상태 (소품 생성 시 참조하므로 먼저 선언)
+const G = { state: 'loading', distance: 0 };
+
 // ---------- 도로, 지면, 연석/보도
 const roadTex = M.makeRoadTexture(renderer.capabilities.getMaxAnisotropy());
 roadTex.repeat.set(1, ROAD_LEN / TILE);
@@ -107,18 +120,21 @@ scene.add(M.createRails(ROAD_LEN, 25 - ROAD_LEN / 2));
 const dummy = new THREE.Object3D();
 const tmpColor = new THREE.Color();
 
+// 소품 슬롯: always = 항상 보이는 메시, variants = 슬롯마다 하나만 보이는 변형 그룹 (국가 테마별 스타일)
+const ZERO_MATRIX = new THREE.Matrix4().makeScale(0, 0, 0);
 class PropStrip {
-  constructor(meshes, count, spacing, respawn) {
-    this.meshes = meshes;
+  constructor({ always = [], variants = [] }, count, spacing, respawn) {
+    this.always = always;
+    this.variants = variants;
     this.span = count * spacing;
     this.respawn = respawn;
     this.items = [];
     for (let i = 0; i < count; i++) {
-      const it = { i, x: 0, z: 25 - i * spacing - Math.random() * spacing * 0.3, sx: 1, sy: 1, sz: 1, ry: 0, hidden: false };
+      const it = { i, x: 0, z: 25 - i * spacing - Math.random() * spacing * 0.3, sx: 1, sy: 1, sz: 1, ry: 0, hidden: false, variant: 0 };
       respawn(it, i);
       this.items.push(it);
     }
-    for (const m of meshes) {
+    for (const m of [...always, ...variants.flat()]) {
       m.frustumCulled = false;
       scene.add(m);
     }
@@ -126,6 +142,7 @@ class PropStrip {
   }
   update(dz) {
     const items = this.items;
+    const fill = this.variants.map(() => 0);
     for (let k = 0; k < items.length; k++) {
       const it = items[k];
       it.z += dz;
@@ -135,54 +152,101 @@ class PropStrip {
       }
       dummy.position.set(it.x, 0, it.z);
       dummy.rotation.set(0, it.ry, 0);
-      if (it.hidden) dummy.scale.set(0, 0, 0);
-      else dummy.scale.set(it.sx, it.sy, it.sz);
+      dummy.scale.set(it.sx, it.sy, it.sz);
       dummy.updateMatrix();
-      for (const m of this.meshes) m.setMatrixAt(k, dummy.matrix);
+      const mat = it.hidden ? ZERO_MATRIX : dummy.matrix;
+      for (const m of this.always) m.setMatrixAt(k, mat);
+      // 변형 메시는 보이는 인스턴스만 앞쪽에 모아 count 로 그림 (숨은 변형 정점 처리 비용 제거)
+      if (it.hidden) continue;
+      const group = this.variants[it.variant];
+      if (!group || !group.length) continue;
+      const n = fill[it.variant]++;
+      for (const m of group) {
+        m.setMatrixAt(n, dummy.matrix);
+        if (m.userData.tinted && it.color) m.setColorAt(n, it.color);
+      }
     }
-    for (const m of this.meshes) m.instanceMatrix.needsUpdate = true;
+    for (const m of this.always) m.instanceMatrix.needsUpdate = true;
+    for (let v = 0; v < this.variants.length; v++) {
+      for (const m of this.variants[v]) {
+        m.count = fill[v];
+        m.instanceMatrix.needsUpdate = true;
+        if (m.instanceColor) m.instanceColor.needsUpdate = true;
+      }
+    }
   }
 }
 
-const palmMesh = new THREE.InstancedMesh(M.palmGeometry(), M.vcMat, 56);
+// 슬롯이 다시 나타나는 위치(먼 앞쪽)의 실제 주행 거리 → 그 구간의 국가 테마
+const slotDist = (it) => (G.distance || 0) - it.z;
+const slotTheme = (it) => themeAt(slotDist(it));
+
+// 건물: 스타일별 base(+glow) 인스턴스 메시 (좌/우 각각)
+const BUILDING_STYLES = ['ruko', 'tube', 'neon', 'modern', 'brick', 'haussmann'];
+const RUKO_COLORS = [0xfff1c9, 0xd8f1e3, 0xfde2e4, 0xdbeafe, 0xfff7ae, 0xe9e3ff, 0xffffff, 0xffd8b5];
+const rukoMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+const buildingGeoms = Object.fromEntries(BUILDING_STYLES.map((st) => [st, M.buildingStyle(st)]));
+function buildingSide(side) {
+  const groups = BUILDING_STYLES.map((st) => {
+    const g = buildingGeoms[st];
+    const meshes = [new THREE.InstancedMesh(g.base, st === 'ruko' ? rukoMat : M.vcMat, 42)];
+    if (g.glow) meshes.push(new THREE.InstancedMesh(g.glow, M.glowMat, 42));
+    return meshes;
+  });
+  const rukoBase = groups[0][0];
+  rukoBase.userData.tinted = true;
+  const strip = new PropStrip({ variants: groups }, 42, 10.2, (it, k) => {
+    const theme = slotTheme(it);
+    const st = pickWeighted(theme.building);
+    it.variant = BUILDING_STYLES.indexOf(st);
+    it.x = side * 16.6;
+    it.ry = side > 0 ? Math.PI : 0;
+    it.sy = st === 'ruko' || st === 'tube' ? 0.85 + Math.random() * 0.45 : 0.8 + Math.random() * 0.5;
+    it.hidden = Math.random() < 0.08; // 골목 사이 틈
+    if (st === 'ruko') (it.color ||= new THREE.Color()).setHex(pick(RUKO_COLORS));
+  });
+  return { strip, groups };
+}
+
+const TREE_KINDS = ['palm', 'sakura', 'ginkgo', 'round'];
+const treeMeshes = TREE_KINDS.map((k) => new THREE.InstancedMesh(M.treeVariant(k), M.vcMat, 56));
+const CURB_KINDS = ['warung', 'vending', 'cafe', 'tent', 'planter'];
+const curbMeshes = CURB_KINDS.map((k) => new THREE.InstancedMesh(M.curbVariant(k), M.vcMat, 14));
 const lampPole = new THREE.InstancedMesh(M.lampPoleGeometry(), M.vcMat, 18);
 const lampHead = new THREE.InstancedMesh(M.lampHeadGeometry(), M.lampHeadMat, 18);
-const rukoMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-const rukoL = new THREE.InstancedMesh(M.rukoGeometry(), rukoMat, 42);
-const rukoR = new THREE.InstancedMesh(M.rukoGeometry(), rukoMat, 42);
-const warungMesh = new THREE.InstancedMesh(M.warungGeometry(), M.vcMat, 14);
+// 가로등 국기: 국경 150m 전부터 다음 나라 국기, 평소엔 일부 가로등에 현재 나라 국기
+const lampFlags = THEMES.map((t) => new THREE.InstancedMesh(M.lampFlagGeometry(), M.flagMaterial(t.code), 18));
 const buildingMat = M.makeBuildingMaterial();
 const bldgMesh = new THREE.InstancedMesh(M.buildingGeometry(), buildingMat, 30);
-const RUKO_COLORS = [0xfff1c9, 0xd8f1e3, 0xfde2e4, 0xdbeafe, 0xfff7ae, 0xe9e3ff, 0xffffff, 0xffd8b5];
-const rukoRespawn = (mesh, side) => (it, k) => {
-  it.x = side * 16.6;
-  it.ry = side > 0 ? Math.PI : 0;
-  it.sy = 0.85 + Math.random() * 0.45;
-  it.hidden = Math.random() < 0.08; // 골목 사이 틈
-  mesh.setColorAt(k, tmpColor.setHex(pick(RUKO_COLORS)));
-  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-};
+const buildingsL = buildingSide(-1), buildingsR = buildingSide(1);
+
 const strips = [
-  new PropStrip([palmMesh], 56, 7.5, (it) => {
+  new PropStrip({ variants: treeMeshes.map((m) => [m]) }, 56, 7.5, (it) => {
+    it.variant = TREE_KINDS.indexOf(slotTheme(it).tree);
     const side = Math.random() < 0.5 ? -1 : 1;
     it.x = side * (Math.random() < 0.7 ? rand(9.6, 10.2) : rand(26, 44));
     it.sx = it.sy = it.sz = rand(0.85, 1.3);
     it.ry = rand(0, Math.PI * 2);
   }),
-  new PropStrip([lampPole, lampHead], 18, 24, (it) => {
+  new PropStrip({ always: [lampPole, lampHead], variants: [[], ...lampFlags.map((m) => [m])] }, 18, 24, (it) => {
     const side = it.i % 2 ? 1 : -1;
     it.x = side * 9.2;
     it.ry = side > 0 ? 0 : Math.PI;
+    const d = slotDist(it);
+    const border = Math.ceil(d / ZONE_LENGTH) * ZONE_LENGTH;
+    if (border - d < 150 && border > 0) it.variant = 1 + themeIndexAt(border);
+    else it.variant = Math.random() < 0.15 ? 1 + themeIndexAt(d) : 0;
   }),
-  new PropStrip([rukoL], 42, 10.2, rukoRespawn(rukoL, -1)),
-  new PropStrip([rukoR], 42, 10.2, rukoRespawn(rukoR, 1)),
-  new PropStrip([warungMesh], 14, 30, (it) => {
+  buildingsL.strip,
+  buildingsR.strip,
+  new PropStrip({ variants: curbMeshes.map((m) => [m]) }, 14, 30, (it) => {
+    it.variant = CURB_KINDS.indexOf(slotTheme(it).curb);
     const side = it.i % 2 ? 1 : -1;
     it.x = side * 12.2;
     it.ry = side > 0 ? Math.PI : 0;
     it.hidden = Math.random() < 0.3;
   }),
-  new PropStrip([bldgMesh], 30, 14, (it, k) => {
+  new PropStrip({ always: [bldgMesh] }, 30, 14, (it, k) => {
     const side = it.i % 2 ? 1 : -1;
     it.x = side * rand(30, 80);
     it.sx = rand(8, 16);
@@ -210,9 +274,10 @@ shieldBubble.position.y = 0.95;
 shieldBubble.scale.set(0.8, 1, 1.2);
 
 const currentBikeKey = () => [save.bike, save.box, save.outfit, save.helmet].join('|');
+const riderOpts = () => ({ style: getBike(save.bike).style, box: save.box, outfit: save.outfit, helmet: save.helmet });
 function buildBike() {
   if (bike) scene.remove(bike.root);
-  bike = M.createBike(getBike(save.bike).color, { box: save.box, outfit: save.outfit, helmet: save.helmet });
+  bike = M.createBike(getBike(save.bike).color, riderOpts());
   bike.root.add(headlight, shieldBubble);
   scene.add(bike.root);
   bikeKey = currentBikeKey();
@@ -225,8 +290,7 @@ ghost.root.visible = false;
 scene.add(ghost.root);
 
 // ---------- 게임 상태
-const G = { state: 'loading' };
-const MP = { active: false, opp: null, oppName: 'Rival', oppDone: false, oppScore: 0, ready: false, oppReady: false, roomSeed: null };
+const MP = { active: false, opp: null, snaps: [], oppName: 'Rival', oppDone: false, oppScore: 0, ready: false, oppReady: false, roomSeed: null };
 
 // ---------- 차량(트래픽)
 const cars = [];
@@ -281,7 +345,14 @@ function blocksAll(lane, z) {
   return occ.size >= 4;
 }
 
-function pickType(r) {
+function pickType(r, r2, z) {
+  // 국가 테마 특수 교통 (태국 툭툭 / 베트남 오토바이 물결 / 뉴욕 옐로캡)
+  const tr = themeAt(G.distance - z).traffic;
+  let acc = 0;
+  for (const [type, w] of Object.entries(tr)) {
+    acc += w;
+    if (r2 < acc) return type;
+  }
   if (G.distance > 1200 && r < 0.05) return 'ramp';
   if (r < 0.12 + Math.min(0.05, G.distance / 60000)) return 'bus';
   if (r < 0.24) return 'truck';
@@ -294,7 +365,7 @@ function pickType(r) {
 function spawnCar(z = SPAWN_Z, forced = null) {
   // 난수는 결과와 무관하게 항상 같은 개수만 소비 → 멀티 동기화 유지
   const r = Array.from({ length: 10 }, () => wr('car'));
-  const type = forced?.type || pickType(r[0]);
+  const type = forced?.type || pickType(r[0], r[9], z);
   const def = M.CAR_DEFS[type];
   const order = forced ? [forced.lane] : type === 'ramp' ? (r[1] < 0.5 ? [2, 3] : [3, 2]) : [0, 1, 2, 3];
   if (type !== 'ramp' && !forced) {
@@ -344,6 +415,7 @@ function setBlink(c, side, on) {
 function updateCars(dt, collide) {
   const t = G.time;
   const solid = collide && !G.air;
+  if (collide) draftingNow = false;
   for (let i = cars.length - 1; i >= 0; i--) {
     const c = cars[i];
     if (c.flying) {
@@ -419,6 +491,11 @@ function updateCars(dt, collide) {
 
     if (!solid || G.air || G.state !== 'playing') continue;
     const dx = Math.abs(c.x - G.x), dz = Math.abs(c.z);
+    // 슬립스트림: 같은 방향 대형차(트럭·버스·견인트럭) 바로 뒤
+    if (c.dir > 0 && (c.type === 'truck' || c.type === 'bus' || c.type === 'ramp')) {
+      const gap = -(c.z + c.len / 2) - BIKE_HL;
+      if (gap > 0 && gap < DRAFT_GAP && dx < DRAFT_LANE) draftingNow = true;
+    }
     if (dx < c.w / 2 + BIKE_HW - 0.05 && dz < c.len / 2 + BIKE_HL - 0.15) {
       // 견인트럭: 뒤쪽 경사판으로 진입하면 점프
       const rearGap = c.z + c.len / 2 + BIKE_HL; // 트럭 뒷면이 바이크 앞을 지난 거리
@@ -601,7 +678,7 @@ function updateCoins(dt, collide) {
     const c = coins[k];
     if (c.active) {
       c.z += G.speed * dt;
-      if (collide && G.magnetTime > 0 && c.z > -30 && c.z < 3) {
+      if (collide && (G.magnetTime > 0 || G.feverT > 0) && c.z > -30 && c.z < 3) {
         c.x += (G.x - c.x) * Math.min(1, dt * 7);
         c.z += -c.z * Math.min(1, dt * 5);
       }
@@ -686,6 +763,340 @@ function applyPower(type) {
   sfx.power();
   vibrate(30);
   popup(POWER_LABEL[type], 'power');
+}
+
+// ======================================================================
+// 글로벌 국가 테마 진행 — 국경 관문 · 국기 · 랜드마크 · 하늘/안개 보간
+// ======================================================================
+const themeTint = new THREE.Color(THEMES[0].tint);
+const themeTintTarget = new THREE.Color(THEMES[0].tint);
+let themeTintAmt = THEMES[0].tintAmt;
+const gateCache = {};
+const gates = [];        // { obj, at } — at: 국경 거리(m)
+const landmarkCache = {};
+let landmarks = [];      // { obj, x, z } — 원경 패럴랙스
+
+function gateFor(idx) {
+  if (!gateCache[idx]) {
+    const g = M.createBorderGate(THEMES[idx]);
+    g.visible = false;
+    scene.add(g);
+    gateCache[idx] = g;
+  }
+  return gateCache[idx];
+}
+
+function spawnLandmark(theme, z = -440) {
+  let obj = landmarkCache[theme.landmark];
+  if (!obj) {
+    obj = M.createLandmark(theme.landmark);
+    scene.add(obj);
+    landmarkCache[theme.landmark] = obj;
+  }
+  landmarks = landmarks.filter((l) => l.obj !== obj);
+  obj.visible = true;
+  landmarks.push({ obj, z, x: (Math.random() < 0.5 ? -1 : 1) * rand(85, 120) });
+}
+
+function resetThemes() {
+  G.themeIdx = themeIndexAt(G.distance);
+  G.nextBorder = (Math.floor(G.distance / ZONE_LENGTH) + 1) * ZONE_LENGTH;
+  const t = THEMES[G.themeIdx];
+  themeTint.setHex(t.tint);
+  themeTintTarget.setHex(t.tint);
+  themeTintAmt = t.tintAmt;
+  for (const g of Object.values(gateCache)) g.visible = false;
+  gates.length = 0;
+  for (const l of landmarks) l.obj.visible = false;
+  landmarks = [];
+  spawnLandmark(t, -330);
+}
+
+function updateThemes(dz, rdt) {
+  const nb = G.nextBorder;
+  // 국경 관문: 국경 지점에 배치되어 앞쪽에서 다가옴 (HUD 팝업 없음)
+  if (nb - G.distance < 235 && !gates.some((g) => g.at === nb)) {
+    const obj = gateFor(themeIndexAt(nb));
+    obj.visible = true;
+    gates.push({ obj, at: nb });
+  }
+  for (let i = gates.length - 1; i >= 0; i--) {
+    const g = gates[i];
+    const z = -(g.at - G.distance);
+    g.obj.position.set(0, 0, z);
+    for (const f of g.obj.flags) f.rotation.y = Math.sin(G.time * 3 + f.position.x) * 0.3;
+    if (z > 20) {
+      g.obj.visible = false;
+      gates.splice(i, 1);
+    }
+  }
+  // 관문 통과 → 다음 나라: 하늘/안개 틴트를 부드럽게 보간
+  if (G.distance >= nb) {
+    G.themeIdx = themeIndexAt(G.distance);
+    G.nextBorder = (Math.floor(G.distance / ZONE_LENGTH) + 1) * ZONE_LENGTH;
+    const t = THEMES[G.themeIdx];
+    themeTintTarget.setHex(t.tint);
+    spawnLandmark(t);
+    fetchRegionTop(t.code);
+    fetchRegionTop(themeAt(G.nextBorder).code);
+  }
+  const k = 1 - Math.exp(-rdt * 1.2);
+  themeTint.lerp(themeTintTarget, k);
+  themeTintAmt = lerp(themeTintAmt, THEMES[G.themeIdx].tintAmt, k);
+  for (let i = landmarks.length - 1; i >= 0; i--) {
+    const l = landmarks[i];
+    l.z += dz * 0.28;
+    l.obj.position.set(l.x, 0, l.z);
+    if (l.z > -70) {
+      l.obj.visible = false;
+      landmarks.splice(i, 1);
+    }
+  }
+}
+
+// ---------- 지역 랭킹 캐시 (전광판 / 라이벌 마커)
+const regionTops = {};
+const regionFetchAt = {};
+async function fetchRegionTop(code, force = false) {
+  if (!code) return;
+  if (!force && regionFetchAt[code] && performance.now() - regionFetchAt[code] < 60000) return;
+  regionFetchAt[code] = performance.now();
+  const res = await leaderboard.fetchTop({ region: code });
+  regionTops[code] = res.ok ? res.top : [];
+  if (code === save.region) setupRivalMarker();
+}
+
+// ======================================================================
+// 도로변 3D 빌보드 + 랭킹 1위 LED 전광판
+// ======================================================================
+const boardPool = [], megaPool = [], activeBoards = [];
+const megaShots = {};
+const megaInfoCache = new Map();
+const BOARD_YAW = 0.93; // 다가오는 차를 향해 비스듬히
+
+function acquireBoard(pool, factory) {
+  let b = pool.find((x) => !x.active);
+  if (!b) {
+    b = { obj: factory(), active: false };
+    scene.add(b.obj);
+    pool.push(b);
+  }
+  b.active = true;
+  b.obj.visible = true;
+  activeBoards.push(b);
+  return b;
+}
+
+function placeBoard(b, side, x, y) {
+  b.z = SPAWN_Z;
+  b.side = side;
+  b.obj.position.set(side * x, y, b.z);
+  b.obj.rotation.y = side < 0 ? -BOARD_YAW : -(Math.PI - BOARD_YAW);
+}
+
+function spawnBillboard() {
+  const theme = themeAt(G.distance - SPAWN_Z);
+  const posters = BILLBOARD_POSTERS[theme.code] || [];
+  if (!posters.length) return;
+  const b = acquireBoard(boardPool, M.createBillboard);
+  placeBoard(b, Math.random() < 0.5 ? -1 : 1, 13.3, 7.6);
+  b.obj.panel.material.map = M.posterTexture(pick(posters), theme.code);
+  b.obj.panel.material.needsUpdate = true;
+}
+
+function spawnMegaBoard() {
+  const theme = themeAt(G.distance - SPAWN_Z);
+  const row = (regionTops[theme.code] || [])[0];
+  const b = acquireBoard(megaPool, M.createMegaBoard);
+  placeBoard(b, Math.random() < 0.5 ? -1 : 1, 13.8, 9);
+  // 1위 라이더 3D 스냅샷 (메인 렌더러로 렌더 타깃에 한 번만 그림)
+  const key = row ? [row.nickname, row.bike, row.box, row.outfit, row.helmet].join('|') : 'none';
+  let shot = megaShots[theme.code];
+  if (!shot) {
+    shot = { rt: new THREE.WebGLRenderTarget(256, 256), key: null };
+    shot.rt.texture.colorSpace = THREE.SRGBColorSpace;
+    megaShots[theme.code] = shot;
+  }
+  if (shot.key !== key) {
+    const bk = getBike(row?.bike || 'rookie');
+    renderRiderSnapshot(renderer, shot.rt, { style: bk.style, box: row?.box || 'basic', outfit: row?.outfit || 'jacket', helmet: row?.helmet || 'basic' }, bk.color);
+    shot.key = key;
+  }
+  b.obj.shot.material.map = shot.rt.texture;
+  b.obj.shot.material.needsUpdate = true;
+  const infoKey = theme.code + key + (row?.score || 0);
+  if (!megaInfoCache.has(infoKey)) {
+    megaInfoCache.set(infoKey, M.megaInfoTexture({
+      city: theme.city,
+      code: row?.region || theme.code,
+      name: row ? String(row.nickname).toUpperCase() : 'YOUR NAME HERE',
+      line: row ? `${fmt(row.score)} PTS${row.dist ? ` · ${fmt(row.dist)} m` : ''}` : 'NO RIDER YET',
+      foot: row ? 'BEAT THIS SCORE TO TAKE THE BOARD' : `BE THE FIRST IN ${theme.city.toUpperCase()}`,
+    }));
+  }
+  b.obj.info.material.map = megaInfoCache.get(infoKey);
+  b.obj.info.material.needsUpdate = true;
+}
+
+function updateBoards(dz) {
+  if (G.distance > G.nextBoard) {
+    spawnBillboard();
+    G.nextBoard += rand(70, 140);
+  }
+  if (G.distance > G.nextMega) {
+    spawnMegaBoard();
+    G.nextMega += rand(550, 750);
+  }
+  for (let i = activeBoards.length - 1; i >= 0; i--) {
+    const b = activeBoards[i];
+    b.z += dz;
+    b.obj.position.z = b.z;
+    if (b.z > 25) {
+      b.active = false;
+      b.obj.visible = false;
+      activeBoards.splice(i, 1);
+    }
+  }
+}
+
+function clearBoards() {
+  for (const b of activeBoards) {
+    b.active = false;
+    b.obj.visible = false;
+  }
+  activeBoards.length = 0;
+}
+
+// ======================================================================
+// 라이벌 마커 (개인 최고 거리 / 지역 1위 거리)
+// ======================================================================
+const pbMarker = M.createRivalMarker(0x39ff88);
+pbMarker.setLabel('PERSONAL BEST');
+const rivalMarker = M.createRivalMarker(0xffc400);
+pbMarker.visible = rivalMarker.visible = false;
+scene.add(pbMarker, rivalMarker);
+
+function setupRivalMarker() {
+  if (G.rivalPassed) return;
+  const me = getSession();
+  const row = (regionTops[save.region] || []).find((r) => !r.isMe && r.dist > 0 && r.nickname !== me?.nickname);
+  G.rivalDist = row ? row.dist : 0;
+  G.rivalName = row ? String(row.nickname).toUpperCase() : '';
+  if (row) rivalMarker.setLabel(`1ST: ${G.rivalName} · ${fmt(row.dist)} m`);
+}
+
+function updateMarkers() {
+  const place = (m, dist) => {
+    const z = -(dist - G.distance);
+    m.visible = dist > 0 && z > -230 && z < 15 && G.state !== 'menu';
+    if (m.visible) m.position.set(0, 0, z);
+  };
+  place(pbMarker, G.pbDist || 0);
+  place(rivalMarker, G.rivalDist || 0);
+  if (G.state !== 'playing') return;
+  if (!G.pbPassed && G.pbDist > 0 && G.distance >= G.pbDist) {
+    G.pbPassed = true;
+    popup('NEW RECORD!', 'perfect', 'PERSONAL BEST DISTANCE');
+    sfx.mission();
+  }
+  if (!G.rivalPassed && G.rivalDist > 0 && G.distance >= G.rivalDist) {
+    G.rivalPassed = true;
+    popup(`PASSED ${G.rivalName}!`, 'combo', `#1 IN ${REGIONS.find((r) => r.code === save.region)?.name.toUpperCase() || 'YOUR REGION'}`);
+    sfx.fever();
+  }
+}
+
+// ======================================================================
+// 돌발 핫 배달 (15초 안에 400m)
+// ======================================================================
+const HOT_TIME = 15, HOT_DIST = 400, HOT_REWARD = 250;
+function updateHotDelivery(rdt) {
+  if (G.distance > G.nextHot) {
+    G.nextHot += 400;
+    if (!G.hot && Math.random() < 0.2) {
+      G.hot = { t: HOT_TIME, start: G.distance };
+      popup('HOT DELIVERY!', 'big', `${HOT_TIME}s / ${HOT_DIST} m`);
+      sfx.beep(true);
+    }
+  }
+  const el = $('hotBanner');
+  if (!G.hot) {
+    el.classList.add('hidden');
+    return;
+  }
+  const h = G.hot;
+  h.t -= rdt;
+  const done = G.distance - h.start;
+  el.classList.remove('hidden');
+  el.classList.toggle('urgent', h.t < 4);
+  $('hotText').textContent = `${Math.max(0, h.t).toFixed(1)}s · ${fmt(Math.max(0, HOT_DIST - done))} m LEFT`;
+  $('hotBar').style.width = `${clamp(done / HOT_DIST, 0, 1) * 100}%`;
+  if (done >= HOT_DIST) {
+    G.hot = null;
+    G.bonusCoins += HOT_REWARD;
+    save.coins += HOT_REWARD;
+    G.hotDone++;
+    popup('DELIVERED!', 'perfect', `+${HOT_REWARD} COINS`);
+    sfx.fireworks();
+    vibrate([30, 40, 30]);
+  } else if (h.t <= 0) {
+    G.hot = null;
+    popup('LATE DELIVERY', 'combo');
+  }
+}
+
+// ======================================================================
+// 슬립스트림 & 슬링샷 / 피버 모드
+// ======================================================================
+const DRAFT_GAP = 6;      // 대형차 뒤 이 거리 안 (m)
+const DRAFT_LANE = 0.9;   // 같은 차선 판정 (횡 간격 m)
+let draftingNow = false;
+
+function updateDraft(dt) {
+  if (draftingNow) {
+    if (G.draftT === 0) popup('SLIPSTREAM', 'power');
+    G.draftT = Math.min(2, G.draftT + dt);
+  } else {
+    // 충분히 드래프팅한 뒤 차선을 바꿔 빠져나오면 슬링샷 부스트
+    if (G.draftT > 0.6 && Math.abs(G.vx) > 1.5) {
+      G.slingT = 1.4;
+      G.score += 200;
+      popup('SLINGSHOT!', 'big', '+200');
+      sfx.slingshot();
+      vibrate(25);
+    }
+    G.draftT = 0;
+  }
+  G.slingT = Math.max(0, G.slingT - dt);
+}
+
+const FEVER_TIME = 5;
+const feverTrails = [0xff2fd6, 0x00e5ff, 0xffe600, 0x7cff4f].map((c) => {
+  const g = M.createGhost(c);
+  g.root.visible = false;
+  scene.add(g.root);
+  return g;
+});
+const trailHistory = [];
+
+function startFever() {
+  G.feverT = FEVER_TIME;
+  popup('FEVER MODE!', 'big', 'x3 SCORE · AUTO MAGNET');
+  sfx.fever();
+  vibrate([20, 30, 20, 30, 40]);
+}
+
+function updateFeverTrails() {
+  trailHistory.push({ x: G.x, y: G.airY || 0, l: G.lean });
+  if (trailHistory.length > 16) trailHistory.shift();
+  const on = G.feverT > 0 && G.state === 'playing';
+  feverTrails.forEach((g, i) => {
+    g.root.visible = on;
+    if (!on) return;
+    const h = trailHistory[Math.max(0, trailHistory.length - 1 - (i + 1) * 3)];
+    g.root.position.set(h.x, h.y, (i + 1) * 0.85);
+    g.lean.rotation.z = h.l;
+  });
 }
 
 // ---------- 이펙트 (3D 빗줄기, 스피드 라인)
@@ -782,6 +1193,7 @@ function updateEnvironment(rdt) {
   skyB.setHex(b[1]);
   skyA.lerp(skyB, f);
   const night = lerp(a[4], b[4], f);
+  skyA.lerp(themeTint, themeTintAmt * (1 - night * 0.5)); // 나라별 대기색
   G.rainAmt = approach(G.rainAmt || 0, G.rain ? 1 : 0, rdt * 0.5);
   const ra = G.rainAmt;
   skyB.copy(rainSky).multiplyScalar(lerp(1, 0.3, night));
@@ -792,6 +1204,8 @@ function updateEnvironment(rdt) {
   if (flash > 0) skyA.lerp(WHITE, flash * 0.6);
   scene.background.copy(skyA);
   scene.fog.color.copy(skyA);
+  M.landmarkMat.color.setScalar(1).lerp(skyA, 0.5); // 원경 랜드마크는 하늘색에 녹아들게
+  M.landmarkGlowMat.color.setScalar(1).lerp(skyA, 0.2);
   scene.fog.near = lerp(60, 22, ra);
   scene.fog.far = lerp(240, 130, ra);
   hemi.intensity = lerp(a[2], b[2], f) * (1 - ra * 0.4) + flash * 2.5;
@@ -822,7 +1236,7 @@ function updateCamera(rdt) {
     lookY = lerp(-1.9, -2.6, p);
   }
   const sf = clamp((G.speed * 3.6 - 60) / 220, 0, 1);
-  const fov = lerp(62, 72, p) + sf * 12 + (G.boostTime > 0 ? 8 : 0) + (G.air ? 6 : 0);
+  const fov = lerp(62, 72, p) + sf * 12 + (G.boostTime > 0 ? 8 : 0) + (G.air ? 6 : 0) + (G.feverT > 0 ? 10 : 0) + (G.slingT > 0 ? 5 : 0);
   if (Math.abs(camera.fov - fov) > 0.05) {
     camera.fov = lerp(camera.fov, fov, Math.min(1, rdt * 4));
     camera.updateProjectionMatrix();
@@ -962,7 +1376,8 @@ function clearWorld() {
 }
 
 function resetRun(seed) {
-  seedWorld(seed ?? newSeed());
+  const runSeed = seed ?? newSeed();
+  seedWorld(runSeed);
   clearWorld();
   screenRain.reset();
   Object.assign(G, {
@@ -975,8 +1390,16 @@ function resetRun(seed) {
     squallT: 0, rain: false, rainAmt: 0, lightning: 0, boltT: 0, shake: 0, crashT: 0,
     air: false, airY: 0, airVy: 0, slipT: 0, slipDir: 0, rpm: 0, braking: false,
     missionsDone: [], cd: 0, cdShown: 0, globalSubmitted: false,
+    seed: runSeed, nextBoard: 120, nextMega: 300, nextHot: 500, hot: null, bonusCoins: 0, hotDone: 0,
+    draftT: 0, slingT: 0, feverT: 0, pbDist: save.bestDist || 0, pbPassed: false,
+    rivalDist: 0, rivalName: '', rivalPassed: false, doubled: false, revived: false,
   });
   for (let z = -60; z > SPAWN_Z; z -= wrand('car', 16, 26)) spawnCar(z);
+  clearBoards();
+  resetThemes();
+  setupRivalMarker();
+  fetchRegionTop(THEMES[G.themeIdx].code);
+  fetchRegionTop(save.region);
   updatePool(conePool, 0, false, 0, 0, 'cone');
   updatePool(signPool, 0, false, 0, 0, 'sign');
   updatePool(puddlePool, 0, false, 0, 0, 'puddle');
@@ -999,9 +1422,12 @@ function startRun(opts = {}) {
   MP.oppDone = false;
   MP.oppScore = 0;
   MP.opp = null;
+  MP.snaps = [];
   MP.ready = false;
   MP.oppReady = false;
-  resetRun(opts.seed);
+  ghost.root.visible = false;
+  resetRun(opts.seed ?? (!opts.mp ? challengeSeed : null) ?? undefined);
+  $('hotBanner').classList.add('hidden');
   hideScreens();
   $('hud').classList.remove('hidden');
   $('hudVs').classList.toggle('hidden', !MP.active);
@@ -1041,6 +1467,8 @@ function spawnGap() {
 
 function scrollWorld(dz) {
   G.distance += dz;
+  updateThemes(dz, frameDt);
+  updateBoards(dz);
   roadTex.offset.y = (G.distance / TILE) % 1;
   grassTex.offset.y = (G.distance / 10) % 1;
   for (const s of strips) s.update(dz);
@@ -1125,6 +1553,7 @@ function updatePlaying(rdt) {
     G.comboTimer -= rdt;
     if (G.comboTimer <= 0) G.combo = 0;
   }
+  G.feverT = Math.max(0, G.feverT - rdt);
 
   // 속도: 자동 가속(기본) / 수동 가속(THROTTLE 을 눌러야 가속)
   const bk = getBike(save.bike);
@@ -1136,8 +1565,10 @@ function updatePlaying(rdt) {
   let target = manual ? 40 / 3.6 : cruise;
   if (throttle) target = maxSpd;
   if (brake) target = 50 / 3.6;
+  if (G.draftT > 0 && !brake) target *= 1 + 0.1 * clamp(G.draftT / 0.6, 0, 1); // 슬립스트림 가속
+  if (G.slingT > 0) target = Math.max(target, maxSpd * 1.25);                // 슬링샷 부스트
   if (G.boostTime > 0) target = maxSpd * 1.35;
-  const accel = target > G.speed ? (G.boostTime > 0 ? 30 : 7 * bk.accel) : brake ? 22 : manual ? 5 : 6;
+  const accel = target > G.speed ? (G.boostTime > 0 || G.slingT > 0 ? 30 : 7 * bk.accel) : brake ? 22 : manual ? 5 : 6;
   G.speed = approach(G.speed, target, accel * rdt);
   G.braking = Boolean(brake);
   // RPM: 스로틀을 감으면 빠르게 치솟고, 놓으면 떨어짐
@@ -1181,6 +1612,7 @@ function updatePlaying(rdt) {
   if (G.x2Time > 0) mult *= 2;
   if (G.boostTime > 0) mult *= 1.5;
   if (G.rain) mult *= 1.3;
+  if (G.feverT > 0) mult *= 3;
   G.mult = mult;
   G.onc = onc;
   G.score += dz * 0.6 * mult;
@@ -1190,6 +1622,10 @@ function updatePlaying(rdt) {
 
   updateCars(dt, true);
   if (G.state !== 'playing') return;
+  updateDraft(dt);
+  updateMarkers();
+  updateHotDelivery(rdt);
+  updateFeverTrails();
   updatePool(conePool, dt, true, 0.24, 0.25, 'cone');
   updatePool(signPool, dt, true, 0.62, 0.2, 'sign');
   updatePool(puddlePool, dt, true, 1.0, 1.6, 'puddle');
@@ -1283,6 +1719,7 @@ function tryBoost() {
 function nearMiss(c, gap) {
   G.combo++;
   G.comboTimer = 3;
+  if (G.combo % 5 === 0) startFever(); // 5연속 니어미스 → 피버
   G.maxCombo = Math.max(G.maxCombo, G.combo);
   G.nearMiss++;
   const perfect = gap < 0.35;
@@ -1368,6 +1805,8 @@ function updateCrashing(rdt) {
   updateStalls(dt, false);
   updateCoins(dt, false);
   updatePowerups(dt, false);
+  updateMarkers();
+  updateFeverTrails();
   const cv = G.cv;
   cv.vy -= 22 * dt;
   cv.y += cv.vy * dt;
@@ -1420,11 +1859,26 @@ function checkMissions() {
 }
 
 // ---------- UI 헬퍼
-const SCREENS = ['menu', 'garage', 'ranking', 'missions', 'settings', 'pause', 'gameover', 'auth', 'multi'];
+const SCREENS = ['menu', 'garage', 'ranking', 'missions', 'settings', 'pause', 'gameover', 'auth', 'multi', 'daily', 'gacha'];
 let currentScreen = null;
 function show(id) {
   currentScreen = id;
   for (const s of SCREENS) $(s).classList.toggle('hidden', s !== id);
+  // 모달이 떠 있으면 터치 조작부 전체를 숨김 (모달 위로 뚫고 나오지 않게)
+  document.body.classList.toggle('modal-open', Boolean(id));
+  if (id === 'garage') mountStage('garageStage', true);
+  else if (id === 'ranking') mountStage('rankStage', false);
+  else if (stage) stage.unmount();
+  if (id === 'garage') startAdTicker();
+}
+
+// ---------- 3D 미리보기 (차고 쇼룸 / 랭킹 Flex View) — 렌더러 하나를 공유
+let stage = null;
+function mountStage(containerId, draggable) {
+  stage = stage || new PreviewStage();
+  stage.setRider(riderOpts(), getBike(save.bike).color);
+  stage.mount($(containerId), { draggable });
+  $('flexLabel').textContent = `MY RIDE · ${getBike(save.bike).name.toUpperCase()}`;
 }
 function hideScreens() { show(null); }
 
@@ -1478,7 +1932,9 @@ let lastTags = '';
 const tagHtml = (ic, text, cls = '') => `<span class="tag ${cls}">${ic ? icon(ic) : ''}${text}</span>`;
 
 function updateHud() {
-  hud.score.textContent = fmt(G.score);
+  const scoreText = fmt(G.score);
+  hud.score.textContent = scoreText;
+  hud.score.dataset.len = scoreText.length > 9 ? 'xl' : scoreText.length > 7 ? 'l' : '';
   hud.mult.textContent = 'x' + G.mult.toFixed(1);
   hud.mult.classList.toggle('hot', G.mult >= 2);
   hud.combo.classList.toggle('hidden', G.combo < 2);
@@ -1501,6 +1957,7 @@ function updateHud() {
   hud.boostFx.classList.toggle('on', boosting);
   hud.boostFx.classList.toggle('slow', !boosting && G.slowTime > 0);
   hud.brakeFx.classList.toggle('on', G.braking && G.state === 'playing');
+  $('feverFx').classList.toggle('on', G.feverT > 0 && G.state === 'playing');
 
   if (MP.active) {
     if (MP.opp) {
@@ -1513,6 +1970,9 @@ function updateHud() {
   }
 
   const tags = [];
+  if (G.feverT > 0) tags.push(tagHtml('bolt', `FEVER x3 ${Math.ceil(G.feverT)}s`, 'fever'));
+  if (G.slingT > 0) tags.push(tagHtml('bolt', 'SLINGSHOT'));
+  else if (G.draftT > 0) tags.push(tagHtml('gauge', 'SLIPSTREAM'));
   if (G.onc) tags.push(tagHtml('warn', 'WRONG WAY x2', 'onc'));
   if (G.air) tags.push(tagHtml('jump', 'AIRBORNE'));
   if (G.shield) tags.push(tagHtml('shield', 'SHIELD'));
@@ -1545,6 +2005,8 @@ function goMenu() {
 }
 
 function refreshMenu() {
+  $('challengeChip').classList.toggle('hidden', challengeSeed == null);
+  if (challengeSeed != null) $('challengeText').textContent = `CHALLENGE ROAD #${challengeSeed}`;
   const s = getSession();
   $('menuName').textContent = s ? s.nickname : save.lastName || 'Rider';
   $('accountLabel').textContent = s ? s.nickname.toUpperCase() : 'SIGN IN';
@@ -1560,6 +2022,11 @@ function openScreen(id, from = 'menu') {
   show(id);
 }
 $('btnPlay').addEventListener('click', () => startRun());
+$('btnClearChallenge').addEventListener('click', () => {
+  challengeSeed = null;
+  history.replaceState(null, '', location.pathname);
+  refreshMenu();
+});
 $('btnGarage').addEventListener('click', () => { renderGarage(); openScreen('garage'); });
 $('btnRanking').addEventListener('click', () => { openScreen('ranking'); renderRanking(); });
 $('btnMissions').addEventListener('click', () => { renderMissions(); openScreen('missions'); });
@@ -1590,6 +2057,7 @@ const SHOP = {
 
 function shopButton(kind, item, owned, sel) {
   if (sel) return '<button class="btn" disabled>EQUIPPED</button>';
+  if (item.special && !owned) return '<button class="btn" disabled>7-DAY STREAK</button>';
   if (owned) return `<button class="btn primary" data-kind="${kind}" data-id="${item.id}" data-act="select">EQUIP</button>`;
   return `<button class="btn gold" data-kind="${kind}" data-id="${item.id}" data-act="buy" data-icon="coin" ${save.coins < item.price ? 'disabled' : ''}>${icon('coin')}${fmt(item.price)}</button>`;
 }
@@ -1606,6 +2074,10 @@ function renderShopItems(kind) {
 
 function renderGarage() {
   $('garageCoins').textContent = fmt(save.coins);
+  if (stage) stage.setRider(riderOpts(), getBike(save.bike).color);
+  $('btnGacha').disabled = save.coins < GACHA_PRICE;
+  $('btnAdCoins').classList.toggle('hidden', !adsEnabled());
+  updateAdCoinsLabel();
   for (const b of $('garageTabs').children) b.classList.toggle('on', b.dataset.tab === garageTab);
   const list = $('shopList');
   if (garageTab === 'bike') {
@@ -1663,6 +2135,79 @@ $('shopList').addEventListener('click', (e) => {
   renderGarage();
 });
 
+// ---------- 랜덤 가차 상자 (1,000 코인)
+let gachaResult = null;
+$('btnGacha').addEventListener('click', () => {
+  if (save.coins < GACHA_PRICE) return;
+  const pool = [];
+  for (const [kind, cat] of Object.entries(SHOP)) {
+    for (const it of cat.list) if (it.price > 0 && !it.special && !save[cat.owned].includes(it.id)) pool.push({ kind, it });
+  }
+  save.coins -= GACHA_PRICE;
+  const reveal = $('gachaReveal');
+  if (!pool.length) {
+    save.coins += GACHA_REFUND;
+    gachaResult = null;
+    reveal.innerHTML = `<div class="swatch" style="background:#ffd34d"></div><b>ALL COLLECTED!</b><span class="muted">Refunded ${fmt(GACHA_REFUND)} coins</span>`;
+  } else {
+    gachaResult = pick(pool);
+    save[SHOP[gachaResult.kind].owned].push(gachaResult.it.id);
+    const label = { box: 'DELIVERY BOX', outfit: 'OUTFIT', helmet: 'HELMET' }[gachaResult.kind];
+    reveal.innerHTML = `<div class="swatch" style="background:${gachaResult.it.swatch}"></div><small class="muted">${label}</small><b>${escapeHtml(gachaResult.it.name)}</b><span class="muted">${escapeHtml(gachaResult.it.desc)}</span>`;
+  }
+  $('btnGachaEquip').classList.toggle('hidden', !gachaResult);
+  persist();
+  sfx.fireworks();
+  show('gacha');
+});
+$('btnGachaEquip').addEventListener('click', () => {
+  if (gachaResult) {
+    save[SHOP[gachaResult.kind].cur] = gachaResult.it.id;
+    persist();
+    buildBike();
+    resetBikePose();
+  }
+  renderGarage();
+  show('garage');
+});
+$('btnGachaClose').addEventListener('click', () => {
+  renderGarage();
+  show('garage');
+});
+
+// ---------- 차고 무료 코인 (보상형 광고, 3분 쿨타임)
+const adHooks = { pause: () => sfx.suspend(), resume: () => sfx.resume() };
+function updateAdCoinsLabel() {
+  const left = Math.ceil((save.adCooldownUntil - Date.now()) / 1000);
+  const btn = $('btnAdCoins');
+  btn.disabled = left > 0;
+  $('adCoinsLabel').textContent = left > 0
+    ? `NEXT FREE COINS IN ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
+    : `WATCH AD FOR ${ADS.freeCoins} COINS`;
+}
+let adTicker = null;
+function startAdTicker() {
+  clearInterval(adTicker);
+  adTicker = setInterval(() => {
+    if (currentScreen !== 'garage') {
+      clearInterval(adTicker);
+      return;
+    }
+    updateAdCoinsLabel();
+  }, 1000);
+}
+$('btnAdCoins').addEventListener('click', async () => {
+  if (Date.now() < save.adCooldownUntil) return;
+  const ok = await showRewarded('free_coins', adHooks);
+  if (!ok) return;
+  save.coins += ADS.freeCoins;
+  save.adCooldownUntil = Date.now() + ADS.freeCoinsCooldownSec * 1000;
+  persist();
+  toast(`+${ADS.freeCoins} COINS`);
+  sfx.coin();
+  renderGarage();
+});
+
 // ---------- 랭킹 (글로벌 / 내 기기)
 let rankTab = 'global';
 
@@ -1670,15 +2215,21 @@ function rankTable(rows) {
   return `<table class="rank-table"><thead><tr><th>#</th><th>RIDER</th><th class="num">BEST</th><th>BIKE</th></tr></thead><tbody>${
     rows.map((r, i) => `<tr class="${r.isMe ? 'me' : ''}">
       <td>${i < 3 ? `<b class="medal m${i + 1}">${i + 1}</b>` : i + 1}</td>
-      <td>${escapeHtml(r.nickname || r.name)}${r.date ? `<br><small class="muted">${escapeHtml(r.date)}</small>` : ''}</td>
+      <td>${r.region ? flagBadge(r.region, i === 0 ? 'flag big' : 'flag') : ''}${escapeHtml(r.nickname || r.name)}${r.date ? `<br><small class="muted">${escapeHtml(r.date)}</small>` : ''}</td>
       <td class="num"><b>${fmt(r.score)}</b></td>
       <td><small>${escapeHtml(getBike(r.bike).name)}</small></td></tr>`).join('')
   }</tbody></table>`;
 }
 
+let rankRegion = null;
 async function renderRanking() {
   for (const b of $('rankTabs').children) b.classList.toggle('on', b.dataset.rtab === rankTab);
   const list = $('rankList'), me = $('rankMe'), mode = $('rankMode');
+  const sel = $('rankRegion');
+  sel.classList.toggle('hidden', rankTab !== 'region');
+  rankRegion = rankRegion || save.region;
+  if (!sel.options.length) sel.innerHTML = REGIONS.map((r) => `<option value="${r.code}">${r.name} · ${r.city}</option>`).join('');
+  sel.value = rankRegion;
   if (rankTab === 'local') {
     mode.textContent = 'THIS DEVICE';
     mode.className = 'badge local';
@@ -1692,8 +2243,10 @@ async function renderRanking() {
   mode.className = ONLINE ? 'badge' : 'badge local';
   list.innerHTML = '<div class="empty">Loading...</div>';
   me.innerHTML = '';
-  const res = await leaderboard.fetchTop();
-  if (rankTab !== 'global' || currentScreen !== 'ranking') return;
+  const tab = rankTab;
+  const res = await leaderboard.fetchTop({ region: tab === 'region' ? rankRegion : null });
+  if (rankTab !== tab || currentScreen !== 'ranking') return;
+  if (res.ok && tab === 'region') regionTops[rankRegion] = res.top;
   if (!res.ok) {
     list.innerHTML = `<div class="empty">Could not load the ranking<br><small>${escapeHtml(res.error)}</small></div>`;
     return;
@@ -1713,6 +2266,10 @@ $('rankTabs').addEventListener('click', (e) => {
   if (!b) return;
   rankTab = b.dataset.rtab;
   sfx.click();
+  renderRanking();
+});
+$('rankRegion').addEventListener('change', (e) => {
+  rankRegion = e.target.value;
   renderRanking();
 });
 
@@ -1763,7 +2320,7 @@ $('authForm').addEventListener('submit', async (e) => {
   $('authPw2').value = '';
   sfx.mission();
   toast(`WELCOME, ${res.user.nickname.toUpperCase()}`);
-  if (save.best > 0) leaderboard.submit(save.best, save.bike); // 기존 기록 반영
+  if (save.best > 0) leaderboard.submit(scoreEntry(save.best, save.bestDist)); // 기존 기록 반영
   refreshMenu();
   if (backTo === 'gameover') {
     backTo = 'menu';
@@ -1806,7 +2363,16 @@ function renderSettings() {
   for (const b of document.querySelectorAll('[data-setting]')) {
     b.textContent = SETTING_LABELS[b.dataset.setting](save.settings[b.dataset.setting]);
   }
+  const sel = $('regionSelect');
+  if (!sel.options.length) sel.innerHTML = REGIONS.map((r) => `<option value="${r.code}">${r.name}</option>`).join('');
+  sel.value = save.region;
 }
+$('regionSelect').addEventListener('change', (e) => {
+  save.region = e.target.value;
+  persist();
+  fetchRegionTop(save.region, true);
+  toast(`REGION  ·  ${REGIONS.find((r) => r.code === save.region).name.toUpperCase()}`);
+});
 function applyControlSettings() {
   document.body.classList.toggle('drag-mode', save.settings.touchMode === 'drag');
   document.body.classList.toggle('auto-throttle', save.settings.throttle === 'auto');
@@ -1914,6 +2480,9 @@ function showGameOver() {
   $('goNew').classList.toggle('hidden', !isRecord);
   setResultTitle(isRecord);
   save.best = Math.max(save.best, score);
+  save.bestDist = Math.max(save.bestDist || 0, Math.floor(G.distance));
+  $('hotBanner').classList.add('hidden');
+  G.hot = null;
   const stats = [
     ['DISTANCE', `${fmt(G.distance)} m`],
     ['NEAR MISS', G.nearMiss],
@@ -1953,6 +2522,9 @@ function showGameOver() {
   cont.classList.toggle('hidden', G.continued || MP.active);
   cont.disabled = save.coins < CONTINUE_COST;
   $('retryLabel').textContent = MP.active ? 'REMATCH' : 'RETRY';
+  // 보상형 광고: 부활 1회 / 코인 2배 1회 (배너 없음)
+  $('btnAdRevive').classList.toggle('hidden', !adsEnabled() || G.continued || MP.active);
+  $('btnAdDouble').classList.toggle('hidden', !adsEnabled() || G.doubled || G.coinsRun + G.bonusCoins <= 0);
 
   if (MP.active) {
     net.send({ t: 'over', sc: score });
@@ -1983,7 +2555,7 @@ async function submitGlobal() {
   if (G.globalSubmitted === score) return;
   G.globalSubmitted = score;
   box.innerHTML = `${icon('globe')} Posting to the global ranking...`;
-  const res = await leaderboard.submit(score, save.bike);
+  const res = await leaderboard.submit(scoreEntry(score, G.distance));
   if (!res.ok) {
     box.innerHTML = `${icon('globe')} Could not post score: ${escapeHtml(res.error)}`;
     G.globalSubmitted = false;
@@ -2048,10 +2620,38 @@ $('btnHome').addEventListener('click', () => {
   goMenu();
 });
 
+const scoreEntry = (score, dist) => ({ score, dist, bike: save.bike, box: save.box, outfit: save.outfit, helmet: save.helmet, region: save.region });
+
 $('btnContinue').addEventListener('click', () => {
   if (G.continued || MP.active || save.coins < CONTINUE_COST) return;
   save.coins -= CONTINUE_COST;
   persist();
+  reviveRun();
+});
+$('btnAdRevive').addEventListener('click', async () => {
+  if (G.continued || MP.active) return;
+  if (await showRewarded('revive', adHooks)) reviveRun();
+});
+$('btnAdDouble').addEventListener('click', async () => {
+  if (G.doubled) return;
+  if (!(await showRewarded('double_coins', adHooks))) return;
+  const extra = G.coinsRun + G.bonusCoins;
+  G.doubled = true;
+  save.coins += extra;
+  persist();
+  $('btnAdDouble').classList.add('hidden');
+  toast(`COINS DOUBLED  ·  +${fmt(extra)}`);
+  sfx.coin();
+});
+// WhatsApp 챌린지: 내 점수 + 같은 도로 시드 링크
+$('btnWhatsApp').addEventListener('click', () => {
+  const base = SHARE_BASE_URL || `${location.origin}${location.pathname}`;
+  const url = `${base}${base.includes('?') ? '&' : '?'}seed=${G.seed}`;
+  const text = `I scored ${fmt(G.score)} (${fmt(G.distance)} m) on Grab Rider! Ride the exact same road and beat me: ${url}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+});
+
+function reviveRun() {
   G.continued = true;
   // 주변 장애물 정리 후 부활
   for (let i = cars.length - 1; i >= 0; i--) if (cars[i].z > -50) releaseCar(cars[i]);
@@ -2070,7 +2670,7 @@ $('btnContinue').addEventListener('click', () => {
   sfx.init();
   sfx.engineStart();
   popup('BACK ON THE ROAD', 'big');
-});
+}
 
 // ======================================================================
 // 1v1 멀티플레이 (Room Code + 시드 동기화 + 고스트)
@@ -2202,10 +2802,14 @@ net.on('data', (m) => {
       if (G.state === 'over') finalizeRun();
       startRun({ mp: true, seed: net.seed });
       break;
-    case 's':
+    case 's': {
       if (!MP.active) break;
-      MP.opp = { d: +m.d || 0, x: +m.x || 0, y: +m.y || 0, l: +m.l || 0, v: +m.v || 0, sc: +m.sc || 0, at: performance.now() };
+      const snap = { d: +m.d || 0, x: +m.x || 0, y: +m.y || 0, l: +m.l || 0, v: +m.v || 0, sc: +m.sc || 0, at: performance.now() };
+      MP.opp = snap;
+      MP.snaps.push(snap);
+      if (MP.snaps.length > 12) MP.snaps.shift();
       break;
+    }
     case 'over':
       MP.oppDone = true;
       MP.oppScore = Math.floor(+m.sc || 0);
@@ -2235,19 +2839,41 @@ function updateMultiplayer(rdt) {
   if (G.state === 'playing' || G.state === 'crashing' || G.state === 'paused') {
     net.sendState({ t: 's', d: Math.round(G.distance * 10) / 10, x: +G.x.toFixed(2), y: +(G.airY || 0).toFixed(2), l: +G.lean.toFixed(2), v: +G.speed.toFixed(1), sc: Math.floor(G.score) });
   }
-  // 상대 고스트: 수신 위치를 속도로 외삽해서 부드럽게
-  const o = MP.opp;
-  if (!o || MP.oppDone) {
+  // 상대 고스트: 15 FPS 패킷을 100ms 지연 버퍼로 보간 → 60 FPS 로 부드럽게
+  if (!MP.opp || MP.oppDone) {
     ghost.root.visible = false;
     return;
   }
-  const ext = Math.min(0.5, (performance.now() - o.at) / 1000);
-  const z = -((o.d + o.v * ext) - G.distance);
-  ghost.root.visible = z > -220 && z < 12;
-  ghost.root.position.x = lerp(ghost.root.position.x, o.x, Math.min(1, rdt * 10));
-  ghost.root.position.y = o.y;
-  ghost.root.position.z = z;
-  ghost.lean.rotation.z = o.l;
+  const target = sampleOpponent(performance.now() - INTERP_DELAY);
+  ghostTarget.set(target.x, target.y, -(target.d - G.distance));
+  const k = 1 - Math.exp(-rdt * 18);
+  if (!ghost.root.visible) ghost.root.position.copy(ghostTarget);
+  else ghost.root.position.lerp(ghostTarget, k);
+  ghost.lean.rotation.z = THREE.MathUtils.lerp(ghost.lean.rotation.z, target.l, k);
+  ghost.root.visible = ghost.root.position.z > -220 && ghost.root.position.z < 12;
+}
+
+const INTERP_DELAY = 100; // ms
+const ghostTarget = new THREE.Vector3();
+// 시각 t 의 상대 상태: 앞뒤 스냅샷 사이를 선형 보간, 버퍼보다 늦으면 속도로 외삽(최대 0.5초)
+function sampleOpponent(t) {
+  const snaps = MP.snaps;
+  const lastSnap = snaps[snaps.length - 1];
+  if (snaps.length < 2 || t >= lastSnap.at) {
+    const ext = clamp((t - lastSnap.at) / 1000, 0, 0.5);
+    return { ...lastSnap, d: lastSnap.d + lastSnap.v * ext };
+  }
+  for (let i = snaps.length - 1; i > 0; i--) {
+    const a = snaps[i - 1], b = snaps[i];
+    if (t >= a.at) {
+      const f = clamp((t - a.at) / Math.max(1, b.at - a.at), 0, 1);
+      return {
+        d: THREE.MathUtils.lerp(a.d, b.d, f), x: THREE.MathUtils.lerp(a.x, b.x, f),
+        y: THREE.MathUtils.lerp(a.y, b.y, f), l: THREE.MathUtils.lerp(a.l, b.l, f),
+      };
+    }
+  }
+  return snaps[0];
 }
 
 function renderVsResult() {
@@ -2268,7 +2894,7 @@ function renderVsResult() {
 
 // ---------- 외부 3D 모델 교체 (로딩 완료 시 즉시 반영)
 const INSTANCED_KEYS = {
-  'prop.palm': [palmMesh], 'prop.ruko': [rukoL, rukoR], 'prop.warung': [warungMesh],
+  'prop.palm': [treeMeshes[0]], 'prop.ruko': [buildingsL.groups[0][0], buildingsR.groups[0][0]], 'prop.warung': [curbMeshes[0]],
   'prop.building': [bldgMesh], 'prop.lamp': [lampPole], 'obstacle.cone': [conePool.mesh], 'obstacle.sign': [signPool.mesh],
 };
 M.models.onLoad((key) => {
@@ -2299,9 +2925,11 @@ M.models.loadAll();
 
 // ---------- 메인 루프
 let last = performance.now();
+let frameDt = 1 / 60;
 function frame(now) {
   requestAnimationFrame(frame);
   const rdt = Math.min(0.05, (now - last) / 1000);
+  frameDt = rdt;
   last = now;
   switch (G.state) {
     case 'playing': updatePlaying(rdt); break;
@@ -2332,6 +2960,7 @@ if (new URLSearchParams(location.search).has('debug')) {
   window.__models = M.models;
   window.__cars = cars;
   window.__scene = scene;
+  window.__renderer = renderer;
   window.__net = net;
   window.__dbg = {
     car: (type, lane, z) => spawnCar(z, { type, lane }),
@@ -2343,17 +2972,43 @@ if (new URLSearchParams(location.search).has('debug')) {
       stalls.push(st);
     },
     squall: startSquall,
+    // 거리 점프 후 도로변 소품을 현재 위치 테마로 즉시 재배치
+    refreshProps: () => {
+      for (const st of strips) st.items.forEach((it, k) => st.respawn(it, k));
+      for (const st of strips) st.update(0);
+    },
+    fever: startFever,
+    mega: spawnMegaBoard,
+    crash: () => crash({ x: G.x - 1 }),
   };
 }
 goMenu();
 $('loading').remove();
 auth.restore().then(refreshMenu);
+// 7일 연속 출석: 어제도 접속했으면 연속 +1, 아니면 1일차부터. 7일차엔 특수 헬멧
 const today = new Date().toDateString();
 if (save.lastDaily !== today) {
-  save.lastDaily = today;
-  save.coins += 100;
-  persist();
-  refreshMenu();
-  toast('DAILY BONUS  ·  +100 COINS');
+  const yesterday = new Date(Date.now() - 86400000).toDateString();
+  const day = save.lastDaily === yesterday ? (save.streak % 7) + 1 : 1;
+  $('streakGrid').innerHTML = STREAK_REWARDS.map((c, i) => `<div class="${i + 1 < day ? 'done' : i + 1 === day ? 'today' : ''} ${i === 6 ? 'special' : ''}">
+    DAY ${i + 1}<b>${fmt(c)}</b>${i === 6 ? '<small>+ CROWN</small>' : icon('coin')}</div>`).join('');
+  show('daily');
+  $('btnClaimDaily').addEventListener('click', () => {
+    const coins = STREAK_REWARDS[day - 1];
+    save.coins += coins;
+    save.streak = day;
+    save.lastDaily = today;
+    let msg = `DAY ${day} REWARD  ·  +${fmt(coins)} COINS`;
+    if (day === 7 && !save.ownedHelmets.includes(STREAK_SPECIAL_HELMET)) {
+      save.ownedHelmets.push(STREAK_SPECIAL_HELMET);
+      msg += '  ·  STREAK CROWN UNLOCKED';
+    }
+    persist();
+    sfx.init();
+    sfx.mission();
+    toast(msg);
+    refreshMenu();
+    show('menu');
+  }, { once: true });
 }
 requestAnimationFrame(frame);

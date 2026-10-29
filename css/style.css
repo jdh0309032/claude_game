@@ -639,3 +639,134 @@ body.drag-mode .steer-pad { display: block; }
 .medal.m2 { background: linear-gradient(135deg, #d9dee3, #9aa3ad); }
 .medal.m3 { background: linear-gradient(135deg, #e3a36b, #b06a2c); }
 .mission .ic, #goMissions .ic, .rank-entry .ic { color: var(--green-dark); }
+
+/* ======================================================================
+   버그 수정: 계기판 고정 / 모달 위로 터치 조작부가 뚫고 나오지 않게
+   ====================================================================== */
+.hud-top { justify-content: space-between; }
+.hud-left, .hud-right { flex: 0 1 auto; min-width: 0; max-width: calc(50% - 86px); }
+/* 계기판은 화면 중앙에 절대 위치로 고정 → 콤보/알림 텍스트가 바뀌어도 밀리지 않음 */
+.hud-center.speedo { position: absolute; left: 50%; top: 0; transform: translateX(-50%); }
+#popups, #hotBanner, #countdown, #toast, #boostFx, #brakeFx, #feverFx { pointer-events: none; }
+.hud-row { flex-wrap: nowrap; }
+#hudTags { max-width: 100%; }
+.screen { z-index: 30; }
+#toast { z-index: 45; }
+body.modal-open #touchControls { display: none !important; }
+
+/* ======================================================================
+   심플 & 미니멀 터치 조작계
+   ====================================================================== */
+.tbtn.steer {
+  background: rgba(255, 255, 255, 0.28); color: #fff; box-shadow: none;
+  border: 2px solid rgba(255, 255, 255, 0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+.tbtn.steer.active { background: rgba(0, 177, 79, 0.85); border-color: #fff; }
+.throttle-grip {
+  width: 70px; height: 150px; border-radius: 20px; background: rgba(15, 18, 24, 0.45);
+  border: 2px solid rgba(255, 255, 255, 0.55); box-shadow: none; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+.throttle-grip .grip-ribs {
+  left: 22px; right: 22px; top: 18px; bottom: 40px; border-radius: 8px;
+  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0 3px, transparent 3px 12px);
+  background-size: 100% 12px; box-shadow: none;
+}
+.throttle-grip .grip-cap { display: none; }
+.throttle-grip b { color: #fff; text-shadow: none; font-family: var(--hud); font-weight: 700; }
+.throttle-grip.active { transform: none; border-color: #ff3b3b; box-shadow: 0 0 0 2px rgba(255, 59, 59, 0.35), inset 0 -60px 40px -30px rgba(255, 59, 59, 0.35); }
+.throttle-grip.active .grip-ribs { animation: gripRoll 0.3s linear infinite; }
+.throttle-grip.active b { color: #ff6b6b; text-shadow: none; }
+@keyframes gripRoll { from { background-position: 0 0; } to { background-position: 0 12px; } }
+.brake-lever {
+  width: 68px; height: 68px; border-radius: 18px; background: rgba(15, 18, 24, 0.45);
+  border: 2px solid rgba(255, 255, 255, 0.55); box-shadow: none; color: #fff; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+.brake-lever .disc { display: none; }
+.brake-lever b { position: static; display: grid; place-items: center; height: 100%; font-family: var(--hud); font-weight: 700; font-size: 12px; }
+.brake-lever.active { transform: scale(0.95); background: rgba(230, 30, 30, 0.85); border-color: #fff; box-shadow: 0 0 18px rgba(255, 40, 40, 0.6); }
+.nos-btn {
+  width: 70px; height: 70px; background: rgba(15, 18, 24, 0.45); border: 2px solid rgba(255, 255, 255, 0.35);
+  box-shadow: none; color: rgba(255, 255, 255, 0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+.nos-btn .nos-ring { display: none; }
+.nos-btn i { background: rgba(0, 229, 255, 0.35); }
+.nos-btn b { font-family: var(--hud); font-weight: 700; font-size: 14px; }
+.nos-btn.ready { color: #fff; border-color: var(--cyan); background: rgba(0, 150, 200, 0.55); box-shadow: 0 0 16px rgba(0, 229, 255, 0.6); animation: nosPulse 1s ease-in-out infinite; }
+.nos-btn.firing { background: var(--cyan); color: #00313d; border-color: #fff; }
+@keyframes nosPulse { 50% { box-shadow: 0 0 26px rgba(0, 229, 255, 0.9); } }
+
+/* ======================================================================
+   신규 요소
+   ====================================================================== */
+/* 돌발 핫 배달 */
+.hot-banner {
+  position: absolute; left: 50%; top: calc(max(10px, env(safe-area-inset-top)) + 104px); transform: translateX(-50%);
+  background: rgba(255, 80, 0, 0.92); color: #fff; border-radius: 12px; padding: 6px 12px 8px; text-align: center;
+  font-family: var(--hud); font-weight: 700; min-width: 190px; box-shadow: 0 6px 18px rgba(255, 80, 0, 0.4);
+}
+.hot-banner b { display: block; font-family: var(--display); font-weight: 400; letter-spacing: 1px; font-size: 15px; }
+.hot-banner span { font-size: 14px; }
+.hot-banner i { display: block; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.3); margin-top: 4px; overflow: hidden; }
+.hot-banner em { display: block; height: 100%; width: 0; background: #fff; }
+.hot-banner.urgent { animation: blink 0.4s steps(2) infinite; }
+
+/* 피버 모드 */
+#feverFx {
+  position: absolute; inset: 0; opacity: 0; transition: opacity 0.3s;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(255, 0, 170, 0.32) 85%, rgba(0, 229, 255, 0.35) 100%);
+}
+#feverFx.on { opacity: 1; animation: feverHue 1.2s linear infinite; }
+@keyframes feverHue { to { filter: hue-rotate(360deg); } }
+
+/* 3D 쇼룸 / Flex View */
+.stage { position: relative; height: 190px; border-radius: 16px; overflow: hidden; background: radial-gradient(circle at 50% 70%, #2c3447, #0e1220); flex: 0 0 auto; }
+.stage.flex { height: 170px; }
+.stage-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; }
+.stage-canvas.draggable { cursor: grab; touch-action: none; }
+.stage-hint { position: absolute; left: 10px; bottom: 8px; color: rgba(255, 255, 255, 0.6); font-weight: 700; font-size: 11px; letter-spacing: 1px; z-index: 1; pointer-events: none; }
+.flex-label { position: absolute; left: 12px; top: 10px; z-index: 1; color: #fff; font-family: var(--display); font-size: 14px; letter-spacing: 1px; pointer-events: none; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
+.garage-actions .btn { font-size: 13px; padding: 11px 10px; }
+.btn.ad-btn { background: #1f2533; color: #fff; border: none; }
+.btn.ad-btn:disabled { opacity: 0.55; }
+.btn.whatsapp { background: #25d366; color: #fff; border: none; width: 100%; }
+.result-ads { flex-wrap: wrap; }
+.result-ads .btn { font-size: 13px; padding: 11px 8px; }
+
+/* 지역 선택 */
+.select { font: inherit; font-weight: 700; font-size: 14px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: #fff; color: var(--text); }
+.select.small { min-width: 120px; padding: 8px 10px; }
+
+/* 국기 배지 */
+.flag { width: 24px; height: 16px; border-radius: 2px; vertical-align: -2px; margin-right: 6px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12); }
+.flag.big { width: 36px; height: 24px; vertical-align: -6px; }
+
+/* 챌린지 칩 */
+.challenge-chip { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; background: rgba(255, 255, 255, 0.2); padding: 4px 6px 4px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; letter-spacing: 1px; }
+.challenge-chip button { border: none; background: rgba(0, 0, 0, 0.2); color: #fff; width: 22px; height: 22px; border-radius: 50%; cursor: pointer; font-size: 14px; line-height: 1; }
+
+/* 7일 출석 */
+.streak-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; width: 100%; }
+.streak-grid div { border-radius: 12px; padding: 8px 2px; background: #f1f3f4; font-weight: 700; font-size: 11px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.streak-grid div b { font-family: var(--display); font-weight: 400; font-size: 13px; }
+.streak-grid div.done { background: var(--green-soft); color: var(--green-dark); }
+.streak-grid div.today { background: var(--green); color: #fff; box-shadow: 0 6px 16px rgba(0, 177, 79, 0.35); }
+.streak-grid div.special { outline: 2px solid #ffd700; }
+
+/* 가차 결과 */
+.gacha-reveal { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 0; }
+.gacha-reveal .swatch { width: 84px; height: 84px; border-radius: 22px; animation: gachaPop 0.6s cubic-bezier(.2, 1.6, .4, 1); }
+.gacha-reveal b { font-family: var(--display); font-weight: 400; font-size: 22px; }
+@keyframes gachaPop { from { transform: scale(0.2) rotate(-25deg); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* 테스트 광고 오버레이 */
+.ad-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.88); display: grid; place-items: center; padding: 16px; }
+.ad-box { background: #fff; border-radius: 20px; padding: 20px; width: min(340px, 100%); text-align: center; display: flex; flex-direction: column; gap: 10px; }
+.ad-box small { color: var(--muted); font-weight: 700; letter-spacing: 1px; }
+.ad-count { font-family: var(--display); font-weight: 400; font-size: 56px; color: var(--green); }
+.ad-box p { margin: 0; color: var(--muted); font-size: 13px; }
+/* 점수가 길어져도 중앙 속도계와 겹치지 않게 축소 */
+.hud-left { max-width: calc(50% - 82px); }
+#hudScore[data-len="l"] { font-size: clamp(18px, 4.6vw, 24px); }
+#hudScore[data-len="xl"] { font-size: clamp(14px, 3.6vw, 19px); }
+/* 핫 배달 배너는 토스트 아래로 */
+.hot-banner { top: calc(max(10px, env(safe-area-inset-top)) + 162px); }

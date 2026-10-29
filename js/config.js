@@ -53,3 +53,120 @@ export const MODEL_CONFIG = {
   'obstacle.sign':  null,
   'obstacle.stall': null, // 갓길 노점상(Kaki Lima)
 };
+
+// ======================================================================
+// 상점 가격표 & 스탯 (차고)
+// ======================================================================
+// style: 외형 변형 (models.js 의 BIKE_SHAPES 와 매칭)
+export const BIKES = [
+  { id: 'rookie',  name: 'Rookie 125',         price: 0,     maxKmh: 170, accel: 1.0,  handling: 1.0,  color: 0xf2f2f2, style: 'scooter', desc: 'Starter delivery scooter' },
+  { id: 'city',    name: 'City Commuter',      price: 1500,  maxKmh: 190, accel: 1.08, handling: 1.08, color: 0x2a9df4, style: 'scooter', desc: 'Nimble in tight traffic' },
+  { id: 'vintage', name: 'Vintage Classic',    price: 2500,  maxKmh: 200, accel: 1.05, handling: 1.15, color: 0x8b1e2d, style: 'classic', desc: 'Chrome and leather charm' },
+  { id: 'express', name: 'Delivery Express',   price: 4000,  maxKmh: 215, accel: 1.2,  handling: 1.15, color: 0x00b14f, style: 'express', desc: 'Built for long shifts' },
+  { id: 'sport',   name: 'Sport Street 250',   price: 6000,  maxKmh: 240, accel: 1.3,  handling: 1.25, color: 0xff6b00, style: 'sport',   desc: 'Razor-sharp handling' },
+  { id: 'enduro',  name: 'Off-Road Enduro',    price: 8000,  maxKmh: 235, accel: 1.35, handling: 1.42, color: 0xffd60a, style: 'enduro',  desc: 'Shrugs off puddles' },
+  { id: 'phantom', name: 'Phantom X',          price: 12000, maxKmh: 280, accel: 1.5,  handling: 1.45, color: 0x7b2cbf, style: 'sport',   desc: 'Legendary hyperbike' },
+  { id: 'cyber',   name: 'Cyber Pulse 3000',   price: 15000, maxKmh: 310, accel: 1.65, handling: 1.55, color: 0x101820, style: 'cyber',   desc: 'Neon-lit future machine' },
+];
+
+// 배달 상자 / 라이더 의상 / 헬멧: 기본 1종(무료) + 유료 6종 (500 ~ 3,000 코인)
+export const BOXES = [
+  { id: 'basic',     name: 'Classic Box',    price: 0,    swatch: '#00b14f', desc: 'Standard green delivery box' },
+  { id: 'styrofoam', name: 'Cooler Box',     price: 500,  swatch: '#f4f4ee', desc: 'Styrofoam box for fresh food' },
+  { id: 'pizza',     name: 'Pizza Stack',    price: 800,  swatch: '#e63946', desc: 'Hot pizza warmer bag' },
+  { id: 'neon',      name: 'Neon Box',       price: 1200, swatch: '#00f0ff', desc: 'Glowing neon trim at night' },
+  { id: 'camo',      name: 'Camo Crate',     price: 1800, swatch: '#5b6b3a', desc: 'Military-grade cargo' },
+  { id: 'treasure',  name: 'Treasure Chest', price: 2500, swatch: '#7a4a22', desc: 'Wooden chest with gold trim' },
+  { id: 'goldbox',   name: 'Gold Vault',     price: 3000, swatch: '#e6b422', desc: 'Solid gold delivery vault' },
+];
+export const OUTFITS = [
+  { id: 'jacket',     name: 'Rider Jacket',  price: 0,    swatch: '#00b14f', desc: 'Signature green jacket' },
+  { id: 'raincoat',   name: 'Yellow Poncho', price: 500,  swatch: '#ffd21f', desc: 'Squall-proof rain poncho' },
+  { id: 'raincoat_p', name: 'Pink Poncho',   price: 800,  swatch: '#ff6fae', desc: 'High-visibility pink poncho' },
+  { id: 'hivis',      name: 'Hi-Vis Vest',   price: 1200, swatch: '#ff8c00', desc: 'Safety orange with reflectors' },
+  { id: 'leather',    name: 'Black Leather', price: 1800, swatch: '#1b1b1f', desc: 'Classic biker leather' },
+  { id: 'racing',     name: 'Racing Suit',   price: 2500, swatch: '#d62828', desc: 'Track-day racing leathers' },
+  { id: 'tux',        name: 'Night Tux',     price: 3000, swatch: '#2b2d42', desc: 'Deliver in style' },
+];
+export const HELMETS = [
+  { id: 'basic',  name: 'Green Half',  price: 0,    swatch: '#00b14f', desc: 'Standard half helmet' },
+  { id: 'retro',  name: 'Retro',       price: 500,  swatch: '#f3efe6', desc: 'Classic red stripe' },
+  { id: 'full',   name: 'Full Face',   price: 800,  swatch: '#15171a', desc: 'Blue mirrored visor' },
+  { id: 'neko',   name: 'Neko Ears',   price: 1200, swatch: '#ffb3c7', desc: 'Cute cat-ear helmet' },
+  { id: 'carbon', name: 'Carbon Pro',  price: 1800, swatch: '#3a3d42', desc: 'Lightweight carbon shell' },
+  { id: 'chrome', name: 'Chrome Dome', price: 2500, swatch: '#c0c6cc', desc: 'Mirror-polished chrome' },
+  { id: 'gold',   name: 'Gold Helmet', price: 3000, swatch: '#e6b422', desc: 'Mark of a top ranker' },
+  { id: 'crown',  name: 'Streak Crown', price: -1,  swatch: '#ffd700', desc: '7-day login streak reward', special: true },
+];
+
+// 랜덤 가차 상자 (상자·의상·헬멧 중 미보유 아이템 1개, 전부 보유 시 일부 환급)
+export const GACHA_PRICE = 1000;
+export const GACHA_REFUND = 400;
+
+// 7일 연속 출석 보상 (7일차: 코인 + 특수 헬멧)
+export const STREAK_REWARDS = [200, 300, 400, 600, 800, 1000, 1500];
+export const STREAK_SPECIAL_HELMET = 'crown';
+
+// ======================================================================
+// 도로변 빌보드 포스터 (국가별 브랜드 패러디)
+// ======================================================================
+export const BILLBOARD_POSTERS = {
+  ID: [
+    { title: 'INDOMIE GO', sub: 'Mie goreng 24/7', bg: '#d62828', fg: '#ffd60a' },
+    { title: 'TEH BOTOL', sub: 'Ice cold, extra sweet', bg: '#ffb703', fg: '#1d3557' },
+    { title: 'GRAB FOOD', sub: 'Lapar? Order now', bg: '#00b14f', fg: '#ffffff' },
+  ],
+  VN: [
+    { title: 'PHO KING', sub: 'Hanoi\'s finest broth', bg: '#c1121f', fg: '#fdf0d5' },
+    { title: 'BANH MI BRO', sub: 'Crunchy since 1958', bg: '#ffb703', fg: '#432818' },
+    { title: 'CA PHE SUA', sub: 'Strong. Sweet. Iced.', bg: '#3e2723', fg: '#ffe8d6' },
+  ],
+  TH: [
+    { title: 'TOM YUM MAX', sub: 'Spicy level 99', bg: '#ff006e', fg: '#ffffff' },
+    { title: 'SIAM COLA', sub: 'Taste of Bangkok', bg: '#3a0ca3', fg: '#f72585' },
+    { title: 'TUK TUK GO', sub: 'Ride in 2 min', bg: '#06d6a0', fg: '#073b4c' },
+  ],
+  KR: [
+    { title: 'KIMCHI COLA', sub: 'Fermented fizz', bg: '#e63946', fg: '#ffffff' },
+    { title: 'SOJU LIGHT', sub: 'Only 12 kcal*', bg: '#2a9d8f', fg: '#e9f5db' },
+    { title: 'K-POP LIVE', sub: 'Gangnam Arena tonight', bg: '#7209b7', fg: '#4cc9f0' },
+  ],
+  JP: [
+    { title: 'RAMEN 24H', sub: 'Shibuya station exit 8', bg: '#ffbe0b', fg: '#d00000' },
+    { title: 'NEKO PHONE', sub: 'Purrfect signal', bg: '#ff70a6', fg: '#ffffff' },
+    { title: 'SUSHI EXPRESS', sub: 'Conveyor at light speed', bg: '#0077b6', fg: '#caf0f8' },
+  ],
+  SG: [
+    { title: 'MERLION AIR', sub: 'Fly the lion city', bg: '#d90429', fg: '#ffffff' },
+    { title: 'KAYA TOAST', sub: 'Breakfast of legends', bg: '#80b918', fg: '#ffffff' },
+    { title: 'HAWKER HUB', sub: 'Michelin on a budget', bg: '#ff9f1c', fg: '#2b2d42' },
+  ],
+  US: [
+    { title: 'BURGER KINGDOM', sub: 'Have it your way-ish', bg: '#f77f00', fg: '#3d0c02' },
+    { title: 'STARBUZZ', sub: 'Venti everything', bg: '#1b4332', fg: '#d8f3dc' },
+    { title: 'COCA LOCA', sub: 'Open crazyness', bg: '#c1121f', fg: '#ffffff' },
+  ],
+  FR: [
+    { title: 'CROISSANT & CO', sub: 'Beurre. Toujours.', bg: '#fefae0', fg: '#bc6c25' },
+    { title: 'LOUVRE VIP', sub: 'Skip the line', bg: '#14213d', fg: '#fca311' },
+    { title: 'VELO PARIS', sub: 'Pedal the boulevards', bg: '#e63946', fg: '#f1faee' },
+  ],
+};
+
+// ======================================================================
+// 공유 & 광고
+// ======================================================================
+// WhatsApp 챌린지 링크의 기본 주소. 비워두면 현재 게임 주소를 사용 (예: 'https://grabrider.app/')
+export const SHARE_BASE_URL = '';
+
+// 보상형 광고 (배너 광고는 사용하지 않음)
+//   provider: 'h5'   → Google H5 Games Ads (AdSense 계정 + H5 Games 승인 필요, adClient 입력)
+//             'mock' → 테스트용 가짜 광고 (5초 카운트다운 후 보상)
+//             'none' → 광고 버튼 숨김
+export const ADS = {
+  provider: 'mock',
+  adClient: '',          // 예: 'ca-pub-1234567890123456'
+  testMode: true,        // H5 Games Ads 테스트 모드 (data-adbreak-test="on")
+  freeCoins: 300,        // 차고 무료 코인 보상
+  freeCoinsCooldownSec: 180, // 3분 쿨타임 (어뷰징 방지 / eCPM 유지)
+};
