@@ -91,6 +91,6 @@ vendor/               Three.js r160 + GLTFLoader (MIT), PeerJS 1.5.4 (MIT)
 
 ## 참고
 
-- 랭킹은 기기(브라우저)별 로컬 랭킹입니다. 여러 사람이 함께 겨루는 온라인 랭킹이 필요하면 별도 백엔드(예: Firebase, Supabase)를 연결해야 합니다.
+- 글로벌 랭킹은 `js/config.js` 의 Supabase 설정을 사용하고, '내 기기' 탭은 이 브라우저의 로컬 TOP 10 입니다.
 - URL에 `?debug`를 붙이면 콘솔에서 `window.__G`로 게임 상태를 확인할 수 있습니다.
 - "Grab"은 Grab Holdings의 상표입니다. 개인 학습/팬 프로젝트 용도로 쓰고, 공개 배포·스토어 출시 시에는 `index.html`, `manifest.webmanifest`의 이름을 자체 브랜드로 바꾸세요.

@@ -3,8 +3,9 @@
 // ---------- 온라인 계정 & 글로벌 랭킹 (Supabase)
 // supabase/schema.sql 을 Supabase SQL Editor 에서 실행한 뒤 아래 두 값을 채우세요.
 // (Authentication > Providers > Email 에서 "Confirm email" 을 꺼야 아이디 가입이 바로 됩니다)
-export const SUPABASE_URL = '';      // 예: 'https://abcd1234.supabase.co'
-export const SUPABASE_ANON_KEY = ''; // 프로젝트 anon public key
+export const SUPABASE_URL = 'https://oavlcqityoudwxylgllj.supabase.co';
+// 공개용 키 (publishable / anon). service_role·secret 키는 절대 넣지 마세요.
+export const SUPABASE_ANON_KEY = 'sb_publishable_fnhE6hTPp8Wwqj_W1gjiog_qT84mTI4';
 
 // 아이디를 Supabase 이메일 계정으로 바꿀 때 붙이는 가상 도메인
 export const ID_EMAIL_DOMAIN = 'grabrider.game';
