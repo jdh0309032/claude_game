@@ -832,3 +832,6 @@ body.modal-open #touchControls { display: none !important; }
 .touch-layer { z-index: 10; }
 #hud { z-index: 5; }
 body.modal-open .touch-layer { display: none !important; pointer-events: none !important; }
+
+.admin-btn { background: #ff006e; color: #fff; border: 0; }
+#adminCountry { max-width: 55%; }

@@ -228,7 +228,7 @@
         <div class="setting"><span><i data-icon="drop"></i>SCREEN WET EFFECT</span><button class="btn toggle" data-setting="wetFx"></button></div>
         <div class="setting"><span><i data-icon="gauge"></i>THROTTLE</span><button class="btn toggle" data-setting="throttle"></button></div>
         <div class="setting"><span><i data-icon="hand"></i>TOUCH STEERING</span><button class="btn toggle" data-setting="touchMode"></button></div>
-        <div class="setting"><span><i data-icon="globe"></i>MY COUNTRY</span><span id="countryLabel" class="country-label"></span></div>
+        <div class="setting"><span><i data-icon="globe"></i>MY COUNTRY</span><span id="countryLabel" class="country-label"></span><select id="adminCountry" class="select small hidden" aria-label="Country (admin)"></select></div>
         <div id="adminRow" class="setting hidden"><span><i data-icon="gear"></i>ADMIN MODE</span><button id="btnAdmin" class="btn toggle">OFF</button></div>
         <h3>HOW TO PLAY</h3>
         <ul class="howto">
@@ -285,6 +285,7 @@
         <div id="goGlobal" class="rank-entry hidden"></div>
         <div class="row result-ads">
           <button id="btnAdRevive" class="btn ad-btn" data-icon="play"><span>WATCH AD TO REVIVE</span></button>
+          <button id="btnAdminRevive" class="btn admin-btn hidden" data-icon="retry"><span>ADMIN REVIVE</span></button>
           <button id="btnAdDouble" class="btn ad-btn" data-icon="coin"><span>WATCH AD TO DOUBLE COINS</span></button>
         </div>
         <button id="btnContinue" class="btn gold" data-icon="coin"><span><span id="contCost">150</span> CONTINUE</span></button>

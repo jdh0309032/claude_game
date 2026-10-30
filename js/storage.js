@@ -378,6 +378,20 @@ export async function lockCountry() {
   }
 }
 
+// 관리자 전용: 국가 변경 (005 마이그레이션의 admin_set_country, 서버에서 관리자 여부 확인)
+export async function adminSetCountry(code) {
+  if (!isCountryCode(code)) return { ok: false, error: 'Invalid country' };
+  try {
+    await ensureFreshToken();
+    const cc = await sb('/rest/v1/rpc/admin_set_country', { method: 'POST', auth: true, body: { p_country: code } });
+    save.country = cc;
+    save.countrySource = 'server';
+    return { ok: true, country: cc };
+  } catch (e) {
+    return { ok: false, error: isMissingSchema(e) ? 'Server needs the 005 database migration' : friendly(e) };
+  }
+}
+
 const COLS = 'user_id,nickname,score,bike,dist,country_code,box,outfit,helmet,flag';
 
 // entry: { score, dist, bike, box, outfit, helmet, flag }

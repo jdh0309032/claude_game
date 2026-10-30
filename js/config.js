@@ -86,7 +86,12 @@ export const BIKES = [
 ];
 
 // 상점 국기 (헬멧 스티커 + 차체 데칼 + 배달 상자 깃발). 주행 테마 8개국 10,000 / 그 외 8,000 코인
-export const FLAG_SHOP_CODES = ['ID', 'VN', 'TH', 'KR', 'JP', 'SG', 'US', 'FR', 'MY', 'PH', 'CN', 'IN', 'GB', 'DE', 'IT', 'ES', 'NL', 'CA', 'RU', 'UA', 'PL'];
+// 이미지는 assets/flags/XX.svg (실제 국기, country-flag-icons). 코드만 추가하면 상점에 나옵니다.
+export const FLAG_SHOP_CODES = [
+  'ID', 'VN', 'TH', 'KR', 'JP', 'SG', 'US', 'FR',
+  'MY', 'PH', 'KH', 'LA', 'MM', 'BN', 'CN', 'HK', 'IN', 'BD', 'PK', 'AU', 'NZ', 'GB', 'IE', 'DE', 'IT', 'ES', 'PT', 'NL',
+  'BE', 'CH', 'SE', 'NO', 'FI', 'DK', 'PL', 'UA', 'TR', 'SA', 'AE', 'EG', 'ZA', 'NG', 'CA', 'MX', 'BR', 'AR',
+];
 export const FLAG_PRICE_THEME = 10000;
 export const FLAG_PRICE_OTHER = 8000;
 

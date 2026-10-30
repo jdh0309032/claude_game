@@ -4,7 +4,9 @@ import { Sound } from './audio.js';
 import { net, describeError } from './net.js';
 import { icon, hydrateIcons } from './icons.js';
 import { ScreenRain } from './rainfx.js';
-import { THEMES, ZONE_LENGTH, themeAt, themeIndexAt, driveSign, pickWeighted, COUNTRY_CODES, countryName, isCountryCode, flagBadge, nationalLivery } from './themes.js';
+import {
+  THEMES, ZONE_LENGTH, themeAt, themeIndexAt, driveSign, pickWeighted, COUNTRY_CODES, countryName, isCountryCode, flagBadge, nationalLivery, preloadFlags,
+} from './themes.js';
 import { PreviewStage, renderRiderSnapshot } from './preview.js';
 import { showRewarded, adsEnabled } from './ads.js';
 import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, GACHA_PRICE, GACHA_REFUND, STREAK_REWARDS, STREAK_SPECIAL_HELMET, FLAG_CHECK_INTERVAL_SEC,
@@ -13,7 +15,7 @@ import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, GACHA_PRICE, GACHA_REFUND, STRE
 import {
   save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, getBike,
   replaceDoneMissions, missionText, auth, leaderboard, getSession, ONLINE, detectCountry,
-  loadPlayerData, flushSave, lockCountry, isServerReady,
+  loadPlayerData, flushSave, lockCountry, isServerReady, adminSetCountry,
 } from './storage.js';
 
 const $ = (id) => document.getElementById(id);
@@ -309,20 +311,20 @@ const FLAGS = FLAG_SHOP_CODES.map((code) => ({
   desc: 'Helmet sticker, bike decal and box flag',
 }));
 
-// 바이크 외형. 국가대표 바이크는 그 나라 국기 색으로 도색 + 국기 데칼
+// 바이크 외형. 국가대표 바이크는 그 나라 국기 색으로 도색 (국기 데칼은 장착한 국기를 따르고, 없앨 수도 있음)
 function bikeLook(bikeId, code) {
   const bk = getBike(bikeId);
   if (bk.special === 'national') {
     const cc = isCountryCode(code) ? code : save.country;
     const [c1, c2] = nationalLivery(cc);
-    return { color: c1, opts: { style: 'sport', accent: c2, national: true, flag: cc } };
+    return { color: c1, opts: { style: 'sport', accent: c2, national: true } };
   }
   return { color: bk.color, opts: { style: bk.style } };
 }
 const myNationalCode = () => save.nationalCode || save.country;
 function myLook() {
   const look = bikeLook(save.bike, myNationalCode());
-  const flag = look.opts.flag || (isCountryCode(save.flag) ? save.flag : null);
+  const flag = isCountryCode(save.flag) ? save.flag : null;
   return { color: look.color, opts: { ...look.opts, box: save.box, outfit: save.outfit, helmet: save.helmet, flag } };
 }
 const currentBikeKey = () => JSON.stringify(myLook());
@@ -330,7 +332,7 @@ const riderOpts = () => myLook().opts;
 // 랭킹 행(다른 라이더)의 장착 조합 → 3D 미리보기
 function rowLook(r) {
   const look = bikeLook(r.bike, r.country);
-  const flag = look.opts.flag || (isCountryCode(r.flag) ? r.flag : null);
+  const flag = isCountryCode(r.flag) ? r.flag : null;
   return { color: look.color, opts: { ...look.opts, box: r.box || 'basic', outfit: r.outfit || 'jacket', helmet: r.helmet || 'basic', flag } };
 }
 
@@ -433,13 +435,24 @@ function pickType(r, r2, z) {
   return 'sedan';
 }
 
+// 통행 방향이 바뀌는 국경(예: 한국 R → 일본 L) 기준 [-200m, +150m] 은 교통 공백 구간
+const GAP_BEFORE = 200, GAP_AFTER = 150;
+function inBorderGap(d) {
+  const b = Math.round(d / ZONE_LENGTH) * ZONE_LENGTH;
+  if (b <= 0 || driveSign(b - 1) === driveSign(b + 1)) return false;
+  return d > b - GAP_BEFORE && d < b + GAP_AFTER;
+}
+
 function spawnCar(z = SPAWN_Z, forced = null) {
   // 난수는 결과와 무관하게 항상 같은 개수만 소비 → 멀티 동기화 유지
   const r = Array.from({ length: 10 }, () => wr('car'));
   const type = forced?.type || pickType(r[0], r[9], z);
   const def = M.CAR_DEFS[type];
   // 스폰 위치 나라의 통행 방향 (좌측통행이면 왼쪽 두 차선이 같은 방향)
-  const ds = driveSign(G.distance - z);
+  const sd = G.distance - z;
+  const ds = driveSign(sd);
+  // 통행 방향이 바뀌는 국경 앞뒤 구간에는 차를 만들지 않음 → 서로 다른 규칙의 차가 섞이지 않게
+  if (!forced && inBorderGap(sd)) return null;
   const same = ds > 0 ? [2, 3] : [1, 0];
   const order = forced ? [forced.lane] : type === 'ramp' ? (r[1] < 0.5 ? same : [same[1], same[0]]) : [0, 1, 2, 3];
   if (type !== 'ramp' && !forced) {
@@ -452,18 +465,14 @@ function spawnCar(z = SPAWN_Z, forced = null) {
     if (!laneClear(lane, z, def.len) || blocksAll(lane, z)) continue;
     const c = acquireCar(type);
     const dir = (lane >= 2) === (ds > 0) ? 1 : -1;
-    const inner = lane === 1 || lane === 2;
     Object.assign(c, {
-      lane, targetLane: lane, dir, ds, crossing: false, baseX: LANES[lane], x: LANES[lane], z, offset: 0,
+      lane, targetLane: lane, dir, ds, side: Math.sign(LANES[lane]), baseX: LANES[lane], x: LANES[lane], z, offset: 0,
       speed: lerp(def.speed[0], def.speed[1], r[4]) * (dir < 0 ? 1.1 : 1),
       passed: false, minGap: 99, changing: false, changeT: 0, flying: false, honked: false,
       wob: r[5] * Math.PI * 2,
       wobAmp: (type === 'bus' || type === 'truck' || type === 'ramp' ? 0.1 : 0.22) * (1 + clamp(G.distance / 8000, 0, 1) * 0.8),
       // 앞서가는 같은 방향 차량일수록 깜빡이 후 급차선 변경을 자주 함
       canChange: type !== 'ramp' && r[6] < Math.min(dir > 0 ? 0.7 : 0.4, (dir > 0 ? 0.3 : 0.12) + G.distance / 8000),
-      // 안쪽 차선 차량은 중앙선 쪽으로 침범하는 패턴
-      canInvade: inner && type !== 'ramp' && G.distance > 600 && r[7] < Math.min(0.4, 0.1 + G.distance / 15000),
-      invadeT: 0,
     });
     const col = type === 'taxi' ? 0xffc300 : type === 'police' ? 0xf4f4f4 : type === 'bus' ? [0x2e86de, 0x10ac84, 0xee5253][(r[8] * 3) | 0]
       : type === 'ramp' ? 0xff8c1a : CAR_COLORS[(r[8] * CAR_COLORS.length) | 0];
@@ -515,23 +524,16 @@ function updateCars(dt, collide) {
       if (ahead > 0 && ahead < (c.len + o.len) / 2 + 5 && o.speed < c.speed) c.speed = o.speed;
     }
 
-    // 국경을 넘으면 통행 방향이 바뀌는 나라: 반대편 같은 성격의 차선으로 건너감 (3 - lane)
-    const cds = driveSign(G.distance - c.z);
-    if (cds !== c.ds) {
-      c.ds = cds;
-      c.lane = 3 - c.lane;
-      c.targetLane = c.lane;
-      c.changing = false;
-      c.crossing = true;
-      c.invadeT = 0;
-      c.blinkMatL.emissiveIntensity = 0;
-      c.blinkMatR.emissiveIntensity = 0;
+    // 차는 절대 중앙선을 넘지 않음. 통행 방향이 다른 나라로 넘어가는 차는 멀리 있을 때 정리
+    // (국경 앞뒤 교통 공백 구간 덕분에 대부분 라이더 시야 밖에서 처리됨)
+    if (driveSign(G.distance - c.z) !== c.ds) {
+      if (c.z < -40) {
+        releaseCar(c);
+        continue;
+      }
+      c.canChange = false;
     }
-    if (c.crossing) {
-      const tx = LANES[c.lane];
-      c.baseX += clamp(tx - c.baseX, -7 * dt, 7 * dt);
-      if (Math.abs(tx - c.baseX) < 0.01) c.crossing = false;
-    } else if (c.changing) {
+    if (c.changing) {
       c.changeT += dt;
       const on = Math.floor(c.changeT * 6) % 2 === 0;
       setBlink(c, Math.sign(LANES[c.targetLane] - c.baseX) * c.dir, on);
@@ -549,7 +551,7 @@ function updateCars(dt, collide) {
           c.blinkMatR.emissiveIntensity = 0;
         }
       }
-    } else if (c.canChange && !c.crossing && c.z > -150 && c.z < -20 && Math.random() < 0.7 * dt) {
+    } else if (c.canChange && c.z > -150 && c.z < -20 && Math.random() < 0.7 * dt) {
       const ol = otherLane(c.lane);
       if (laneClear(ol, c.z, c.len, c)) {
         c.targetLane = ol;
@@ -558,17 +560,10 @@ function updateCars(dt, collide) {
       }
     }
 
-    // 중앙선 침범: 깜빡이 없이 중앙선 쪽으로 슬금슬금 → 2.6초 후 복귀
-    if (c.canInvade && !c.changing && c.invadeT <= 0 && c.z > -130 && c.z < -35 && Math.random() < 0.6 * dt) {
-      c.invadeT = 2.6;
-      c.canInvade = false;
-    }
-    const want = c.invadeT > 0 ? -Math.sign(c.baseX) * 1.15 : 0;
-    c.invadeT = Math.max(0, c.invadeT - dt);
-    c.offset = approach(c.offset, want, 1.6 * dt);
-
     c.z += (G.speed - c.dir * c.speed) * dt;
-    c.x = c.baseX + c.offset + Math.sin(t * 0.8 + c.wob) * c.wobAmp;
+    c.x = c.baseX + Math.sin(t * 0.8 + c.wob) * c.wobAmp;
+    // 안전장치: 차체가 중앙선(x = 0)을 넘지 않도록 자기 쪽으로 고정
+    c.x = c.side * Math.max(c.side * c.x, c.w / 2 + 0.25);
     c.group.position.set(c.x, 0, c.z);
     if (c.sirenR) {
       const ph = Math.floor(t * 8) % 2;
@@ -2567,7 +2562,7 @@ function selectRankRow(i) {
   }
   const look = rowLook(r);
   stage.setRider(look.opts, look.color);
-  setFlexLabel(`#${i + 1} ${String(r.nickname).toUpperCase()} · ${getBike(r.bike).name.toUpperCase()}`, i === 0 ? r.country : look.opts.flag);
+  setFlexLabel(`#${i + 1} ${String(r.nickname).toUpperCase()} · ${getBike(r.bike).name.toUpperCase()}`, r.country);
 }
 
 async function renderRanking() {
@@ -2816,12 +2811,38 @@ function renderSettings() {
     b.textContent = SETTING_LABELS[b.dataset.setting](save.settings[b.dataset.setting]);
   }
   const src = { server: 'LOCKED', ip: 'IP', tz: 'ESTIMATED' }[save.countrySource] || '';
-  $('countryLabel').innerHTML = `${flagBadge(save.country)}${escapeHtml(countryName(save.country))} <small class="muted">${src}</small>`;
+  $('countryLabel').innerHTML = `${flagBadge(save.country)}${escapeHtml(countryName(save.country))} <small class="muted">${isAdminMode() ? 'ADMIN' : src}</small>`;
+  // 관리자만 국가를 바꿀 수 있음
+  const sel = $('adminCountry');
+  sel.classList.toggle('hidden', !isAdminMode());
+  $('countryLabel').classList.toggle('hidden', isAdminMode());
+  if (isAdminMode()) {
+    sel.innerHTML = countryOptions(save.country);
+    sel.value = save.country;
+  }
   const showAdmin = ADMIN_DEBUG_TOGGLE && DEBUG && !serverAdmin;
   $('adminRow').classList.toggle('hidden', !showAdmin && !serverAdmin);
   $('btnAdmin').textContent = isAdminMode() ? 'ON' : 'OFF';
   $('btnAdmin').disabled = serverAdmin;
 }
+$('adminCountry').addEventListener('change', async (e) => {
+  if (!isAdminMode()) return;
+  const code = e.target.value;
+  // 관리자 계정은 서버에도 저장 (admin_set_country), 디버그 관리자는 이번 접속에만
+  if (serverAdmin) {
+    const res = await adminSetCountry(code);
+    if (!res.ok) {
+      toast(`COUNTRY  ·  ${res.error}`);
+      renderSettings();
+      return;
+    }
+  }
+  save.country = code;
+  toast(`ADMIN  ·  COUNTRY ${countryName(code).toUpperCase()}`);
+  regionTopsDirty(code);
+  onDataReplaced();
+  renderSettings();
+});
 // 디버그 전용 관리자 토글 (?debug). 이번 접속에만 적용, 랭킹 기록 차단
 $('btnAdmin').addEventListener('click', () => {
   if (serverAdmin || !DEBUG) return;
@@ -2959,7 +2980,8 @@ function showGameOver() {
   cont.disabled = save.coins < CONTINUE_COST;
   $('retryLabel').textContent = MP.active ? 'REMATCH' : 'RETRY';
   // 보상형 광고: 부활 1회 / 코인 2배 1회 (배너 없음)
-  $('btnAdRevive').classList.toggle('hidden', !adsEnabled() || G.continued || MP.active);
+  $('btnAdRevive').classList.toggle('hidden', !adsEnabled() || G.continued || MP.active || isAdminMode());
+  $('btnAdminRevive').classList.toggle('hidden', !isAdminMode() || MP.active);
   $('btnAdDouble').classList.toggle('hidden', !adsEnabled() || G.doubled || G.coinsRun + G.bonusCoins <= 0);
 
   if (MP.active) {
@@ -2980,6 +3002,10 @@ async function submitGlobal() {
   const s = getSession();
   const score = Math.floor(G.score);
   const cname = escapeHtml(countryName(save.country));
+  if (isAdminMode()) {
+    box.innerHTML = `${icon('gear')} ADMIN MODE · this run is not recorded on the ranking`;
+    return;
+  }
   if (!s) {
     box.innerHTML = `${flagBadge(save.country)} Sign in to post your score to the ${cname} ranking <button class="btn primary" id="goLogin">SIGN IN</button>`;
     $('goLogin').addEventListener('click', () => { renderAuth(); openScreen('auth', 'gameover'); });
@@ -2987,10 +3013,6 @@ async function submitGlobal() {
   }
   if (score <= 0) {
     box.classList.add('hidden');
-    return;
-  }
-  if (isAdminMode()) {
-    box.innerHTML = `${icon('gear')} ADMIN MODE · this run is not recorded on the ranking`;
     return;
   }
   if (G.globalSubmitted === score) return;
@@ -3045,6 +3067,11 @@ $('btnContinue').addEventListener('click', () => {
   if (G.continued || MP.active || save.coins < CONTINUE_COST) return;
   save.coins -= CONTINUE_COST;
   persist();
+  reviveRun();
+});
+// 관리자: 비용·광고 없이 몇 번이든 즉시 부활
+$('btnAdminRevive').addEventListener('click', () => {
+  if (!isAdminMode() || MP.active || G.state !== 'over') return;
   reviveRun();
 });
 $('btnAdRevive').addEventListener('click', async () => {
@@ -3442,6 +3469,9 @@ function showDailyStreak() {
     show('menu');
   }, { once: true });
 }
+
+// 국기 이미지 미리 불러오기 (3D 국경 게이트·가로등·광고판 텍스처용)
+preloadFlags([...THEMES.map((t) => t.code), ...FLAG_SHOP_CODES]);
 
 // 시작: IP 로 국가 판별 → 자동 로그인 → 서버 데이터 → 국가 고정 → 국가대표 검증
 detectCountry()

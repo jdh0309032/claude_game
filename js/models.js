@@ -1058,8 +1058,8 @@ export function flagTexture(code) {
   const c = document.createElement('canvas');
   c.width = 192;
   c.height = 128;
-  drawFlag(c.getContext('2d'), code, 192, 128);
   const t = new THREE.CanvasTexture(c);
+  drawFlag(c.getContext('2d'), code, 192, 128, 0, 0, () => { t.needsUpdate = true; });
   t.colorSpace = THREE.SRGBColorSpace;
   flagTexCache[code] = t;
   return t;
@@ -1093,14 +1093,16 @@ export function createBorderGate(theme) {
   const x = c.getContext('2d');
   x.fillStyle = '#12141f';
   x.fillRect(0, 0, 1024, 96);
-  drawFlag(x, theme.code, 112, 74, 14, 11);
-  drawFlag(x, theme.code, 112, 74, 898, 11);
+  let tex = null;
+  const refresh = () => { if (tex) tex.needsUpdate = true; };
+  drawFlag(x, theme.code, 111, 74, 14, 11, refresh);
+  drawFlag(x, theme.code, 111, 74, 898, 11, refresh);
   x.fillStyle = '#ffffff';
   x.font = 'bold 50px "Russo One", "Arial Black", sans-serif';
   x.textAlign = 'center';
   x.textBaseline = 'middle';
   x.fillText(theme.welcome, 512, 52, 740);
-  const tex = new THREE.CanvasTexture(c);
+  tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   for (const zf of [0.51, -0.51]) {
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(19.6, 1.45), new THREE.MeshBasicMaterial({ map: tex }));
@@ -1160,8 +1162,9 @@ export function posterTexture(poster, code) {
   x.fillText(poster.title, 28, 108, 456);
   x.font = 'bold 30px "Rajdhani", "Arial", sans-serif';
   x.fillText(poster.sub, 30, 178, 400);
-  drawFlag(x, code, 54, 36, 440, 204);
-  const t = new THREE.CanvasTexture(c);
+  let t = null;
+  drawFlag(x, code, 54, 36, 440, 204, () => { if (t) t.needsUpdate = true; });
+  t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   posterCache.set(key, t);
   return t;
@@ -1243,7 +1246,8 @@ export function megaInfoTexture(data) {
   // 국기 배지
   x.fillStyle = '#ffffff';
   x.fillRect(26, 92, 148, 100);
-  drawFlag(x, data.code, 140, 92, 30, 96);
+  let t = null;
+  drawFlag(x, data.code, 138, 92, 30, 96, () => { if (t) t.needsUpdate = true; });
   x.fillStyle = '#ffffff';
   x.font = 'bold 48px "Russo One", "Arial Black", sans-serif';
   x.fillText(data.country.toUpperCase(), 196, 162, W - 226);
@@ -1258,7 +1262,7 @@ export function megaInfoTexture(data) {
   x.fillStyle = 'rgba(255,255,255,0.7)';
   x.font = 'bold 28px "Rajdhani", "Arial", sans-serif';
   x.fillText(data.foot, 30, 430, W - 60);
-  const t = new THREE.CanvasTexture(c);
+  t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }

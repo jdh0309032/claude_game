@@ -43,7 +43,8 @@ python3 -m http.server 8000
 
 - **니어미스 & 콤보** — 차 옆을 아슬아슬하게 스치면 보너스. 0.35m 이내는 *PERFECT* (2배). 3초 안에 연속 성공하면 콤보 배율 상승.
 - **좌/우측 통행** — 인도네시아·태국·일본·싱가포르는 **좌측통행**(같은 방향 차선이 왼쪽, 마주 오는 차가 오른쪽), 한국·베트남·미국·프랑스는 **우측통행**.
-  국경 게이트에 *KEEP LEFT / KEEP RIGHT* 안내판이 있고, 국경을 넘는 차량은 반대편 차선으로 건너가 규칙에 맞춰집니다.
+  국경 게이트에 *KEEP LEFT / KEEP RIGHT* 안내판이 있습니다. 차량은 **절대 중앙선을 넘지 않으며**(자기 쪽 차선에 고정),
+  통행 방향이 바뀌는 국경 앞 200m ~ 뒤 150m 에는 차를 만들지 않고, 다른 규칙 구역으로 들어가는 차는 라이더에게서 40m 이상 떨어져 있을 때 정리합니다.
 - **역주행 차선** — 그 나라 기준 반대 차선을 달리면 점수 2배 + 니트로 충전.
 - **니트로** — 게이지를 채워 발동. 4초간 최고속 135%, 무적, 부딪힌 차는 날려버리고 *SMASH* 보너스. **발동 중엔 게이지가 차지 않습니다.**
 - **견인트럭 점프 & 공중 묘기** — 경사판 견인트럭이 이전보다 2배 자주 나옵니다(600m 이후). 올라타면 공중으로 뜨고(`isAirborne`),
@@ -52,7 +53,7 @@ python3 -m http.server 8000
   회전이 덜 끝났거나 뒤집힌 각도(수평에서 약 29° 이상)로 닿으면 **CRASH LANDING**으로 게임 오버. 입력을 놓으면 가까운 수평 자세로 살짝 맞춰 줍니다.
 - **스콜(Squall)** — 30초 폭우 이벤트(점수 1.3배, 빗소리·주기적 천둥 번개). 화면에 맺힌 빗물이 중력 방향으로만 흘러내리며 잔상과 굴절을 남깁니다(`js/rainfx.js`, Canvas 2D).
   저사양 기기는 설정에서 *SCREEN WET EFFECT* 를 끄면 되고, 이때도 어두워지는 조명·번개 플래시·하늘을 비추는 물웅덩이로 폭우가 표현됩니다. 물웅덩이를 밟으면 핸들이 둔해지고 미끄러집니다.
-- **위험 요소** — 갓길 노점상(Kaki Lima 수레·천막), 중앙선 라바콘·공사 표지판, 중앙선을 침범하는 차량,
+- **위험 요소** — 갓길 노점상(Kaki Lima 수레·천막), 중앙선 라바콘·공사 표지판,
   **깜빡이를 켜고 1초 뒤 급차선 변경하는 차량**(앞서가는 같은 방향 차량이 특히 자주),
   **도로 돌발 요소**: 공사 포트홀(덜컹 + 감속, 콤보 끊김), 열린 맨홀(충돌), 떨어진 화물 상자(충돌, 니트로·거대화로 날려버림).
 - **DROP ZONE** — 도로 가장자리의 반투명 초록 구역을 정확히 통과하면 +30 코인 + 스피드 부스트.
@@ -69,8 +70,10 @@ python3 -m http.server 8000
 - **낮/노을/밤 사이클** + 국가별 색조.
 - **차고 360° 쇼룸** — 드래그로 돌려보는 3D 미리보기. 바이크 8종(0 / 1,500 / 2,500 / 4,000 / 6,000 / 8,000 / 12,000 / 15,000 코인),
   배달 상자·의상·헬멧 각각 기본 + 유료 6종(500–3,000 코인). **MYSTERY BOX**(1,000 코인) 가챠: 미보유 상자·의상·헬멧 랜덤(국기 제외), 전부 보유 시 400 코인 환급.
-- **FLAGS 탭 (상점 국기)** — 21개국 국기(주행 테마 8개국 10,000 / 그 외 8,000 코인). 헬멧 스티커·차체 데칼·배달 상자 깃발로 붙습니다.
-- **국가대표 바이크 (National Team, 국가 1위 전용)** — 구매 불가. 내 국가 랭킹 **실시간 1위**가 되는 즉시 지급·자동 장착(국기 색 도색 + 국기 데칼, 최고 320 km/h).
+- **FLAGS 탭 (상점 국기)** — 46개국 국기(주행 테마 8개국 10,000 / 그 외 8,000 코인, `FLAG_SHOP_CODES`). 헬멧 스티커·차체 데칼·배달 상자 깃발로 붙고, *No Flag* 로 뗄 수 있습니다.
+  국기는 모두 **실제 국기 이미지**(`assets/flags/XX.svg`, [country-flag-icons](https://github.com/catamphetamine/country-flag-icons) MIT)를 씁니다.
+- **국가대표 바이크 (National Team, 국가 1위 전용)** — 구매 불가. 내 국가 랭킹 **실시간 1위**가 되는 즉시 지급·자동 장착(국기 색 도색, 최고 320 km/h).
+  국기 데칼은 강제가 아니라 FLAGS 탭에서 장착한 국기를 따르며(다른 나라 국기도, 국기 없음도 가능),
   2위 이하로 밀리는 순간 회수되고 원래 타던 바이크로 돌아갑니다. 1위 여부는 클라이언트 값이 아니라 DB 함수 `my_rank_v4` 로만 판단하며,
   30초마다(`FLAG_CHECK_INTERVAL_SEC`)와 앱 복귀·점수 전송·랭킹 조회 때 다시 확인합니다.
 - **7일 연속 출석** (로그인 계정) — 200 → 300 → 400 → 600 → 800 → 1,000 → 1,500 코인, 7일차엔 한정 *Crown* 헬멧. 하루 빠지면 1일차부터.
@@ -101,6 +104,7 @@ python3 -m http.server 8000
 3. SQL Editor 에서 [`supabase/schema.sql`](supabase/schema.sql) 실행 (랭킹 테이블 기본 스키마)
 4. 이어서 [`supabase/migrations/004_player_data_admin.sql`](supabase/migrations/004_player_data_admin.sql) 실행
    (002·003 내용 포함: `player_data` 테이블, `load_player_data`/`save_player_data`/`lock_country`/`submit_score_v4`/`my_rank_v4`, 예전 전송 함수 차단)
+   그다음 [`supabase/migrations/005_admin_country.sql`](supabase/migrations/005_admin_country.sql) 실행 (관리자 국가 변경)
 5. `js/config.js` 에 `SUPABASE_URL`, `SUPABASE_ANON_KEY` 입력 (publishable/anon 키만 사용, service_role 키는 절대 넣지 마세요)
 
 - **국가 고정:** 접속 시 IP Geolocation(`GEO_IP_ENDPOINTS`: country.is → geojs → ipapi.co)으로 국가를 판별하고, 로그인 계정은 처음 판별된 국가가
@@ -110,6 +114,8 @@ python3 -m http.server 8000
 - 랭킹은 **국가 기준 하나**입니다. 랭킹 화면에서 다른 나라 순위를 볼 수는 있지만, 내 기록·국가대표 혜택은 고정된 내 국가에만 적용됩니다.
   행을 누르면 그 라이더가 착용한 바이크·상자·의상·헬멧·국기 조합이 위쪽 3D 뷰포트에 표시됩니다.
 - **관리자 모드:** `player_data.is_admin = true` 인 계정으로 로그인하면 *ADMIN MODE* 가 켜집니다(지정 SQL 은 004 파일 하단 참고).
+  관리자는 설정의 *MY COUNTRY* 에서 국가를 마음대로 바꿀 수 있고(서버 저장은 [`005_admin_country.sql`](supabase/migrations/005_admin_country.sql) 의 `admin_set_country`),
+  결과 화면의 **ADMIN REVIVE** 로 비용·광고 없이 몇 번이든 즉시 부활합니다.
   모든 바이크·상자·의상·헬멧·국기·국가대표 바이크를 구매 없이 장착할 수 있고(`allUnlocked`), 주행 기록은 **랭킹에 전송하지 않으며**
   서버 함수(`submit_score_v4`)도 관리자 계정의 기록을 거부합니다. `?debug` 로 열면 설정에 이번 접속에만 적용되는 ADMIN MODE 토글이 보입니다
   (`ADMIN_DEBUG_TOGGLE`, 이 토글 상태에서도 기록 전송 안 함).
@@ -148,7 +154,8 @@ js/audio.js           WebAudio 합성 효과음 + 128 BPM BGM 시퀀서
 js/rainfx.js          화면 빗물 오버레이 (Canvas 2D 굴절)
 js/icons.js           미니멀 라인 아이콘 (SVG)
 supabase/schema.sql   랭킹 DB 기본 스키마
-supabase/migrations/  002 지역·Flex View, 003 국가 랭킹, 004 서버 저장·국가 고정·관리자
+supabase/migrations/  002 지역·Flex View, 003 국가 랭킹, 004 서버 저장·국가 고정·관리자, 005 관리자 국가 변경
+assets/flags/         실제 국기 SVG (country-flag-icons, MIT)
 assets/models/        외부 3D 모델 폴더
 vendor/               Three.js r160 + GLTFLoader (MIT), PeerJS 1.5.4 (MIT)
 ```
