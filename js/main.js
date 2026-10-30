@@ -4,13 +4,13 @@ import { Sound } from './audio.js';
 import { net, describeError } from './net.js';
 import { icon, hydrateIcons } from './icons.js';
 import { ScreenRain } from './rainfx.js';
-import { THEMES, ZONE_LENGTH, themeAt, themeIndexAt, pickWeighted, REGIONS, flagBadge } from './themes.js';
+import { THEMES, ZONE_LENGTH, themeAt, themeIndexAt, pickWeighted, COUNTRY_CODES, countryName, isCountryCode, flagBadge } from './themes.js';
 import { PreviewStage, renderRiderSnapshot } from './preview.js';
 import { showRewarded, adsEnabled } from './ads.js';
-import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, GACHA_PRICE, GACHA_REFUND, STREAK_REWARDS, STREAK_SPECIAL_HELMET } from './config.js';
+import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, GACHA_PRICE, GACHA_REFUND, STREAK_REWARDS, STREAK_SPECIAL_HELMET, FLAG_CHECK_INTERVAL_SEC } from './config.js';
 import {
-  save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, getBike, qualifies, addRanking, sortRanking,
-  replaceDoneMissions, missionText, auth, leaderboard, getSession, ONLINE,
+  save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, getBike,
+  replaceDoneMissions, missionText, auth, leaderboard, getSession, ONLINE, detectCountry,
 } from './storage.js';
 
 const $ = (id) => document.getElementById(id);
@@ -123,8 +123,9 @@ const tmpColor = new THREE.Color();
 // 소품 슬롯: always = 항상 보이는 메시, variants = 슬롯마다 하나만 보이는 변형 그룹 (국가 테마별 스타일)
 const ZERO_MATRIX = new THREE.Matrix4().makeScale(0, 0, 0);
 class PropStrip {
-  constructor({ always = [], variants = [] }, count, spacing, respawn) {
+  constructor({ always = [], variants = [], block = null }, count, spacing, respawn) {
     this.always = always;
+    this.block = block; // (it) => true 면 이번 프레임에 숨김 (빌보드 아래 가로수/가로등 등)
     this.variants = variants;
     this.span = count * spacing;
     this.respawn = respawn;
@@ -154,10 +155,11 @@ class PropStrip {
       dummy.rotation.set(0, it.ry, 0);
       dummy.scale.set(it.sx, it.sy, it.sz);
       dummy.updateMatrix();
-      const mat = it.hidden ? ZERO_MATRIX : dummy.matrix;
+      const hide = it.hidden || (this.block !== null && this.block(it));
+      const mat = hide ? ZERO_MATRIX : dummy.matrix;
       for (const m of this.always) m.setMatrixAt(k, mat);
       // 변형 메시는 보이는 인스턴스만 앞쪽에 모아 count 로 그림 (숨은 변형 정점 처리 비용 제거)
-      if (it.hidden) continue;
+      if (hide) continue;
       const group = this.variants[it.variant];
       if (!group || !group.length) continue;
       const n = fill[it.variant]++;
@@ -220,15 +222,26 @@ const buildingMat = M.makeBuildingMaterial();
 const bldgMesh = new THREE.InstancedMesh(M.buildingGeometry(), buildingMat, 30);
 const buildingsL = buildingSide(-1), buildingsR = buildingSide(1);
 
+// 빌보드가 서 있는 인도 구간의 가로수·가로등은 숨김 (패널/기둥과 겹쳐 파묻히지 않게)
+const activeBoards = [];
+function underBoard(it) {
+  const ax = Math.abs(it.x);
+  if (ax > 14) return false;
+  for (const b of activeBoards) {
+    if (Math.sign(it.x) === b.side && Math.abs(it.z - b.z) < b.halfZ) return true;
+  }
+  return false;
+}
+
 const strips = [
-  new PropStrip({ variants: treeMeshes.map((m) => [m]) }, 56, 7.5, (it) => {
+  new PropStrip({ variants: treeMeshes.map((m) => [m]), block: underBoard }, 56, 7.5, (it) => {
     it.variant = TREE_KINDS.indexOf(slotTheme(it).tree);
     const side = Math.random() < 0.5 ? -1 : 1;
     it.x = side * (Math.random() < 0.7 ? rand(9.6, 10.2) : rand(26, 44));
     it.sx = it.sy = it.sz = rand(0.85, 1.3);
     it.ry = rand(0, Math.PI * 2);
   }),
-  new PropStrip({ always: [lampPole, lampHead], variants: [[], ...lampFlags.map((m) => [m])] }, 18, 24, (it) => {
+  new PropStrip({ always: [lampPole, lampHead], variants: [[], ...lampFlags.map((m) => [m])], block: underBoard }, 18, 24, (it) => {
     const side = it.i % 2 ? 1 : -1;
     it.x = side * 9.2;
     it.ry = side > 0 ? 0 : Math.PI;
@@ -273,8 +286,15 @@ const shieldBubble = new THREE.Mesh(
 shieldBubble.position.y = 0.95;
 shieldBubble.scale.set(0.8, 1, 1.2);
 
-const currentBikeKey = () => [save.bike, save.box, save.outfit, save.helmet].join('|');
-const riderOpts = () => ({ style: getBike(save.bike).style, box: save.box, outfit: save.outfit, helmet: save.helmet });
+// 국가 1위 전용 국기: DB 검증(my_rank_v3 = 1) 결과로만 잠금 해제되고, 장착 중일 때만 바이크에 붙음
+const flagActive = () => save.flagUnlocked && save.flagEquipped && isCountryCode(save.flagCode);
+const currentBikeKey = () => [save.bike, save.box, save.outfit, save.helmet, flagActive() ? save.flagCode : ''].join('|');
+const riderOpts = () => ({ style: getBike(save.bike).style, box: save.box, outfit: save.outfit, helmet: save.helmet, flag: flagActive() ? save.flagCode : null });
+// 랭킹 행(다른 라이더)의 장착 조합 → 3D 미리보기 옵션. 국가 1위 행은 국기 포함
+const rowOpts = (r, isFirst) => ({
+  style: getBike(r.bike).style, box: r.box || 'basic', outfit: r.outfit || 'jacket', helmet: r.helmet || 'basic',
+  flag: isFirst && isCountryCode(r.country) ? r.country : null,
+});
 function buildBike() {
   if (bike) scene.remove(bike.root);
   bike = M.createBike(getBike(save.bike).color, riderOpts());
@@ -854,25 +874,33 @@ function updateThemes(dz, rdt) {
   }
 }
 
-// ---------- 지역 랭킹 캐시 (전광판 / 라이벌 마커)
+// ---------- 국가 랭킹 캐시 (전광판 / 라이벌 마커)
 const regionTops = {};
 const regionFetchAt = {};
 async function fetchRegionTop(code, force = false) {
   if (!code) return;
   if (!force && regionFetchAt[code] && performance.now() - regionFetchAt[code] < 60000) return;
   regionFetchAt[code] = performance.now();
-  const res = await leaderboard.fetchTop({ region: code });
+  const res = await leaderboard.fetchTop({ country: code });
   regionTops[code] = res.ok ? res.top : [];
-  if (code === save.region) setupRivalMarker();
+  if (code === save.country) {
+    setupRivalMarker();
+    if (res.ok && res.me) applyFlagStatus(res.me.rank === 1, code);
+  }
 }
 
 // ======================================================================
 // 도로변 3D 빌보드 + 랭킹 1위 LED 전광판
 // ======================================================================
-const boardPool = [], megaPool = [], activeBoards = [];
+const boardPool = [], megaPool = [];
 const megaShots = {};
 const megaInfoCache = new Map();
-const BOARD_YAW = 0.93; // 다가오는 차를 향해 비스듬히
+// 건물 전면 좌표: 건물 중심 |x| = 16.6, 깊이 6 → 도로 쪽 외벽 |x| = 13.6.
+// 차양·네온 간판·비상계단이 외벽에서 최대 ~1m 튀어나오므로 빌보드의 건물 쪽 끝은 그보다 앞(BOARD_FAR)에 둠
+const BUILDING_FRONT = 16.6 - 3;
+const BOARD_FAR = BUILDING_FRONT - 1.1;
+const BOARD_NEAR = ROAD_HALF - 0.9; // 도로 쪽 끝은 바깥 차선 위 높이 6m+ 로만 살짝 걸침
+const BOARD_MAX_YAW = 0.93; // 다가오는 라이더 쪽으로 최대한 비스듬히
 
 function acquireBoard(pool, factory) {
   let b = pool.find((x) => !x.active);
@@ -887,11 +915,18 @@ function acquireBoard(pool, factory) {
   return b;
 }
 
-function placeBoard(b, side, x, y) {
+// 폭 W 인 판이 BOARD_NEAR~BOARD_FAR 사이에 들어가는 최대 각도로 세우고, 중심 x 를 건물 전면 기준으로 계산
+function placeBoard(b, side, y) {
+  const { width } = b.obj.dims;
+  const s = Math.min(Math.sin(BOARD_MAX_YAW), (BOARD_FAR - BOARD_NEAR) / width);
+  const yaw = Math.asin(s);
+  const cx = BOARD_FAR - (width / 2) * s;
   b.z = SPAWN_Z;
   b.side = side;
-  b.obj.position.set(side * x, y, b.z);
-  b.obj.rotation.y = side < 0 ? -BOARD_YAW : -(Math.PI - BOARD_YAW);
+  b.halfZ = (width / 2) * Math.cos(yaw) + 2;
+  b.obj.position.set(side * cx, y, b.z);
+  b.obj.rotation.y = side < 0 ? -yaw : -(Math.PI - yaw);
+  b.obj.setSide(side < 0 ? 1 : -1); // 기둥을 건물 쪽 절반으로
 }
 
 function spawnBillboard() {
@@ -899,7 +934,7 @@ function spawnBillboard() {
   const posters = BILLBOARD_POSTERS[theme.code] || [];
   if (!posters.length) return;
   const b = acquireBoard(boardPool, M.createBillboard);
-  placeBoard(b, Math.random() < 0.5 ? -1 : 1, 13.3, 7.6);
+  placeBoard(b, Math.random() < 0.5 ? -1 : 1, 6.2 + b.obj.dims.height / 2);
   b.obj.panel.material.map = M.posterTexture(pick(posters), theme.code);
   b.obj.panel.material.needsUpdate = true;
 }
@@ -908,9 +943,9 @@ function spawnMegaBoard() {
   const theme = themeAt(G.distance - SPAWN_Z);
   const row = (regionTops[theme.code] || [])[0];
   const b = acquireBoard(megaPool, M.createMegaBoard);
-  placeBoard(b, Math.random() < 0.5 ? -1 : 1, 13.8, 9);
-  // 1위 라이더 3D 스냅샷 (메인 렌더러로 렌더 타깃에 한 번만 그림)
-  const key = row ? [row.nickname, row.bike, row.box, row.outfit, row.helmet].join('|') : 'none';
+  placeBoard(b, Math.random() < 0.5 ? -1 : 1, 6.8 + b.obj.dims.height / 2);
+  // 1위 라이더 3D 스냅샷 (메인 렌더러로 렌더 타깃에 한 번만 그림). 1위라서 국기 아이템도 착용
+  const key = row ? [row.nickname, row.bike, row.box, row.outfit, row.helmet, row.country].join('|') : 'none';
   let shot = megaShots[theme.code];
   if (!shot) {
     shot = { rt: new THREE.WebGLRenderTarget(256, 256), key: null };
@@ -919,19 +954,21 @@ function spawnMegaBoard() {
   }
   if (shot.key !== key) {
     const bk = getBike(row?.bike || 'rookie');
-    renderRiderSnapshot(renderer, shot.rt, { style: bk.style, box: row?.box || 'basic', outfit: row?.outfit || 'jacket', helmet: row?.helmet || 'basic' }, bk.color);
+    renderRiderSnapshot(renderer, shot.rt, row ? rowOpts(row, true) : { style: bk.style }, bk.color);
     shot.key = key;
   }
   b.obj.shot.material.map = shot.rt.texture;
   b.obj.shot.material.needsUpdate = true;
-  const infoKey = theme.code + key + (row?.score || 0);
+  const infoKey = theme.code + key + (row?.score || 0) + (row?.dist || 0);
   if (!megaInfoCache.has(infoKey)) {
     megaInfoCache.set(infoKey, M.megaInfoTexture({
-      city: theme.city,
-      code: row?.region || theme.code,
-      name: row ? String(row.nickname).toUpperCase() : 'YOUR NAME HERE',
-      line: row ? `${fmt(row.score)} PTS${row.dist ? ` · ${fmt(row.dist)} m` : ''}` : 'NO RIDER YET',
-      foot: row ? 'BEAT THIS SCORE TO TAKE THE BOARD' : `BE THE FIRST IN ${theme.city.toUpperCase()}`,
+      code: theme.code,
+      country: theme.country,
+      name: row ? String(row.nickname).toUpperCase() : '',
+      dist: fmt(row?.dist || 0),
+      score: fmt(row?.score || 0),
+      empty: !row,
+      foot: row ? 'BEAT THIS RIDER TO TAKE THE BOARD' : `BE THE FIRST IN ${theme.country.toUpperCase()}`,
     }));
   }
   b.obj.info.material.map = megaInfoCache.get(infoKey);
@@ -979,7 +1016,7 @@ scene.add(pbMarker, rivalMarker);
 function setupRivalMarker() {
   if (G.rivalPassed) return;
   const me = getSession();
-  const row = (regionTops[save.region] || []).find((r) => !r.isMe && r.dist > 0 && r.nickname !== me?.nickname);
+  const row = (regionTops[save.country] || []).find((r) => !r.isMe && r.dist > 0 && r.nickname !== me?.nickname);
   G.rivalDist = row ? row.dist : 0;
   G.rivalName = row ? String(row.nickname).toUpperCase() : '';
   if (row) rivalMarker.setLabel(`1ST: ${G.rivalName} · ${fmt(row.dist)} m`);
@@ -1001,7 +1038,7 @@ function updateMarkers() {
   }
   if (!G.rivalPassed && G.rivalDist > 0 && G.distance >= G.rivalDist) {
     G.rivalPassed = true;
-    popup(`PASSED ${G.rivalName}!`, 'combo', `#1 IN ${REGIONS.find((r) => r.code === save.region)?.name.toUpperCase() || 'YOUR REGION'}`);
+    popup(`PASSED ${G.rivalName}!`, 'combo', `#1 IN ${countryName(save.country).toUpperCase()}`);
     sfx.fever();
   }
 }
@@ -1265,10 +1302,7 @@ function enableTouchUI() {
 if (isTouchDevice) enableTouchUI();
 
 window.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT') {
-    if (e.key === 'Enter' && e.target.id === 'nameInput') submitName();
-    return;
-  }
+  if (e.target.tagName === 'INPUT') return;
   keys[e.code] = true;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   if (e.repeat) return;
@@ -1384,7 +1418,7 @@ function resetRun(seed) {
     speed: 21, x: 3.5, vx: 0, lean: 0, distance: 0, score: 0, mult: 1, time: 0,
     coinsRun: 0, nearMiss: 0, combo: 0, comboTimer: 0, maxCombo: 0, nitro: 0, boostTime: 0,
     shield: false, magnetTime: 0, x2Time: 0, slowTime: 0, invuln: 0, oncomingDist: 0,
-    boostsUsed: 0, maxKmh: 0, smashed: 0, jumps: 0, continued: false, finalized: false, rankEntry: null,
+    boostsUsed: 0, maxKmh: 0, smashed: 0, jumps: 0, continued: false, finalized: false,
     nextSpawn: 25, nextCoins: 60, nextPower: wrand('power', 450, 700), nextCones: wrand('cone', 350, 600),
     nextStall: wrand('stall', 300, 500), nextPuddle: wrand('puddle', 400, 700), nextSquall: wrand('weather', 1200, 2000),
     squallT: 0, rain: false, rainAmt: 0, lightning: 0, boltT: 0, shake: 0, crashT: 0,
@@ -1399,7 +1433,7 @@ function resetRun(seed) {
   resetThemes();
   setupRivalMarker();
   fetchRegionTop(THEMES[G.themeIdx].code);
-  fetchRegionTop(save.region);
+  fetchRegionTop(save.country);
   updatePool(conePool, 0, false, 0, 0, 'cone');
   updatePool(signPool, 0, false, 0, 0, 'sign');
   updatePool(puddlePool, 0, false, 0, 0, 'puddle');
@@ -1878,7 +1912,10 @@ function mountStage(containerId, draggable) {
   stage = stage || new PreviewStage();
   stage.setRider(riderOpts(), getBike(save.bike).color);
   stage.mount($(containerId), { draggable });
-  $('flexLabel').textContent = `MY RIDE · ${getBike(save.bike).name.toUpperCase()}`;
+  setFlexLabel(`MY RIDE · ${getBike(save.bike).name.toUpperCase()}`, flagActive() ? save.flagCode : null);
+}
+function setFlexLabel(text, flag) {
+  $('flexLabel').innerHTML = `${flag ? flagBadge(flag, 'flag') : ''}${escapeHtml(text)}`;
 }
 function hideScreens() { show(null); }
 
@@ -2028,7 +2065,7 @@ $('btnClearChallenge').addEventListener('click', () => {
   refreshMenu();
 });
 $('btnGarage').addEventListener('click', () => { renderGarage(); openScreen('garage'); });
-$('btnRanking').addEventListener('click', () => { openScreen('ranking'); renderRanking(); });
+$('btnRanking').addEventListener('click', () => { rankCountry = save.country; openScreen('ranking'); renderRanking(); });
 $('btnMissions').addEventListener('click', () => { renderMissions(); openScreen('missions'); });
 $('btnSettings').addEventListener('click', () => { renderSettings(); openScreen('settings'); });
 $('btnAccount').addEventListener('click', () => { renderAuth(); openScreen('auth'); });
@@ -2072,6 +2109,23 @@ function renderShopItems(kind) {
   }).join('');
 }
 
+// 단일 '국기' 아이템: 잠금(?) ↔ 국가 1위일 때만 해제
+function flagCard() {
+  const here = countryName(save.country);
+  if (!save.flagUnlocked) {
+    const why = getSession() ? `Reach #1 in the ${escapeHtml(here)} ranking to unlock.` : `Sign in and reach #1 in the ${escapeHtml(here)} ranking to unlock.`;
+    return `<div class="bike-card flag-item locked">
+      <div class="swatch mystery">?</div>
+      <div><h4>National Flag</h4><p>${why} Helmet sticker, bike decal and box flag. Lose #1 and it locks again.</p></div>
+      <button class="btn" disabled>LOCKED</button></div>`;
+  }
+  const on = flagActive();
+  return `<div class="bike-card flag-item ${on ? 'selected' : ''}">
+      <div class="swatch flag-swatch">${flagBadge(save.flagCode, 'flag big')}</div>
+      <div><h4>National Flag · ${escapeHtml(countryName(save.flagCode))}</h4><p>You are #1 in ${escapeHtml(countryName(save.flagCode))}. Only the current #1 rider can wear this flag.</p></div>
+      <button class="btn ${on ? '' : 'primary'}" data-act="flag">${on ? 'UNEQUIP' : 'EQUIP'}</button></div>`;
+}
+
 function renderGarage() {
   $('garageCoins').textContent = fmt(save.coins);
   if (stage) stage.setRider(riderOpts(), getBike(save.bike).color);
@@ -2099,7 +2153,7 @@ function renderGarage() {
     list.innerHTML = renderShopItems('box');
   } else {
     $('garageHint').textContent = 'Customize your rider outfit and helmet.';
-    list.innerHTML = `<div class="shop-section">OUTFIT</div>${renderShopItems('outfit')}<div class="shop-section">HELMET</div>${renderShopItems('helmet')}`;
+    list.innerHTML = `<div class="shop-section">NATIONAL #1</div>${flagCard()}<div class="shop-section">OUTFIT</div>${renderShopItems('outfit')}<div class="shop-section">HELMET</div>${renderShopItems('helmet')}`;
   }
 }
 
@@ -2115,6 +2169,16 @@ $('shopList').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-act]');
   if (!btn) return;
   const { kind, id, act } = btn.dataset;
+  if (act === 'flag') {
+    if (!save.flagUnlocked) return;
+    save.flagEquipped = !save.flagEquipped;
+    persist();
+    sfx.click();
+    buildBike();
+    resetBikePose();
+    renderGarage();
+    return;
+  }
   const isBike = kind === 'bike';
   const item = isBike ? getBike(id) : SHOP[kind].list.find((x) => x.id === id);
   const ownedKey = isBike ? 'ownedBikes' : SHOP[kind].owned;
@@ -2208,68 +2272,86 @@ $('btnAdCoins').addEventListener('click', async () => {
   renderGarage();
 });
 
-// ---------- 랭킹 (글로벌 / 내 기기)
-let rankTab = 'global';
+// ---------- 국가 랭킹 (행을 누르면 그 라이더의 3D 바이크/라이더 조합을 미리보기)
+let rankCountry = null;
+let rankRows = [];
+let rankSel = -1;
+
+function countryOptions(extra) {
+  const codes = [...new Set([extra, save.country, ...COUNTRY_CODES].filter(isCountryCode))];
+  return codes.map((c) => `<option value="${c}">${escapeHtml(countryName(c))}</option>`).join('');
+}
 
 function rankTable(rows) {
-  return `<table class="rank-table"><thead><tr><th>#</th><th>RIDER</th><th class="num">BEST</th><th>BIKE</th></tr></thead><tbody>${
-    rows.map((r, i) => `<tr class="${r.isMe ? 'me' : ''}">
+  return `<table class="rank-table selectable"><thead><tr><th>#</th><th>RIDER</th><th class="num">BEST</th><th>BIKE</th></tr></thead><tbody>${
+    rows.map((r, i) => `<tr class="${r.isMe ? 'me' : ''} ${i === rankSel ? 'sel' : ''}" data-row="${i}">
       <td>${i < 3 ? `<b class="medal m${i + 1}">${i + 1}</b>` : i + 1}</td>
-      <td>${r.region ? flagBadge(r.region, i === 0 ? 'flag big' : 'flag') : ''}${escapeHtml(r.nickname || r.name)}${r.date ? `<br><small class="muted">${escapeHtml(r.date)}</small>` : ''}</td>
+      <td>${i === 0 && r.country ? flagBadge(r.country, 'flag big') : ''}${escapeHtml(r.nickname)}${r.dist ? `<br><small class="muted">${fmt(r.dist)} m</small>` : ''}</td>
       <td class="num"><b>${fmt(r.score)}</b></td>
       <td><small>${escapeHtml(getBike(r.bike).name)}</small></td></tr>`).join('')
   }</tbody></table>`;
 }
 
-let rankRegion = null;
-async function renderRanking() {
-  for (const b of $('rankTabs').children) b.classList.toggle('on', b.dataset.rtab === rankTab);
-  const list = $('rankList'), me = $('rankMe'), mode = $('rankMode');
-  const sel = $('rankRegion');
-  sel.classList.toggle('hidden', rankTab !== 'region');
-  rankRegion = rankRegion || save.region;
-  if (!sel.options.length) sel.innerHTML = REGIONS.map((r) => `<option value="${r.code}">${r.name} · ${r.city}</option>`).join('');
-  sel.value = rankRegion;
-  if (rankTab === 'local') {
-    mode.textContent = 'THIS DEVICE';
-    mode.className = 'badge local';
-    list.innerHTML = save.ranking.length
-      ? rankTable(save.ranking.map((r) => ({ ...r, isMe: r.id === save.lastRankId })))
-      : '<div class="empty">No records yet.</div>';
-    me.innerHTML = '';
+// i = -1 → 내 라이더
+function selectRankRow(i) {
+  rankSel = i;
+  for (const tr of $('rankList').querySelectorAll('tr[data-row]')) tr.classList.toggle('sel', Number(tr.dataset.row) === i);
+  if (!stage) return;
+  const r = rankRows[i];
+  if (!r) {
+    stage.setRider(riderOpts(), getBike(save.bike).color);
+    setFlexLabel(`MY RIDE · ${getBike(save.bike).name.toUpperCase()}`, flagActive() ? save.flagCode : null);
     return;
   }
+  const opts = rowOpts(r, i === 0);
+  stage.setRider(opts, getBike(r.bike).color);
+  setFlexLabel(`#${i + 1} ${String(r.nickname).toUpperCase()} · ${getBike(r.bike).name.toUpperCase()}`, opts.flag);
+}
+
+async function renderRanking() {
+  const list = $('rankList'), me = $('rankMe'), mode = $('rankMode');
+  const sel = $('rankCountry');
+  rankCountry = rankCountry || save.country;
+  sel.innerHTML = countryOptions(rankCountry);
+  sel.value = rankCountry;
   mode.textContent = ONLINE ? 'ONLINE' : 'LOCAL MODE';
   mode.className = ONLINE ? 'badge' : 'badge local';
   list.innerHTML = '<div class="empty">Loading...</div>';
   me.innerHTML = '';
-  const tab = rankTab;
-  const res = await leaderboard.fetchTop({ region: tab === 'region' ? rankRegion : null });
-  if (rankTab !== tab || currentScreen !== 'ranking') return;
-  if (res.ok && tab === 'region') regionTops[rankRegion] = res.top;
+  rankRows = [];
+  selectRankRow(-1);
+  const country = rankCountry;
+  const res = await leaderboard.fetchTop({ country });
+  if (rankCountry !== country || currentScreen !== 'ranking') return;
   if (!res.ok) {
     list.innerHTML = `<div class="empty">Could not load the ranking<br><small>${escapeHtml(res.error)}</small></div>`;
     return;
   }
-  list.innerHTML = res.top.length ? rankTable(res.top) : '<div class="empty">No records yet.<br>Be the first rider on the board!</div>';
+  regionTops[country] = res.top;
+  if (country === save.country && res.me) applyFlagStatus(res.me.rank === 1, country);
+  rankRows = res.top;
+  rankSel = rankRows.length ? 0 : -1;
+  list.innerHTML = rankRows.length
+    ? rankTable(rankRows)
+    : `<div class="empty">No records in ${escapeHtml(countryName(country))} yet.<br>Be the first rider on the board!</div>`;
+  selectRankRow(rankSel);
   const s = getSession();
   if (!s) me.innerHTML = 'Sign in to see your rank <button class="btn primary" id="rankLogin">SIGN IN</button>';
-  else if (res.me) me.innerHTML = `YOUR RANK <b>#${res.me.rank}</b> · ${escapeHtml(res.me.nickname)} · <b>${fmt(res.me.score)}</b>`;
-  else me.innerHTML = `${escapeHtml(s.nickname)} has no record yet`;
+  else if (res.me) me.innerHTML = `YOUR RANK IN ${escapeHtml(countryName(country).toUpperCase())} <b>#${res.me.rank}</b> · <b>${fmt(res.me.score)}</b> <button class="btn small" id="rankMine">MY RIDE</button>`;
+  else me.innerHTML = `${escapeHtml(s.nickname)} has no record in ${escapeHtml(countryName(country))} <button class="btn small" id="rankMine">MY RIDE</button>`;
   if (!ONLINE) me.innerHTML += '<br><small class="muted">No server configured: ranking is shared only between accounts on this device (js/config.js)</small>';
-  const rl = $('rankLogin');
-  if (rl) rl.addEventListener('click', () => { renderAuth(); openScreen('auth', 'menu'); });
+  $('rankLogin')?.addEventListener('click', () => { renderAuth(); openScreen('auth', 'menu'); });
+  $('rankMine')?.addEventListener('click', () => { sfx.click(); selectRankRow(-1); });
 }
 
-$('rankTabs').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-rtab]');
-  if (!b) return;
-  rankTab = b.dataset.rtab;
+$('rankList').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-row]');
+  if (!tr) return;
   sfx.click();
-  renderRanking();
+  selectRankRow(Number(tr.dataset.row));
 });
-$('rankRegion').addEventListener('change', (e) => {
-  rankRegion = e.target.value;
+$('rankCountry').addEventListener('change', (e) => {
+  rankCountry = e.target.value;
   renderRanking();
 });
 
@@ -2320,7 +2402,8 @@ $('authForm').addEventListener('submit', async (e) => {
   $('authPw2').value = '';
   sfx.mission();
   toast(`WELCOME, ${res.user.nickname.toUpperCase()}`);
-  if (save.best > 0) leaderboard.submit(scoreEntry(save.best, save.bestDist)); // 기존 기록 반영
+  // 기존 기록 반영 후 국가 1위(국기) 여부 확인
+  (save.best > 0 ? leaderboard.submit(scoreEntry(save.best, save.bestDist)) : Promise.resolve()).then(() => checkFlagStatus());
   refreshMenu();
   if (backTo === 'gameover') {
     backTo = 'menu';
@@ -2332,12 +2415,78 @@ $('authForm').addEventListener('submit', async (e) => {
 });
 $('btnLogout').addEventListener('click', () => {
   auth.signOut();
+  applyFlagStatus(false, '', { silent: true });
   authTab = 'login';
   sfx.click();
   toast('SIGNED OUT');
   refreshMenu();
   renderAuth();
 });
+
+// ======================================================================
+// 국가 1위 전용 '국기' 아이템: 서버 순위로 잠금 해제 / 재잠금
+// ======================================================================
+function regionTopsDirty(code) {
+  delete regionFetchAt[code];
+  fetchRegionTop(code, true);
+}
+
+// unlocked 가 바뀌었을 때만 처리. 해제 → 자동 장착, 재잠금 → 기본 상태로 리셋
+function applyFlagStatus(unlocked, code, { silent = false } = {}) {
+  const was = save.flagUnlocked, prev = save.flagCode;
+  if (was === unlocked && (!unlocked || prev === code)) return;
+  save.flagUnlocked = unlocked;
+  save.flagCode = unlocked ? code : '';
+  save.flagEquipped = unlocked; // 1위 달성 즉시 자동 장착, 뺏기면 해제
+  persist();
+  if (!silent) {
+    if (unlocked) {
+      toast(`#1 IN ${countryName(code).toUpperCase()}  ·  NATIONAL FLAG UNLOCKED`);
+      sfx.fireworks();
+    } else if (was) {
+      toast(`YOU LOST #1 IN ${countryName(prev).toUpperCase()}  ·  FLAG LOCKED`);
+    }
+  }
+  if (bikeKey !== currentBikeKey()) {
+    buildBike();
+    if (G.state !== 'playing' && G.state !== 'crashing') resetBikePose();
+  }
+  if (currentScreen === 'garage') renderGarage();
+  else if (currentScreen === 'ranking' && rankSel < 0) selectRankRow(-1);
+}
+
+let flagChecking = false;
+async function checkFlagStatus() {
+  if (flagChecking) return;
+  if (!getSession()) {
+    applyFlagStatus(false, '', { silent: true });
+    return;
+  }
+  flagChecking = true;
+  try {
+    const r = await leaderboard.myRank(save.country);
+    applyFlagStatus(Boolean(r && r.rank === 1), r?.country || save.country);
+  } catch (e) {
+    // 통신 실패 시 마지막으로 검증된 상태 유지
+  } finally {
+    flagChecking = false;
+  }
+}
+
+// 1위를 뺏기는 순간을 잡기 위해 주기적으로 재확인 (화면이 보일 때만)
+setInterval(() => {
+  if (document.visibilityState === 'visible') checkFlagStatus();
+}, FLAG_CHECK_INTERVAL_SEC * 1000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkFlagStatus();
+});
+
+// 국가가 바뀌면(IP 재판별/설정 변경) 내 최고 기록을 새 국가로 옮기고 1위 여부 재확인
+async function onCountryChanged() {
+  if (getSession() && save.best > 0) await leaderboard.submit(scoreEntry(save.best, save.bestDist));
+  regionTopsDirty(save.country);
+  await checkFlagStatus();
+}
 
 // ---------- 미션
 function renderMissions() {
@@ -2364,14 +2513,23 @@ function renderSettings() {
     b.textContent = SETTING_LABELS[b.dataset.setting](save.settings[b.dataset.setting]);
   }
   const sel = $('regionSelect');
-  if (!sel.options.length) sel.innerHTML = REGIONS.map((r) => `<option value="${r.code}">${r.name}</option>`).join('');
-  sel.value = save.region;
+  sel.innerHTML = `<option value="auto">AUTO (IP) · ${escapeHtml(countryName(save.country))}</option>${countryOptions(save.country)}`;
+  sel.value = save.countrySource === 'manual' ? save.country : 'auto';
 }
-$('regionSelect').addEventListener('change', (e) => {
-  save.region = e.target.value;
-  persist();
-  fetchRegionTop(save.region, true);
-  toast(`REGION  ·  ${REGIONS.find((r) => r.code === save.region).name.toUpperCase()}`);
+$('regionSelect').addEventListener('change', async (e) => {
+  const v = e.target.value;
+  if (v === 'auto') {
+    save.countrySource = 'tz';
+    persist();
+    await detectCountry({ force: true });
+  } else {
+    save.country = v;
+    save.countrySource = 'manual';
+    persist();
+  }
+  renderSettings();
+  toast(`COUNTRY  ·  ${countryName(save.country).toUpperCase()}`);
+  onCountryChanged();
 });
 function applyControlSettings() {
   document.body.classList.toggle('drag-mode', save.settings.touchMode === 'drag');
@@ -2494,28 +2652,6 @@ function showGameOver() {
   $('goStats').innerHTML = stats.map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join('');
   $('goMissions').innerHTML = G.missionsDone.map((m) => `<div>${icon('check')} ${escapeHtml(missionText(m))} +${m.reward}</div>`).join('');
 
-  // 내 기기 랭킹: 로그인 상태면 닉네임으로 자동 등록, 게스트는 이름 입력
-  const s = getSession();
-  if (G.rankEntry) {
-    G.rankEntry.score = score;
-    G.rankEntry.dist = Math.floor(G.distance);
-    sortRanking();
-    persist();
-    const pos = save.ranking.indexOf(G.rankEntry) + 1;
-    $('rankDone').textContent = pos ? `This device's ranking updated: #${pos}` : '';
-  } else if (s && qualifies(score)) {
-    G.rankEntry = rankRecord(s.nickname);
-    const pos = addRanking(G.rankEntry);
-    $('rankDone').textContent = `This device's ranking: #${pos}`;
-  }
-  const canRank = !G.rankEntry && qualifies(score);
-  $('rankForm').classList.toggle('hidden', !canRank);
-  $('rankDone').classList.toggle('hidden', !G.rankEntry);
-  if (canRank) {
-    $('rankPos').textContent = save.ranking.filter((r) => r.score >= score).length + 1;
-    $('nameInput').value = save.lastName || '';
-  }
-
   // 이어달리기 (멀티에선 불가)
   const cont = $('btnContinue');
   $('contCost').textContent = CONTINUE_COST;
@@ -2537,14 +2673,15 @@ function showGameOver() {
   persist();
 }
 
-// 글로벌 랭킹 전송 (로그인 상태) / 로그인 유도 (게스트)
+// 국가 랭킹 전송 (로그인 상태) / 로그인 유도 (게스트)
 async function submitGlobal() {
   const box = $('goGlobal');
   box.classList.remove('hidden');
   const s = getSession();
   const score = Math.floor(G.score);
+  const cname = escapeHtml(countryName(save.country));
   if (!s) {
-    box.innerHTML = `${icon('globe')} Sign in to post your score to the global ranking <button class="btn primary" id="goLogin">SIGN IN</button>`;
+    box.innerHTML = `${flagBadge(save.country)} Sign in to post your score to the ${cname} ranking <button class="btn primary" id="goLogin">SIGN IN</button>`;
     $('goLogin').addEventListener('click', () => { renderAuth(); openScreen('auth', 'gameover'); });
     return;
   }
@@ -2554,49 +2691,27 @@ async function submitGlobal() {
   }
   if (G.globalSubmitted === score) return;
   G.globalSubmitted = score;
-  box.innerHTML = `${icon('globe')} Posting to the global ranking...`;
+  box.innerHTML = `${flagBadge(save.country)} Posting to the ${cname} ranking...`;
   const res = await leaderboard.submit(scoreEntry(score, G.distance));
   if (!res.ok) {
-    box.innerHTML = `${icon('globe')} Could not post score: ${escapeHtml(res.error)}`;
+    box.innerHTML = `${flagBadge(save.country)} Could not post score: ${escapeHtml(res.error)}`;
     G.globalSubmitted = false;
     return;
   }
-  const top = await leaderboard.fetchTop();
-  const rank = top.ok && top.me ? `#${top.me.rank}` : '-';
-  box.innerHTML = `${icon('globe')} GLOBAL RANK <b>${rank}</b> · BEST <b>${fmt(res.best)}</b>${ONLINE ? '' : ' <small class="muted">(local mode)</small>'}`;
+  let rank = '-';
+  try {
+    const r = await leaderboard.myRank(save.country);
+    if (r) rank = `#${r.rank}`;
+    applyFlagStatus(Boolean(r && r.rank === 1), save.country);
+  } catch (e) { /* 순위 조회 실패 시 표시만 생략 */ }
+  regionTopsDirty(save.country);
+  box.innerHTML = `${flagBadge(save.country)} ${cname.toUpperCase()} RANK <b>${rank}</b> · BEST <b>${fmt(res.best)}</b>${ONLINE ? '' : ' <small class="muted">(local mode)</small>'}`;
 }
-
-function rankRecord(name) {
-  const d = new Date();
-  return {
-    name, score: Math.floor(G.score), dist: Math.floor(G.distance), bike: save.bike,
-    date: `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`,
-  };
-}
-
-function submitName() {
-  if (G.state !== 'over' || G.rankEntry) return;
-  const name = $('nameInput').value.trim().slice(0, 10) || 'PLAYER';
-  save.lastName = name;
-  G.rankEntry = rankRecord(name);
-  const pos = addRanking(G.rankEntry);
-  $('nameInput').blur();
-  $('rankForm').classList.add('hidden');
-  const done = $('rankDone');
-  done.textContent = `${name} saved to this device's ranking at #${pos}`;
-  done.classList.remove('hidden');
-  sfx.mission();
-}
-$('btnSubmitName').addEventListener('click', submitName);
 
 function finalizeRun() {
   if (G.finalized || !('score' in G)) return;
   G.finalized = true;
   const score = Math.floor(G.score);
-  if (!G.rankEntry && qualifies(score)) {
-    G.rankEntry = rankRecord(getSession()?.nickname || save.lastName || 'PLAYER');
-    addRanking(G.rankEntry);
-  }
   save.best = Math.max(save.best, score);
   save.stats.runs++;
   save.stats.totalDist += Math.floor(G.distance);
@@ -2620,7 +2735,7 @@ $('btnHome').addEventListener('click', () => {
   goMenu();
 });
 
-const scoreEntry = (score, dist) => ({ score, dist, bike: save.bike, box: save.box, outfit: save.outfit, helmet: save.helmet, region: save.region });
+const scoreEntry = (score, dist) => ({ score, dist, bike: save.bike, box: save.box, outfit: save.outfit, helmet: save.helmet, country: save.country });
 
 $('btnContinue').addEventListener('click', () => {
   if (G.continued || MP.active || save.coins < CONTINUE_COST) return;
@@ -2980,11 +3095,17 @@ if (new URLSearchParams(location.search).has('debug')) {
     fever: startFever,
     mega: spawnMegaBoard,
     crash: () => crash({ x: G.x - 1 }),
+    boards: activeBoards,
+    board: spawnBillboard,
   };
 }
 goMenu();
 $('loading').remove();
-auth.restore().then(refreshMenu);
+// 자동 로그인 → IP 로 국가 판별 → 국기(국가 1위) 상태 검증
+auth.restore()
+  .then(refreshMenu)
+  .then(() => detectCountry())
+  .then((changed) => (changed ? onCountryChanged() : checkFlagStatus()));
 // 7일 연속 출석: 어제도 접속했으면 연속 +1, 아니면 1일차부터. 7일차엔 특수 헬멧
 const today = new Date().toDateString();
 if (save.lastDaily !== today) {

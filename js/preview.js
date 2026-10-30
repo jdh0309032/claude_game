@@ -28,8 +28,8 @@ function makeStageScene() {
 // 3/4 정면-측면 뷰 (바이크 앞 45°)
 function frontSideCamera(aspect) {
   const cam = new THREE.PerspectiveCamera(32, aspect, 0.1, 50);
-  cam.position.set(3.0, 1.9, -3.4);
-  cam.lookAt(0, 0.85, 0);
+  cam.position.set(3.1, 2.1, -3.6);
+  cam.lookAt(0, 1.05, 0); // 상자 위 국기 깃발까지 프레임 안에
   return cam;
 }
 

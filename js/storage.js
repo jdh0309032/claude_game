@@ -1,6 +1,6 @@
 // 저장 데이터(코인, 랭킹, 바이크, 커스텀 파츠, 미션, 설정) — localStorage 기반
 // + 계정 인증 / 글로벌 랭킹 API (Supabase 설정 시 온라인, 아니면 로컬 모드)
-import { SUPABASE_URL, SUPABASE_ANON_KEY, ID_EMAIL_DOMAIN } from './config.js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, ID_EMAIL_DOMAIN, GEO_IP_ENDPOINTS, GEO_REFRESH_HOURS } from './config.js';
 
 const KEY = 'motorush.save.v1';
 const SESSION_KEY = 'grabrider.session.v1';
@@ -9,7 +9,7 @@ const LOCAL_DB_KEY = 'grabrider.localdb.v1';
 // 상점 가격표는 config.js 에서 관리
 export { BIKES, BOXES, OUTFITS, HELMETS } from './config.js';
 import { BIKES } from './config.js';
-import { guessRegion } from './themes.js';
+import { guessRegion, isCountryCode } from './themes.js';
 
 // 이전 버전 바이크 id → 새 라인업으로 이전
 const LEGACY_BIKES = { street: 'city', racer: 'sport', hyper: 'phantom' };
@@ -31,7 +31,6 @@ function defaults() {
   return {
     coins: 0,
     best: 0,
-    ranking: [],
     ownedBikes: ['rookie'],
     bike: 'rookie',
     ownedBoxes: ['basic'],
@@ -39,14 +38,18 @@ function defaults() {
     ownedOutfits: ['jacket'],
     outfit: 'jacket',
     ownedHelmets: ['basic'],
-    region: guessRegion(),
+    country: guessRegion(), // 랭킹 국가 (IP 조회로 갱신)
+    countrySource: 'tz', // 'tz' 시간대 추정 | 'ip' IP 조회 | 'manual' 사용자가 설정에서 선택
+    countryCheckedAt: 0,
+    flagUnlocked: false, // 국가 1위 전용 국기 (서버 검증 결과)
+    flagCode: '',
+    flagEquipped: true,
     bestDist: 0,
     streak: 0,
     adCooldownUntil: 0,
     helmet: 'basic',
     lastName: '',
     lastDaily: '',
-    lastRankId: 0,
     missions: [],
     missionLevels: {},
     settings: { sound: true, music: true, vibrate: true, quality: 'high', touchMode: 'buttons', throttle: 'auto', wetFx: true },
@@ -70,6 +73,12 @@ function load() {
       if (merged.settings.touchMode === 'zones') merged.settings.touchMode = 'buttons';
       merged.ownedBikes = [...new Set(merged.ownedBikes.map((id) => LEGACY_BIKES[id] || id))];
       merged.bike = LEGACY_BIKES[merged.bike] || merged.bike;
+      // 이전 버전: 지역(region) → 국가(country), 기기 로컬 랭킹 삭제
+      if (!d.country && isCountryCode(d.region)) merged.country = d.region;
+      if (!isCountryCode(merged.country)) merged.country = guessRegion();
+      delete merged.region;
+      delete merged.ranking;
+      delete merged.lastRankId;
       return merged;
     }
   } catch (e) { /* 저장소 사용 불가 시 기본값 */ }
@@ -92,26 +101,6 @@ export function resetSave() {
 
 export function getBike(id) {
   return BIKES.find((b) => b.id === id) || BIKES[0];
-}
-
-// ---------- 랭킹
-export function qualifies(score) {
-  if (score <= 0) return false;
-  return save.ranking.length < 10 || score > save.ranking[save.ranking.length - 1].score;
-}
-
-export function sortRanking() {
-  save.ranking.sort((a, b) => b.score - a.score);
-  save.ranking = save.ranking.slice(0, 10);
-}
-
-export function addRanking(entry) {
-  entry.id = Date.now();
-  save.ranking.push(entry);
-  sortRanking();
-  save.lastRankId = entry.id;
-  persist();
-  return save.ranking.indexOf(entry) + 1;
 }
 
 // ---------- 미션
@@ -289,13 +278,57 @@ export const auth = {
   },
 };
 
-// 새 스키마(supabase/migrations/002_regions_flex.sql) 적용 여부. 없으면 기존 컬럼만 사용
-let schemaV2 = true;
-const V2_COLS = 'user_id,nickname,score,bike,dist,region,box,outfit,helmet';
-const V1_COLS = 'user_id,nickname,score,bike';
-const isMissingSchema = (e) => e && (e.status === 400 || e.status === 404) && /column|function|schema cache|does not exist/i.test(e.message);
+// ---------- 국가 자동 판별 (IP Geolocation → 실패 시 시간대)
+async function fetchCountry(ep) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 3500);
+  try {
+    const res = await fetch(ep.url, { signal: ctl.signal, cache: 'no-store' });
+    if (!res.ok) return null;
+    const code = String(ep.pick(await res.json()) || '').toUpperCase();
+    return isCountryCode(code) ? code : null;
+  } catch (e) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-// entry: { score, dist, bike, box, outfit, helmet, region }
+// 반환: 바뀐 경우 새 국가 코드, 그대로면 null. 사용자가 직접 고른 국가는 건드리지 않음
+export async function detectCountry({ force = false } = {}) {
+  if (save.countrySource === 'manual' && !force) return null;
+  const fresh = save.countrySource === 'ip' && Date.now() - save.countryCheckedAt < GEO_REFRESH_HOURS * 3600e3;
+  if (fresh && !force) return null;
+  for (const ep of GEO_IP_ENDPOINTS || []) {
+    const code = await fetchCountry(ep);
+    if (!code) continue;
+    const changed = code !== save.country;
+    save.country = code;
+    save.countrySource = 'ip';
+    save.countryCheckedAt = Date.now();
+    persist();
+    return changed ? code : null;
+  }
+  return null;
+}
+
+// 랭킹 DB 버전: 3 = country_code (003 마이그레이션), 2 = region (002), 1 = 기본 스키마
+let schema = 3;
+const COLS = {
+  3: 'user_id,nickname,score,bike,dist,country_code,box,outfit,helmet',
+  2: 'user_id,nickname,score,bike,dist,region,box,outfit,helmet',
+  1: 'user_id,nickname,score,bike',
+};
+const isMissingSchema = (e) => e && (e.status === 400 || e.status === 404) && /column|function|schema cache|does not exist/i.test(e.message);
+function downgrade(err) {
+  if (!isMissingSchema(err) || schema <= 1) throw err;
+  schema -= 1;
+  console.warn(`[leaderboard] DB schema v${schema + 1} not found, falling back to v${schema}. Run supabase/migrations/003_country_flag.sql`);
+}
+const rowCountry = (r) => r.country_code || r.region || null;
+export const schemaLevel = () => schema;
+
+// entry: { score, dist, bike, box, outfit, helmet, country }
 export const leaderboard = {
   // 게임 오버 시 최고 점수 전송 (서버/로컬 모두 본인 최고점만 유지)
   async submit(entry) {
@@ -304,25 +337,32 @@ export const leaderboard = {
     try {
       if (session.mode === 'online') {
         await ensureFreshToken();
-        if (schemaV2) {
+        for (;;) {
           try {
-            const best = await sb('/rest/v1/rpc/submit_score_v2', {
-              method: 'POST', auth: true,
-              body: { p_score: e.score, p_dist: e.dist, p_bike: e.bike, p_box: e.box, p_outfit: e.outfit, p_helmet: e.helmet, p_region: e.region, p_nickname: session.nickname },
-            });
+            let best;
+            if (schema === 3) {
+              best = await sb('/rest/v1/rpc/submit_score_v3', {
+                method: 'POST', auth: true,
+                body: { p_score: e.score, p_dist: e.dist, p_bike: e.bike, p_box: e.box, p_outfit: e.outfit, p_helmet: e.helmet, p_country: e.country, p_nickname: session.nickname },
+              });
+            } else if (schema === 2) {
+              best = await sb('/rest/v1/rpc/submit_score_v2', {
+                method: 'POST', auth: true,
+                body: { p_score: e.score, p_dist: e.dist, p_bike: e.bike, p_box: e.box, p_outfit: e.outfit, p_helmet: e.helmet, p_region: e.country, p_nickname: session.nickname },
+              });
+            } else {
+              best = await sb('/rest/v1/rpc/submit_score', { method: 'POST', auth: true, body: { p_score: e.score, p_bike: e.bike, p_nickname: session.nickname } });
+            }
             return { ok: true, best };
           } catch (err) {
-            if (!isMissingSchema(err)) throw err;
-            schemaV2 = false;
-            console.warn('[leaderboard] v2 schema not found, using v1. Run supabase/migrations/002_regions_flex.sql');
+            downgrade(err);
           }
         }
-        const best = await sb('/rest/v1/rpc/submit_score', { method: 'POST', auth: true, body: { p_score: e.score, p_bike: e.bike, p_nickname: session.nickname } });
-        return { ok: true, best };
       }
       const db = localDB();
       const cur = db.board[session.id];
       if (!cur || e.score > cur.score) db.board[session.id] = { nickname: session.nickname, ...e, updatedAt: Date.now() };
+      else db.board[session.id].country = e.country;
       writeJSON(LOCAL_DB_KEY, db);
       return { ok: true, best: db.board[session.id].score };
     } catch (err) {
@@ -330,50 +370,77 @@ export const leaderboard = {
     }
   },
 
-  // TOP 10 + 내 순위 (region 지정 시 지역 랭킹)
-  async fetchTop({ region = null } = {}) {
+  // 국가별 TOP 10 + 내 순위
+  async fetchTop({ country } = {}) {
     try {
       if (ONLINE) {
-        const q = (cols) => `/rest/v1/leaderboard?select=${cols}&order=score.desc&limit=10${region ? `&region=eq.${encodeURIComponent(region)}` : ''}`;
         let top;
-        try {
-          top = await sb(q(schemaV2 ? V2_COLS : V1_COLS));
-        } catch (err) {
-          if (!isMissingSchema(err)) throw err;
-          schemaV2 = false;
-          if (region) return { ok: false, error: 'Regional ranking needs the 002 database migration' };
-          top = await sb(q(V1_COLS));
+        for (;;) {
+          if (schema === 1) return { ok: false, error: 'Country ranking needs the 003 database migration' };
+          const col = schema === 3 ? 'country_code' : 'region';
+          const order = schema === 3 ? 'score.desc,best_at.asc' : 'score.desc';
+          try {
+            top = await sb(`/rest/v1/leaderboard?select=${COLS[schema]}&${col}=eq.${encodeURIComponent(country)}&score=gt.0&order=${order}&limit=10`);
+            break;
+          } catch (err) {
+            downgrade(err);
+          }
         }
         let me = null;
         if (session?.mode === 'online') {
           await ensureFreshToken();
-          let r;
-          try {
-            r = schemaV2
-              ? await sb('/rest/v1/rpc/my_rank_v2', { method: 'POST', auth: true, body: { p_region: region } })
-              : await sb('/rest/v1/rpc/my_rank', { method: 'POST', auth: true, body: {} });
-          } catch (err) {
-            if (!isMissingSchema(err)) throw err;
-            r = await sb('/rest/v1/rpc/my_rank', { method: 'POST', auth: true, body: {} });
-          }
-          if (r && r[0]) me = { rank: Number(r[0].rank), score: r[0].score, nickname: session.nickname };
+          const r = await this.myRank(country);
+          if (r) me = { ...r, nickname: session.nickname };
         }
-        return { ok: true, online: true, v2: schemaV2, top: top.map((t) => ({ ...t, isMe: t.user_id === session?.userId })), me };
+        return {
+          ok: true, online: true, schema,
+          top: top.map((t) => ({ ...t, country: rowCountry(t), isMe: t.user_id === session?.userId })),
+          me,
+        };
       }
       const all = Object.entries(localDB().board)
-        .map(([id, v]) => ({ id, ...v }))
-        .filter((r) => !region || r.region === region)
-        .sort((a, b) => b.score - a.score);
+        .map(([id, v]) => ({ id, ...v, country: v.country || v.region }))
+        .filter((r) => r.country === country && r.score > 0)
+        .sort((a, b) => b.score - a.score || a.updatedAt - b.updatedAt);
       const idx = session ? all.findIndex((r) => r.id === session.id) : -1;
       return {
         ok: true,
         online: false,
-        v2: true,
+        schema: 3,
         top: all.slice(0, 10).map((r) => ({ ...r, isMe: r.id === session?.id })),
-        me: idx >= 0 ? { rank: idx + 1, score: all[idx].score, nickname: all[idx].nickname } : null,
+        me: idx >= 0 ? { rank: idx + 1, score: all[idx].score, country, nickname: all[idx].nickname } : null,
       };
     } catch (err) {
       return { ok: false, error: friendly(err) };
+    }
+  },
+
+  // 내 국가 순위 (country 생략 시 DB 에 저장된 내 국가 기준). 기록 없음 → null, 통신 실패 → throw
+  async myRank(country = null) {
+    if (!session) return null;
+    if (session.mode !== 'online') {
+      const db = localDB();
+      const mine = db.board[session.id];
+      const cc = country || mine?.country || mine?.region;
+      if (!mine || mine.score <= 0 || (mine.country || mine.region) !== cc) return null;
+      const all = Object.values(db.board).filter((r) => (r.country || r.region) === cc && r.score > 0)
+        .sort((a, b) => b.score - a.score || a.updatedAt - b.updatedAt);
+      return { rank: all.indexOf(mine) + 1, score: mine.score, country: cc };
+    }
+    await ensureFreshToken();
+    for (;;) {
+      try {
+        let r;
+        if (schema === 3) r = await sb('/rest/v1/rpc/my_rank_v3', { method: 'POST', auth: true, body: { p_country: country } });
+        else if (schema === 2) {
+          if (!country) return null; // v2 에는 "내 국가" 조회가 없음
+          r = await sb('/rest/v1/rpc/my_rank_v2', { method: 'POST', auth: true, body: { p_region: country } });
+        } else return null;
+        if (!r || !r[0]) return null;
+        return { rank: Number(r[0].rank), score: r[0].score, country: r[0].country_code || country };
+      } catch (err) {
+        downgrade(err);
+      }
     }
   },
 };

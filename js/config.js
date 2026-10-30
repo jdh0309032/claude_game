@@ -10,6 +10,21 @@ export const SUPABASE_ANON_KEY = 'sb_publishable_fnhE6hTPp8Wwqj_W1gjiog_qT84mTI4
 // 아이디를 Supabase 이메일 계정으로 바꿀 때 붙이는 가상 도메인
 export const ID_EMAIL_DOMAIN = 'grabrider.game';
 
+// ---------- 국가 자동 판별 (IP Geolocation)
+// 접속 시 위에서부터 차례로 시도해 ISO 국가 코드(예: 'KR')를 얻습니다. 모두 실패하면 기기 시간대로 추정.
+// 키가 필요 없는 공개 API 들이며, 요청 시 사용자의 IP 가 해당 서비스로 전달됩니다. 빈 배열이면 IP 조회를 하지 않습니다.
+export const GEO_IP_ENDPOINTS = [
+  { url: 'https://api.country.is/', pick: (j) => j.country },
+  { url: 'https://get.geojs.io/v1/ip/country.json', pick: (j) => j.country },
+  { url: 'https://ipapi.co/json/', pick: (j) => j.country_code || j.country },
+];
+// 국가 재조회 주기 (시간). 사용자가 설정에서 직접 고른 국가는 덮어쓰지 않습니다.
+export const GEO_REFRESH_HOURS = 24;
+
+// ---------- 국가 1위 전용 '국기' 아이템
+// 내 국가 랭킹 1위 여부를 서버(my_rank_v3)에서 이 주기(초)로 다시 확인합니다.
+export const FLAG_CHECK_INTERVAL_SEC = 30;
+
 // ---------- 1v1 멀티플레이 (PeerJS)
 // null 이면 PeerJS 공개 브로커(0.peerjs.com)를 사용합니다.
 // 자체 서버를 쓰려면: { host: 'my-peer.example.com', port: 443, path: '/', secure: true }

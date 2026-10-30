@@ -62,10 +62,25 @@ export function pickWeighted(weights, r = Math.random()) {
   return entries[entries.length - 1][0];
 }
 
-// ---------- 랭킹 지역
-export const REGIONS = THEMES.map((t) => ({ code: t.code, name: t.country, city: t.city }));
+// ---------- 랭킹 국가
+// IP 위치 조회로 어떤 나라든 들어올 수 있으므로 ISO 3166-1 alpha-2 코드를 그대로 쓰고,
+// 목록(드롭다운)에는 주행 테마 8개국 + 자주 쓰는 나라를 먼저 보여줌
+export const COUNTRY_CODES = [
+  ...THEMES.map((t) => t.code),
+  'MY', 'PH', 'CN', 'TW', 'HK', 'IN', 'AU', 'NZ', 'GB', 'DE', 'IT', 'ES', 'NL', 'CA', 'MX', 'BR',
+  'AR', 'RU', 'UA', 'PL', 'TR', 'SA', 'AE', 'EG', 'ZA', 'NG', 'KH', 'LA', 'MM', 'BD', 'PK',
+];
+export const isCountryCode = (c) => typeof c === 'string' && /^[A-Z]{2}$/.test(c);
 
-// IP 조회 없이 기기 시간대로 지역 추정 (사용자가 설정에서 변경 가능)
+let regionNames = null;
+try { regionNames = new Intl.DisplayNames(['en'], { type: 'region' }); } catch (e) { /* 구형 브라우저 */ }
+export function countryName(code) {
+  const t = THEMES.find((x) => x.code === code);
+  if (t) return t.country;
+  try { return regionNames?.of(code) || code; } catch (e) { return code; }
+}
+
+// IP 조회 실패 시 대체: 기기 시간대로 추정
 export function guessRegion() {
   let tz = '';
   try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* ignore */ }
@@ -73,9 +88,12 @@ export function guessRegion() {
     'Asia/Jakarta': 'ID', 'Asia/Makassar': 'ID', 'Asia/Jayapura': 'ID', 'Asia/Pontianak': 'ID',
     'Asia/Ho_Chi_Minh': 'VN', 'Asia/Saigon': 'VN', 'Asia/Hanoi': 'VN',
     'Asia/Bangkok': 'TH', 'Asia/Seoul': 'KR', 'Asia/Tokyo': 'JP', 'Asia/Singapore': 'SG',
-    'Europe/Paris': 'FR',
+    'Europe/Paris': 'FR', 'Asia/Kuala_Lumpur': 'MY', 'Asia/Manila': 'PH', 'Asia/Shanghai': 'CN',
+    'Asia/Taipei': 'TW', 'Asia/Hong_Kong': 'HK', 'Asia/Kolkata': 'IN', 'Europe/London': 'GB',
+    'Europe/Berlin': 'DE', 'Europe/Rome': 'IT', 'Europe/Madrid': 'ES', 'Europe/Amsterdam': 'NL',
   };
   if (map[tz]) return map[tz];
+  if (tz.startsWith('Australia/')) return 'AU';
   if (tz.startsWith('America/')) return 'US';
   return 'ID';
 }
@@ -98,6 +116,10 @@ export function drawFlag(ctx, code, w, h, ox = 0, oy = 0) {
   x.save();
   x.translate(ox, oy);
   const rect = (c, a, b, cw, ch) => { x.fillStyle = c; x.fillRect(a, b, cw, ch); };
+  // 가로(false) / 세로(true) 줄무늬 국기
+  const bands = (cols, vertical) => cols.forEach((c, i) => (vertical
+    ? rect(c, (w / cols.length) * i, 0, w / cols.length + 0.5, h)
+    : rect(c, 0, (h / cols.length) * i, w, h / cols.length + 0.5)));
   switch (code) {
     case 'ID':
       rect('#ce1126', 0, 0, w, h / 2);
@@ -171,8 +193,73 @@ export function drawFlag(ctx, code, w, h, ox = 0, oy = 0) {
       rect('#ffffff', w / 3, 0, w / 3, h);
       rect('#ef4135', (w * 2) / 3, 0, w / 3 + 0.5, h);
       break;
+    case 'DE': bands(['#000000', '#dd0000', '#ffce00'], false); break;
+    case 'NL': bands(['#ae1c28', '#ffffff', '#21468b'], false); break;
+    case 'RU': bands(['#ffffff', '#0039a6', '#d52b1e'], false); break;
+    case 'UA': bands(['#0057b7', '#ffd700'], false); break;
+    case 'PL': bands(['#ffffff', '#dc143c'], false); break;
+    case 'IT': bands(['#009246', '#ffffff', '#ce2b37'], true); break;
+    case 'ES':
+      rect('#aa151b', 0, 0, w, h);
+      rect('#f1bf00', 0, h / 4, w, h / 2);
+      break;
+    case 'IN':
+      bands(['#ff9933', '#ffffff', '#138808'], false);
+      x.strokeStyle = '#000080';
+      x.lineWidth = Math.max(1, h * 0.03);
+      x.beginPath(); x.arc(w / 2, h / 2, h * 0.13, 0, Math.PI * 2); x.stroke();
+      break;
+    case 'CN':
+      rect('#de2910', 0, 0, w, h);
+      star(x, w * 0.17, h * 0.27, h * 0.16, '#ffde00');
+      for (const [sx, sy] of [[0.33, 0.1], [0.4, 0.2], [0.4, 0.35], [0.33, 0.45]]) star(x, w * sx, h * sy, h * 0.055, '#ffde00');
+      break;
+    case 'PH':
+      rect('#0038a8', 0, 0, w, h / 2);
+      rect('#ce1126', 0, h / 2, w, h / 2);
+      x.fillStyle = '#ffffff';
+      x.beginPath(); x.moveTo(0, 0); x.lineTo(h * 0.87, h / 2); x.lineTo(0, h); x.closePath(); x.fill();
+      star(x, h * 0.3, h / 2, h * 0.11, '#fcd116');
+      break;
+    case 'MY': {
+      const s = h / 14;
+      for (let i = 0; i < 14; i++) rect(i % 2 ? '#ffffff' : '#cc0001', 0, i * s, w, s + 0.5);
+      rect('#010066', 0, 0, w / 2, s * 8);
+      x.fillStyle = '#ffcc00';
+      x.beginPath(); x.arc(w * 0.18, s * 4, s * 2.6, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#010066';
+      x.beginPath(); x.arc(w * 0.215, s * 4, s * 2.3, 0, Math.PI * 2); x.fill();
+      star(x, w * 0.36, s * 4, s * 1.9, '#ffcc00');
+      break;
+    }
+    case 'GB':
+      rect('#012169', 0, 0, w, h);
+      x.strokeStyle = '#ffffff';
+      x.lineWidth = h * 0.2;
+      x.beginPath(); x.moveTo(0, 0); x.lineTo(w, h); x.moveTo(w, 0); x.lineTo(0, h); x.stroke();
+      x.strokeStyle = '#c8102e';
+      x.lineWidth = h * 0.07;
+      x.beginPath(); x.moveTo(0, 0); x.lineTo(w, h); x.moveTo(w, 0); x.lineTo(0, h); x.stroke();
+      rect('#ffffff', w / 2 - h * 0.17, 0, h * 0.34, h);
+      rect('#ffffff', 0, h / 2 - h * 0.17, w, h * 0.34);
+      rect('#c8102e', w / 2 - h * 0.1, 0, h * 0.2, h);
+      rect('#c8102e', 0, h / 2 - h * 0.1, w, h * 0.2);
+      break;
+    case 'CA':
+      rect('#ffffff', 0, 0, w, h);
+      rect('#d52b1e', 0, 0, w / 4, h);
+      rect('#d52b1e', (w * 3) / 4, 0, w / 4 + 0.5, h);
+      star(x, w / 2, h / 2, h * 0.26, '#d52b1e');
+      break;
     default:
-      rect('#00b14f', 0, 0, w, h);
+      // 아직 그림이 없는 나라: 중립 배지 + 국가 코드
+      rect('#2b2d42', 0, 0, w, h);
+      rect('#00b14f', 0, h * 0.78, w, h * 0.22);
+      x.fillStyle = '#ffffff';
+      x.font = `bold ${Math.round(h * 0.5)}px "Russo One", "Arial Black", sans-serif`;
+      x.textAlign = 'center';
+      x.textBaseline = 'middle';
+      x.fillText(String(code || '?').slice(0, 2), w / 2, h * 0.42);
   }
   x.restore();
 }

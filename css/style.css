@@ -770,3 +770,20 @@ body.modal-open #touchControls { display: none !important; }
 #hudScore[data-len="xl"] { font-size: clamp(14px, 3.6vw, 19px); }
 /* 핫 배달 배너는 토스트 아래로 */
 .hot-banner { top: calc(max(10px, env(safe-area-inset-top)) + 162px); }
+/* 랭킹: 행을 눌러 3D 미리보기 */
+.rank-table.selectable tbody tr { cursor: pointer; }
+.rank-table.selectable tbody tr.sel td { background: #e3f7ec; box-shadow: inset 0 0 0 0 transparent; }
+.rank-table.selectable tbody tr.sel td:first-child { box-shadow: inset 4px 0 0 var(--green); }
+#rankCountry { width: 100%; margin: 10px 0 4px; }
+.rank-me .btn.small { padding: 6px 10px; font-size: 12px; margin-left: 6px; }
+.flex-label { display: flex; align-items: center; gap: 6px; }
+.flex-label .flag { width: 24px; height: 16px; }
+/* 국가 1위 전용 국기 아이템 */
+.flag-item { border: 2px dashed rgba(0, 0, 0, 0.12); }
+.flag-item:not(.locked) { border: 2px solid #ffd34d; background: linear-gradient(90deg, #fff8dc, #fff); }
+.swatch.mystery {
+  display: grid; place-items: center; color: #fff; font-family: var(--display); font-size: 30px;
+  background: repeating-linear-gradient(45deg, #2b2d42 0 8px, #3a3d58 8px 16px);
+}
+.swatch.flag-swatch { display: grid; place-items: center; background: #fff; }
+.swatch.flag-swatch .flag { width: 44px; height: 30px; margin: 0; }

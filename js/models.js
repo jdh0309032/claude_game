@@ -523,12 +523,41 @@ export function createBike(color, opts = {}) {
   const flame = makeFlame();
   lean.add(flame);
   // 브레이크 시 후미등(스톱램프) 글로우
+  if (opts.flag) lean.add(flagDecals(opts.flag, Boolean(extBox)));
   const brakeGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xff2a2a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
   brakeGlow.position.set(0, 1.0, 0.82);
   brakeGlow.scale.set(1.6, 1.0, 1);
   lean.add(brakeGlow);
   root.add(shadow(0.9, 2.2));
   return { root, lean, bodyMat, flame, tailMat: bikeTail, brakeGlow };
+}
+
+// 국가 1위 전용 국기: 헬멧 스티커 + 차체 데칼 + 배달 상자 깃발
+function flagDecals(code, extBox) {
+  const grp = new THREE.Group();
+  const decalMat = new THREE.MeshBasicMaterial({
+    map: flagTexture(code), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  const decal = (w, h, x, y, z, ry, rx = 0) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), decalMat);
+    m.position.set(x, y, z);
+    m.rotation.set(rx, ry, 0, 'YXZ');
+    grp.add(m);
+  };
+  for (const sx of [-1, 1]) {
+    decal(0.14, 0.093, sx * 0.183, 1.6, -0.17, sx * Math.PI / 2); // 헬멧 옆면
+    decal(0.3, 0.2, sx * 0.173, 0.97, -0.06, sx * Math.PI / 2, -0.1); // 시트 아래 차체
+  }
+  // 상자 뒤 모서리의 깃대 + 깃발
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.75, 6), new THREE.MeshLambertMaterial({ color: 0xd0d4d8 }));
+  const top = extBox ? 1.7 : 1.59;
+  pole.position.set(0.24, top + 0.375, 0.88);
+  const cloth = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.24).translate(0.18, 0, 0), new THREE.MeshBasicMaterial({ map: flagTexture(code), side: THREE.DoubleSide }));
+  cloth.rotation.y = -Math.PI / 2 + 0.25; // 주행 반대 방향(+z, 뒤쪽)으로 휘날림
+  cloth.position.set(0.24, top + 0.62, 0.88);
+  grp.add(pole, cloth);
+  grp.userData.cloth = cloth;
+  return grp;
 }
 
 let _glowTex = null;
@@ -1014,62 +1043,97 @@ export function posterTexture(poster, code) {
   return t;
 }
 
+// 도로변 빌보드 공통 치수 (main.js 가 건물 전면에서 띄우는 오프셋 계산에 사용)
+export const BILLBOARD = { width: 8.4, height: 4.4, posts: [0.6, 3.2] };
+export const MEGABOARD = { width: 12.4, height: 5.6, posts: [1.6, 5.0] };
+
+// 패널(포스터/LED 화면)이 백보드 위에서 깜빡이지 않도록 앞쪽으로 띄우고 나중에 그림
+function screenMat() {
+  return new THREE.MeshBasicMaterial({ color: 0xffffff, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
+}
+// 기둥은 건물 쪽 절반에만 세워 인도에 서고 차도로는 내려오지 않게 함 (setSide 로 좌/우 반전)
+function boardPosts(grp, dims, topY) {
+  const posts = dims.posts.map(() => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.28, topY, 0.28), new THREE.MeshLambertMaterial({ color: 0x55595e }));
+    m.position.set(0, -dims.height / 2 - topY / 2, 0);
+    grp.add(m);
+    return m;
+  });
+  grp.setSide = (farSign) => posts.forEach((m, i) => { m.position.z = farSign * dims.posts[i]; });
+}
+
 export function createBillboard() {
   const grp = new THREE.Group();
-  const p = [box(0.3, 4.4, 8.4, 0, 0, 0, 0x2b2d42), box(0.2, 6, 0.3, 0.1, -4.8, -3, 0x55595e), box(0.2, 6, 0.3, 0.1, -4.8, 3, 0x55595e)];
-  grp.add(new THREE.Mesh(merge(p), vcMat));
-  const panel = new THREE.Mesh(new THREE.PlaneGeometry(8, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  grp.add(new THREE.Mesh(box(0.3, BILLBOARD.height, BILLBOARD.width, 0, 0, 0, 0x2b2d42), vcMat));
+  const panel = new THREE.Mesh(new THREE.PlaneGeometry(8, 4), screenMat());
   panel.rotation.y = Math.PI / 2;
-  panel.position.x = 0.17;
+  panel.position.x = 0.2;
+  panel.renderOrder = 2;
   grp.add(panel);
+  boardPosts(grp, BILLBOARD, 6.2);
   grp.panel = panel;
+  grp.dims = BILLBOARD;
   return grp;
 }
 
 // 대형 LED 전광판: 왼쪽 = 1위 라이더 3D 스냅샷, 오른쪽 = 텍스트
 export function createMegaBoard() {
   const grp = new THREE.Group();
-  const p = [box(0.4, 6.6, 15.6, 0, 0, 0, 0x14161f)];
-  for (const z of [-6, 6]) p.push(box(0.3, 8, 0.4, 0.1, -6.8, z, 0x55595e));
-  grp.add(new THREE.Mesh(merge(p), vcMat));
-  const shot = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  const frame = [box(0.4, MEGABOARD.height, MEGABOARD.width, 0, 0, 0, 0x14161f)];
+  frame.push(box(0.42, 0.12, MEGABOARD.width, 0, MEGABOARD.height / 2 - 0.06, 0, 0x39ff88));
+  grp.add(new THREE.Mesh(merge(frame), vcMat));
+  const shot = new THREE.Mesh(new THREE.PlaneGeometry(5, 5), screenMat());
   shot.rotation.y = Math.PI / 2;
-  shot.position.set(0.22, 0, -4.5);
-  const info = new THREE.Mesh(new THREE.PlaneGeometry(9, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  shot.position.set(0.25, -0.1, -3.5);
+  const info = new THREE.Mesh(new THREE.PlaneGeometry(6.75, 5), screenMat());
   info.rotation.y = Math.PI / 2;
-  info.position.set(0.22, 0, 3);
+  info.position.set(0.25, -0.1, 2.625);
+  shot.renderOrder = info.renderOrder = 2;
   grp.add(shot, info);
+  boardPosts(grp, MEGABOARD, 6.8);
   grp.shot = shot;
   grp.info = info;
+  grp.dims = MEGABOARD;
   return grp;
 }
 
+// data: { code, name, dist, score, empty, foot }
 export function megaInfoTexture(data) {
+  const W = 648, H = 480;
   const c = document.createElement('canvas');
-  c.width = 576;
-  c.height = 384;
+  c.width = W;
+  c.height = H;
   const x = c.getContext('2d');
-  const g = x.createLinearGradient(0, 0, 576, 384);
+  const g = x.createLinearGradient(0, 0, W, H);
   g.addColorStop(0, '#0b1d2a');
   g.addColorStop(1, '#14002b');
   x.fillStyle = g;
-  x.fillRect(0, 0, 576, 384);
+  x.fillRect(0, 0, W, H);
   // LED 도트 패턴
   x.fillStyle = 'rgba(255,255,255,0.05)';
-  for (let yy = 0; yy < 384; yy += 6) for (let xx = 0; xx < 576; xx += 6) x.fillRect(xx, yy, 2, 2);
+  for (let yy = 0; yy < H; yy += 6) for (let xx = 0; xx < W; xx += 6) x.fillRect(xx, yy, 2, 2);
+  x.textBaseline = 'alphabetic';
   x.fillStyle = '#39ff88';
-  x.font = 'bold 30px "Russo One", "Arial Black", sans-serif';
-  x.fillText(`CURRENT ${data.city.toUpperCase()} #1`, 28, 62, 520);
-  if (data.code) drawFlag(x, data.code, 120, 80, 28, 96);
+  x.font = 'bold 34px "Russo One", "Arial Black", sans-serif';
+  x.fillText('CURRENT COUNTRY #1:', 30, 64, W - 60);
+  // 국기 배지
   x.fillStyle = '#ffffff';
-  x.font = 'bold 56px "Russo One", "Arial Black", sans-serif';
-  x.fillText(data.name, 168, 152, 380);
+  x.fillRect(26, 92, 148, 100);
+  drawFlag(x, data.code, 140, 92, 30, 96);
+  x.fillStyle = '#ffffff';
+  x.font = 'bold 48px "Russo One", "Arial Black", sans-serif';
+  x.fillText(data.country.toUpperCase(), 196, 162, W - 226);
   x.fillStyle = '#00e5ff';
-  x.font = 'bold 40px "Rajdhani", "Arial", sans-serif';
-  x.fillText(data.line, 28, 250, 520);
+  x.font = 'bold 54px "Russo One", "Arial Black", sans-serif';
+  x.fillText(data.empty ? 'NO RIDER YET' : `${data.name} (${data.dist}m)`, 30, 280, W - 60);
+  if (!data.empty) {
+    x.fillStyle = '#ffd34d';
+    x.font = 'bold 40px "Rajdhani", "Arial", sans-serif';
+    x.fillText(`${data.score} PTS`, 30, 350, W - 60);
+  }
   x.fillStyle = 'rgba(255,255,255,0.7)';
-  x.font = 'bold 26px "Rajdhani", "Arial", sans-serif';
-  x.fillText(data.foot, 28, 330, 520);
+  x.font = 'bold 28px "Rajdhani", "Arial", sans-serif';
+  x.fillText(data.foot, 30, 430, W - 60);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
