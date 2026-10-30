@@ -4,16 +4,20 @@ import { Sound } from './audio.js';
 import { net, describeError } from './net.js';
 import { icon, hydrateIcons } from './icons.js';
 import { ScreenRain } from './rainfx.js';
-import { THEMES, ZONE_LENGTH, themeAt, themeIndexAt, pickWeighted, COUNTRY_CODES, countryName, isCountryCode, flagBadge } from './themes.js';
+import { THEMES, ZONE_LENGTH, themeAt, themeIndexAt, driveSign, pickWeighted, COUNTRY_CODES, countryName, isCountryCode, flagBadge, nationalLivery } from './themes.js';
 import { PreviewStage, renderRiderSnapshot } from './preview.js';
 import { showRewarded, adsEnabled } from './ads.js';
-import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, GACHA_PRICE, GACHA_REFUND, STREAK_REWARDS, STREAK_SPECIAL_HELMET, FLAG_CHECK_INTERVAL_SEC } from './config.js';
+import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, GACHA_PRICE, GACHA_REFUND, STREAK_REWARDS, STREAK_SPECIAL_HELMET, FLAG_CHECK_INTERVAL_SEC,
+  FLAG_SHOP_CODES, FLAG_PRICE_THEME, FLAG_PRICE_OTHER, ADMIN_DEBUG_TOGGLE,
+} from './config.js';
 import {
   save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, getBike,
   replaceDoneMissions, missionText, auth, leaderboard, getSession, ONLINE, detectCountry,
+  loadPlayerData, flushSave, lockCountry, isServerReady,
 } from './storage.js';
 
 const $ = (id) => document.getElementById(id);
+const DEBUG = new URLSearchParams(location.search).has('debug');
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -21,7 +25,7 @@ const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 const approach = (v, t, step) => (v < t ? Math.min(t, v + step) : Math.max(t, v - step));
 
 // ---------- 상수
-const LANES = [-5.25, -1.75, 1.75, 5.25]; // 0,1 = 반대 차선(역주행) / 2,3 = 같은 방향
+const LANES = [-5.25, -1.75, 1.75, 5.25]; // 우측통행 국가: 0,1 = 반대 차선 / 2,3 = 같은 방향 (좌측통행 국가는 반대)
 const DIVIDERS = [-3.5, 0, 3.5];
 const SPAWN_Z = -230;
 const ROAD_HALF = 7.5;
@@ -32,8 +36,14 @@ const BOOST_TIME = 4;
 const SQUALL_TIME = 30;
 const GRAVITY = 16;
 const CAR_COLORS = [0xd62828, 0xf77f00, 0x2a9d8f, 0x264653, 0x8d99ae, 0xe9ecef, 0x1d3557, 0x6a4c93, 0x40916c, 0x151515, 0xbfc0c0, 0x7f5539, 0x3a86ff];
-const POWER_TYPES = ['shield', 'magnet', 'x2', 'slow'];
-const POWER_LABEL = { shield: 'SHIELD', magnet: 'MAGNET', x2: 'x2 SCORE', slow: 'SLOW-MO' };
+const POWER_TYPES = ['shield', 'magnet', 'giant', 'x2', 'slow'];
+// 등장 비중: 자석·보호막·거대화 위주
+const POWER_WEIGHTS = [0.3, 0.3, 0.22, 0.1, 0.08];
+const POWER_LABEL = { shield: 'SHIELD', magnet: 'MAGNET', giant: 'GIANT MODE', x2: 'x2 SCORE', slow: 'SLOW-MO' };
+const GIANT_TIME = 6;
+// 공중 묘기: 회전 속도(rad/s), 착지 허용 각도(rad), 회전수별 보너스
+const AIR_SPIN = 9.5, AIR_FLIP = 9.5, LAND_TOL = 0.5;
+const TRICK_BONUS = [200, 500, 1200, 2500];
 
 // ---------- 시드 기반 월드 난수 (PRNG: mulberry32)
 // 멀티플레이 시 방장이 만든 시드로 두 기기의 도로/교통/날씨를 동일하게 생성.
@@ -46,7 +56,7 @@ function mulberry32(a) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-const STREAMS = ['car', 'coin', 'cone', 'power', 'weather', 'puddle', 'stall'];
+const STREAMS = ['car', 'coin', 'cone', 'power', 'weather', 'puddle', 'stall', 'hazard'];
 const W = {};
 function seedWorld(seed) {
   STREAMS.forEach((k, i) => { W[k] = mulberry32((seed ^ (i * 0x9e3779b1)) >>> 0); });
@@ -286,18 +296,59 @@ const shieldBubble = new THREE.Mesh(
 shieldBubble.position.y = 0.95;
 shieldBubble.scale.set(0.8, 1, 1.2);
 
-// 국가 1위 전용 국기: DB 검증(my_rank_v3 = 1) 결과로만 잠금 해제되고, 장착 중일 때만 바이크에 붙음
-const flagActive = () => save.flagUnlocked && save.flagEquipped && isCountryCode(save.flagCode);
-const currentBikeKey = () => [save.bike, save.box, save.outfit, save.helmet, flagActive() ? save.flagCode : ''].join('|');
-const riderOpts = () => ({ style: getBike(save.bike).style, box: save.box, outfit: save.outfit, helmet: save.helmet, flag: flagActive() ? save.flagCode : null });
-// 랭킹 행(다른 라이더)의 장착 조합 → 3D 미리보기 옵션. 국가 1위 행은 국기 포함
-const rowOpts = (r, isFirst) => ({
-  style: getBike(r.bike).style, box: r.box || 'basic', outfit: r.outfit || 'jacket', helmet: r.helmet || 'basic',
-  flag: isFirst && isCountryCode(r.country) ? r.country : null,
-});
+// ---------- 관리자 모드: 서버 계정(player_data.is_admin) 또는 ?debug 토글
+// 모든 아이템 사용 가능 + 랭킹 기록 차단
+let serverAdmin = false;
+let debugAdmin = false;
+const isAdminMode = () => serverAdmin || debugAdmin;
+
+// 상점 국기 카탈로그 (헬멧 스티커 + 차체 데칼 + 상자 깃발)
+const FLAGS = FLAG_SHOP_CODES.map((code) => ({
+  id: code, code, name: `${countryName(code)} Flag`,
+  price: THEMES.some((t) => t.code === code) ? FLAG_PRICE_THEME : FLAG_PRICE_OTHER,
+  desc: 'Helmet sticker, bike decal and box flag',
+}));
+
+// 바이크 외형. 국가대표 바이크는 그 나라 국기 색으로 도색 + 국기 데칼
+function bikeLook(bikeId, code) {
+  const bk = getBike(bikeId);
+  if (bk.special === 'national') {
+    const cc = isCountryCode(code) ? code : save.country;
+    const [c1, c2] = nationalLivery(cc);
+    return { color: c1, opts: { style: 'sport', accent: c2, national: true, flag: cc } };
+  }
+  return { color: bk.color, opts: { style: bk.style } };
+}
+const myNationalCode = () => save.nationalCode || save.country;
+function myLook() {
+  const look = bikeLook(save.bike, myNationalCode());
+  const flag = look.opts.flag || (isCountryCode(save.flag) ? save.flag : null);
+  return { color: look.color, opts: { ...look.opts, box: save.box, outfit: save.outfit, helmet: save.helmet, flag } };
+}
+const currentBikeKey = () => JSON.stringify(myLook());
+const riderOpts = () => myLook().opts;
+// 랭킹 행(다른 라이더)의 장착 조합 → 3D 미리보기
+function rowLook(r) {
+  const look = bikeLook(r.bike, r.country);
+  const flag = look.opts.flag || (isCountryCode(r.flag) ? r.flag : null);
+  return { color: look.color, opts: { ...look.opts, box: r.box || 'basic', outfit: r.outfit || 'jacket', helmet: r.helmet || 'basic', flag } };
+}
+
+// 관리자 모드가 아니면 보유하지 않은 아이템 장착을 해제
+function sanitizeEquip() {
+  if (isAdminMode()) return;
+  if (save.bike === 'national' && !save.nationalUnlocked) save.bike = save.ownedBikes.includes(save.prevBike) ? save.prevBike : 'rookie';
+  if (save.bike !== 'national' && !save.ownedBikes.includes(save.bike)) save.bike = 'rookie';
+  for (const [k, own, def] of [['box', 'ownedBoxes', 'basic'], ['outfit', 'ownedOutfits', 'jacket'], ['helmet', 'ownedHelmets', 'basic']]) {
+    if (!save[own].includes(save[k])) save[k] = def;
+  }
+  if (save.flag && !save.ownedFlags.includes(save.flag)) save.flag = '';
+}
+
 function buildBike() {
   if (bike) scene.remove(bike.root);
-  bike = M.createBike(getBike(save.bike).color, riderOpts());
+  const look = myLook();
+  bike = M.createBike(look.color, look.opts);
   bike.root.add(headlight, shieldBubble);
   scene.add(bike.root);
   bikeKey = currentBikeKey();
@@ -373,12 +424,12 @@ function pickType(r, r2, z) {
     acc += w;
     if (r2 < acc) return type;
   }
-  if (G.distance > 1200 && r < 0.05) return 'ramp';
-  if (r < 0.12 + Math.min(0.05, G.distance / 60000)) return 'bus';
-  if (r < 0.24) return 'truck';
-  if (r < 0.4) return 'suv';
-  if (r < 0.48) return 'taxi';
-  if (r < 0.51) return 'police';
+  if (G.distance > 600 && r < 0.1) return 'ramp'; // 견인트럭 점프대 (이전 대비 2배)
+  if (r < 0.2 + Math.min(0.05, G.distance / 60000)) return 'bus';
+  if (r < 0.31) return 'truck';
+  if (r < 0.45) return 'suv';
+  if (r < 0.52) return 'taxi';
+  if (r < 0.55) return 'police';
   return 'sedan';
 }
 
@@ -387,7 +438,10 @@ function spawnCar(z = SPAWN_Z, forced = null) {
   const r = Array.from({ length: 10 }, () => wr('car'));
   const type = forced?.type || pickType(r[0], r[9], z);
   const def = M.CAR_DEFS[type];
-  const order = forced ? [forced.lane] : type === 'ramp' ? (r[1] < 0.5 ? [2, 3] : [3, 2]) : [0, 1, 2, 3];
+  // 스폰 위치 나라의 통행 방향 (좌측통행이면 왼쪽 두 차선이 같은 방향)
+  const ds = driveSign(G.distance - z);
+  const same = ds > 0 ? [2, 3] : [1, 0];
+  const order = forced ? [forced.lane] : type === 'ramp' ? (r[1] < 0.5 ? same : [same[1], same[0]]) : [0, 1, 2, 3];
   if (type !== 'ramp' && !forced) {
     for (let i = 3; i > 0; i--) {
       const j = Math.floor(r[i] * (i + 1));
@@ -397,15 +451,16 @@ function spawnCar(z = SPAWN_Z, forced = null) {
   for (const lane of order) {
     if (!laneClear(lane, z, def.len) || blocksAll(lane, z)) continue;
     const c = acquireCar(type);
-    const dir = lane >= 2 ? 1 : -1;
+    const dir = (lane >= 2) === (ds > 0) ? 1 : -1;
     const inner = lane === 1 || lane === 2;
     Object.assign(c, {
-      lane, targetLane: lane, dir, baseX: LANES[lane], x: LANES[lane], z, offset: 0,
+      lane, targetLane: lane, dir, ds, crossing: false, baseX: LANES[lane], x: LANES[lane], z, offset: 0,
       speed: lerp(def.speed[0], def.speed[1], r[4]) * (dir < 0 ? 1.1 : 1),
       passed: false, minGap: 99, changing: false, changeT: 0, flying: false, honked: false,
       wob: r[5] * Math.PI * 2,
       wobAmp: (type === 'bus' || type === 'truck' || type === 'ramp' ? 0.1 : 0.22) * (1 + clamp(G.distance / 8000, 0, 1) * 0.8),
-      canChange: type !== 'ramp' && r[6] < Math.min(0.6, 0.15 + G.distance / 8000),
+      // 앞서가는 같은 방향 차량일수록 깜빡이 후 급차선 변경을 자주 함
+      canChange: type !== 'ramp' && r[6] < Math.min(dir > 0 ? 0.7 : 0.4, (dir > 0 ? 0.3 : 0.12) + G.distance / 8000),
       // 안쪽 차선 차량은 중앙선 쪽으로 침범하는 패턴
       canInvade: inner && type !== 'ramp' && G.distance > 600 && r[7] < Math.min(0.4, 0.1 + G.distance / 15000),
       invadeT: 0,
@@ -460,14 +515,30 @@ function updateCars(dt, collide) {
       if (ahead > 0 && ahead < (c.len + o.len) / 2 + 5 && o.speed < c.speed) c.speed = o.speed;
     }
 
-    // 차선 변경 (깜빡이 → 이동)
-    if (c.changing) {
+    // 국경을 넘으면 통행 방향이 바뀌는 나라: 반대편 같은 성격의 차선으로 건너감 (3 - lane)
+    const cds = driveSign(G.distance - c.z);
+    if (cds !== c.ds) {
+      c.ds = cds;
+      c.lane = 3 - c.lane;
+      c.targetLane = c.lane;
+      c.changing = false;
+      c.crossing = true;
+      c.invadeT = 0;
+      c.blinkMatL.emissiveIntensity = 0;
+      c.blinkMatR.emissiveIntensity = 0;
+    }
+    if (c.crossing) {
+      const tx = LANES[c.lane];
+      c.baseX += clamp(tx - c.baseX, -7 * dt, 7 * dt);
+      if (Math.abs(tx - c.baseX) < 0.01) c.crossing = false;
+    } else if (c.changing) {
       c.changeT += dt;
       const on = Math.floor(c.changeT * 6) % 2 === 0;
       setBlink(c, Math.sign(LANES[c.targetLane] - c.baseX) * c.dir, on);
-      if (c.changeT > 0.9) {
+      // 깜빡이 1초 → 급차선 변경 (약 0.5초 만에 옆 차선으로)
+      if (c.changeT > 1.0) {
         const tx = LANES[c.targetLane];
-        const step = 2.6 * dt;
+        const step = 7 * dt;
         c.baseX += clamp(tx - c.baseX, -step, step);
         if (Math.abs(tx - c.baseX) < 0.01) {
           c.baseX = tx;
@@ -478,7 +549,7 @@ function updateCars(dt, collide) {
           c.blinkMatR.emissiveIntensity = 0;
         }
       }
-    } else if (c.canChange && c.z > -150 && c.z < -20 && Math.random() < 0.7 * dt) {
+    } else if (c.canChange && !c.crossing && c.z > -150 && c.z < -20 && Math.random() < 0.7 * dt) {
       const ol = otherLane(c.lane);
       if (laneClear(ol, c.z, c.len, c)) {
         c.targetLane = ol;
@@ -558,6 +629,70 @@ const signPool = makeInstanced(M.signGeometry(), M.vcMat, 16);
 const puddleMat = M.createPuddleMaterial();
 const puddlePool = makeInstanced(M.puddleGeometry(), puddleMat, 18);
 puddlePool.mesh.renderOrder = -1;
+// 도로 돌발 위험: 포트홀(덜컹·감속), 열린 맨홀(충돌), 화물 상자(충돌, 니트로·거대화로 날림)
+const potholePool = makeInstanced(M.potholeGeometry(), M.vcMat, 12);
+const manholePool = makeInstanced(M.manholeGeometry(), M.vcMat, 8);
+const cargoPool = makeInstanced(M.cargoGeometry(), M.vcMat, 10);
+const HAZARDS = [
+  { pool: potholePool, kind: 'pothole', hw: 0.6, hl: 0.55 },
+  { pool: manholePool, kind: 'manhole', hw: 0.5, hl: 0.5 },
+  { pool: cargoPool, kind: 'cargo', hw: 0.55, hl: 0.45 },
+];
+
+function spawnHazard() {
+  const r1 = wr('hazard'), r2 = wr('hazard'), r3 = wr('hazard');
+  const kind = r1 < 0.45 ? 'pothole' : r1 < 0.75 ? 'cargo' : 'manhole';
+  const h = HAZARDS.find((k) => k.kind === kind);
+  spawnInPool(h.pool, { x: LANES[(r2 * 4) | 0] + (r3 - 0.5) * 1.2, z: SPAWN_Z, rot: 0 });
+}
+
+function hitPothole() {
+  if (G.giantT > 0 || G.boostTime > 0) return;
+  G.speed *= 0.75;
+  G.shake = 0.6;
+  G.combo = 0;
+  sfx.land();
+  vibrate([30, 30, 30]);
+  popup('POTHOLE!', 'power');
+}
+
+// ---------- 배달 드롭존: 도로 가장자리 구역을 정확히 통과하면 코인 + 부스트
+const dropZones = [];
+const DROP_REWARD = 30;
+function spawnDropZone() {
+  const r1 = wr('hazard');
+  let d = dropZones.find((z) => !z.active);
+  if (!d) {
+    d = { obj: M.createDropZone() };
+    scene.add(d.obj);
+    dropZones.push(d);
+  }
+  Object.assign(d, { active: true, x: r1 < 0.5 ? LANES[0] : LANES[3], z: SPAWN_Z, done: false });
+  d.obj.visible = true;
+}
+function updateDropZones(dt, collide) {
+  for (const d of dropZones) {
+    if (!d.active) continue;
+    d.z += G.speed * dt;
+    d.obj.position.set(d.x, 0, d.z);
+    d.obj.area.material.opacity = 0.22 + Math.sin(G.time * 6) * 0.08;
+    if (collide && !d.done && d.z > -M.DROP_ZONE.length / 2 && d.z < M.DROP_ZONE.length / 2 && G.state === 'playing'
+      && !G.air && Math.abs(G.x - d.x) < M.DROP_ZONE.width / 2 - BIKE_HW * 0.5) {
+      d.done = true;
+      G.bonusCoins += DROP_REWARD;
+      save.coins += DROP_REWARD;
+      G.slingT = Math.max(G.slingT, 1.2);
+      addNitro(15);
+      popup('DROP ZONE!', 'perfect', `+${DROP_REWARD} COINS · BOOST`);
+      sfx.mission();
+      vibrate(25);
+    }
+    if (d.z > 20) {
+      d.active = false;
+      d.obj.visible = false;
+    }
+  }
+}
 
 function spawnInPool(pool, props) {
   const it = pool.items.find((k) => !k.active);
@@ -606,6 +741,12 @@ function updatePool(pool, dt, collide, hw, hl, kind) {
         if (kind === 'puddle') {
           c.hit = true;
           hitPuddle();
+        } else if (kind === 'pothole') {
+          c.hit = true;
+          hitPothole();
+        } else if (kind === 'manhole') {
+          c.hit = true;
+          hitObstacle(c, 'hole');
         } else {
           hitObstacle(c, 'small');
         }
@@ -614,7 +755,8 @@ function updatePool(pool, dt, collide, hw, hl, kind) {
       dummy.scale.set(1, 1, 1);
     }
     dummy.position.set(c.x, c.y + (kind === 'puddle' ? 0.03 : 0), c.z);
-    dummy.rotation.set(c.rot, 0, c.rot * 0.7);
+    if (kind === 'pothole' || kind === 'manhole') dummy.rotation.set(0, 0, 0);
+    else dummy.rotation.set(c.rot, 0, c.rot * 0.7);
     dummy.updateMatrix();
     mesh.setMatrixAt(k, dummy.matrix);
   }
@@ -747,7 +889,8 @@ const powerItems = [];
 
 function spawnPower() {
   const r1 = wr('power'), r2 = wr('power'), r3 = wr('power');
-  const type = POWER_TYPES[(r1 * POWER_TYPES.length) | 0];
+  let acc = 0;
+  const type = POWER_TYPES[Math.max(0, POWER_WEIGHTS.findIndex((w) => (acc += w) > r1))];
   if (powerItems.some((p) => p.type === type)) return;
   const x = r2 < 0.5 ? LANES[(r3 * 4) | 0] : DIVIDERS[(r3 * 3) | 0];
   powerItems.push({ type, x, z: SPAWN_Z });
@@ -780,6 +923,10 @@ function applyPower(type) {
   if (type === 'magnet') G.magnetTime = 10;
   if (type === 'x2') G.x2Time = 12;
   if (type === 'slow') G.slowTime = 5;
+  if (type === 'giant') {
+    G.giantT = GIANT_TIME;
+    sfx.fever();
+  }
   sfx.power();
   vibrate(30);
   popup(POWER_LABEL[type], 'power');
@@ -885,7 +1032,7 @@ async function fetchRegionTop(code, force = false) {
   regionTops[code] = res.ok ? res.top : [];
   if (code === save.country) {
     setupRivalMarker();
-    if (res.ok && res.me) applyFlagStatus(res.me.rank === 1, code);
+    if (res.ok && res.me) applyNationalStatus(res.me.rank === 1, code);
   }
 }
 
@@ -945,7 +1092,7 @@ function spawnMegaBoard() {
   const b = acquireBoard(megaPool, M.createMegaBoard);
   placeBoard(b, Math.random() < 0.5 ? -1 : 1, 6.8 + b.obj.dims.height / 2);
   // 1위 라이더 3D 스냅샷 (메인 렌더러로 렌더 타깃에 한 번만 그림). 1위라서 국기 아이템도 착용
-  const key = row ? [row.nickname, row.bike, row.box, row.outfit, row.helmet, row.country].join('|') : 'none';
+  const key = row ? [row.nickname, row.bike, row.box, row.outfit, row.helmet, row.country, row.flag].join('|') : 'none';
   let shot = megaShots[theme.code];
   if (!shot) {
     shot = { rt: new THREE.WebGLRenderTarget(256, 256), key: null };
@@ -953,8 +1100,8 @@ function spawnMegaBoard() {
     megaShots[theme.code] = shot;
   }
   if (shot.key !== key) {
-    const bk = getBike(row?.bike || 'rookie');
-    renderRiderSnapshot(renderer, shot.rt, row ? rowOpts(row, true) : { style: bk.style }, bk.color);
+    const look = row ? rowLook(row) : bikeLook('rookie');
+    renderRiderSnapshot(renderer, shot.rt, look.opts, look.color);
     shot.key = key;
   }
   b.obj.shot.material.map = shot.rt.texture;
@@ -1263,6 +1410,7 @@ function updateEnvironment(rdt) {
 
 // ---------- 카메라
 let camX = 0, camY = 0;
+let giantCam = 0;
 function updateCamera(rdt) {
   const p = clamp((1.35 - camera.aspect) / 0.8, 0, 1); // 0 = 가로화면, 1 = 세로화면
   const baseY = lerp(3.0, 5.4, p), camZ = lerp(6.2, 8.4, p);
@@ -1282,7 +1430,8 @@ function updateCamera(rdt) {
   camY = lerp(camY, (G.airY || 0) * 0.6, Math.min(1, rdt * 4));
   G.shake = Math.max(0, (G.shake || 0) - rdt * 2.2);
   const s = G.shake * 0.35 + (G.boostTime > 0 ? 0.04 : 0);
-  camera.position.set(camX + rand(-s, s), baseY + camY + rand(-s, s), camZ);
+  giantCam = lerp(giantCam, G.giantT > 0 ? 1 : 0, Math.min(1, rdt * 3));
+  camera.position.set(camX + rand(-s, s), baseY + camY + giantCam * 1.6 + rand(-s, s), camZ + giantCam * 2.5);
   camera.lookAt(camX * 0.9, lookY + camY * 0.5, lookZ);
   camera.rotateZ((G.lean || 0) * 0.08);
 }
@@ -1404,7 +1553,11 @@ function clearWorld() {
   while (cars.length) releaseCar(cars[0]);
   while (stalls.length) releaseStall(stalls[0]);
   for (const c of coins) c.active = false;
-  for (const pool of [conePool, signPool, puddlePool]) for (const c of pool.items) c.active = false;
+  for (const pool of [conePool, signPool, puddlePool, potholePool, manholePool, cargoPool]) for (const c of pool.items) c.active = false;
+  for (const d of dropZones) {
+    d.active = false;
+    d.obj.visible = false;
+  }
   for (const p of powerItems) powerMeshes[p.type].group.visible = false;
   powerItems.length = 0;
 }
@@ -1415,12 +1568,13 @@ function resetRun(seed) {
   clearWorld();
   screenRain.reset();
   Object.assign(G, {
-    speed: 21, x: 3.5, vx: 0, lean: 0, distance: 0, score: 0, mult: 1, time: 0,
+    speed: 21, x: 3.5 * driveSign(0), vx: 0, lean: 0, distance: 0, score: 0, mult: 1, time: 0,
     coinsRun: 0, nearMiss: 0, combo: 0, comboTimer: 0, maxCombo: 0, nitro: 0, boostTime: 0,
-    shield: false, magnetTime: 0, x2Time: 0, slowTime: 0, invuln: 0, oncomingDist: 0,
+    shield: false, magnetTime: 0, x2Time: 0, slowTime: 0, giantT: 0, invuln: 0, oncomingDist: 0,
+    rotPitch: 0, rotYaw: 0, rotationCount: 0, rotShown: 0, tricks: 0,
     boostsUsed: 0, maxKmh: 0, smashed: 0, jumps: 0, continued: false, finalized: false,
-    nextSpawn: 25, nextCoins: 60, nextPower: wrand('power', 450, 700), nextCones: wrand('cone', 350, 600),
-    nextStall: wrand('stall', 300, 500), nextPuddle: wrand('puddle', 400, 700), nextSquall: wrand('weather', 1200, 2000),
+    nextSpawn: 25, nextCoins: 60, nextPower: wrand('power', 120, 180), nextCones: wrand('cone', 350, 600),
+    nextStall: wrand('stall', 300, 500), nextHazard: wrand('hazard', 350, 500), nextDrop: wrand('hazard', 400, 600), nextPuddle: wrand('puddle', 400, 700), nextSquall: wrand('weather', 1200, 2000),
     squallT: 0, rain: false, rainAmt: 0, lightning: 0, boltT: 0, shake: 0, crashT: 0,
     air: false, airY: 0, airVy: 0, slipT: 0, slipDir: 0, rpm: 0, braking: false,
     missionsDone: [], cd: 0, cdShown: 0, globalSubmitted: false,
@@ -1437,6 +1591,7 @@ function resetRun(seed) {
   updatePool(conePool, 0, false, 0, 0, 'cone');
   updatePool(signPool, 0, false, 0, 0, 'sign');
   updatePool(puddlePool, 0, false, 0, 0, 'puddle');
+  for (const h of HAZARDS) updatePool(h.pool, 0, false, 0, 0, h.kind);
   updateCoins(0, false);
   resetBikePose();
 }
@@ -1444,6 +1599,7 @@ function resetRun(seed) {
 function resetBikePose() {
   bike.root.position.set(G.x, 0, 0);
   bike.root.rotation.set(0, 0, 0);
+  bike.root.scale.setScalar(1);
   bike.lean.rotation.set(0, 0, 0);
   bike.root.visible = true;
 }
@@ -1465,6 +1621,7 @@ function startRun(opts = {}) {
   hideScreens();
   $('hud').classList.remove('hidden');
   $('hudVs').classList.toggle('hidden', !MP.active);
+  $('hudAdmin').classList.toggle('hidden', !isAdminMode());
   G.state = 'countdown';
   G.cd = 3.2;
   G.cdShown = 0;
@@ -1509,7 +1666,7 @@ function scrollWorld(dz) {
 }
 
 // 거리 기준 스폰 — 절대 거리 일정표(+=)를 써서 멀티에서 같은 거리 → 같은 결과
-const SPAWN_KEYS = ['nextSpawn', 'nextCoins', 'nextPower', 'nextCones', 'nextStall', 'nextPuddle', 'nextSquall'];
+const SPAWN_KEYS = ['nextSpawn', 'nextCoins', 'nextPower', 'nextCones', 'nextStall', 'nextPuddle', 'nextSquall', 'nextHazard', 'nextDrop'];
 function runSpawners() {
   // 비정상적으로 크게 밀린 경우(디버그 점프 등)만 따라잡기
   for (const k of SPAWN_KEYS) if (G.distance - G[k] > 1500) G[k] = G.distance;
@@ -1524,7 +1681,7 @@ function runSpawners() {
   }
   if (G.distance > G.nextPower) {
     spawnPower();
-    G.nextPower += wrand('power', 500, 850);
+    G.nextPower += wrand('power', 100, 150); // 100~150m 마다
   }
   if (G.distance > G.nextCones) {
     spawnCones();
@@ -1537,6 +1694,14 @@ function runSpawners() {
   if (G.distance > G.nextPuddle) {
     spawnPuddle();
     G.nextPuddle += G.rain ? wrand('puddle', 25, 60) : wrand('puddle', 220, 420);
+  }
+  if (G.distance > G.nextHazard) {
+    spawnHazard();
+    G.nextHazard += wrand('hazard', 160, 320) * lerp(1, 0.6, clamp(G.distance / 15000, 0, 1));
+  }
+  if (G.distance > G.nextDrop) {
+    spawnDropZone();
+    G.nextDrop += wrand('hazard', 450, 700);
   }
   if (G.distance > G.nextSquall) {
     startSquall();
@@ -1568,6 +1733,7 @@ function updatePlaying(rdt) {
   G.slowTime = Math.max(0, G.slowTime - rdt);
   G.magnetTime = Math.max(0, G.magnetTime - rdt);
   G.x2Time = Math.max(0, G.x2Time - rdt);
+  G.giantT = Math.max(0, G.giantT - rdt);
   G.invuln = Math.max(0, G.invuln - rdt);
   G.boostTime = Math.max(0, G.boostTime - rdt);
   G.slipT = Math.max(0, G.slipT - rdt);
@@ -1603,7 +1769,7 @@ function updatePlaying(rdt) {
   if (G.slingT > 0) target = Math.max(target, maxSpd * 1.25);                // 슬링샷 부스트
   if (G.boostTime > 0) target = maxSpd * 1.35;
   const accel = target > G.speed ? (G.boostTime > 0 || G.slingT > 0 ? 30 : 7 * bk.accel) : brake ? 22 : manual ? 5 : 6;
-  G.speed = approach(G.speed, target, accel * rdt);
+  if (!G.air) G.speed = approach(G.speed, target, accel * rdt); // 공중에선 속도 유지
   G.braking = Boolean(brake);
   // RPM: 스로틀을 감으면 빠르게 치솟고, 놓으면 떨어짐
   const spdRatio = clamp(G.speed / (maxSpd * 1.35), 0, 1);
@@ -1616,7 +1782,9 @@ function updatePlaying(rdt) {
   const latMax = (7 + G.speed * 0.1) * handling;
   const slipping = G.slipT > 0;
   const resp = slipping ? 1.2 : G.air ? 2.5 : G.rain ? 5 : 10;
-  G.vx = lerp(G.vx, steer * latMax, 1 - Math.exp(-rdt * resp));
+  // 공중: 좌우 = 스핀(Yaw), 스로틀/위 = 백플립, 브레이크/아래 = 프런트플립. 옆으로는 관성만
+  G.vx = lerp(G.vx, G.air ? G.vx * 0.6 : steer * latMax, 1 - Math.exp(-rdt * resp));
+  if (G.air) updateAirTricks(rdt, steer, throttle, brake);
   if (slipping) G.vx += G.slipDir * 7 * rdt * (G.slipT / 1.3);
   G.x += G.vx * rdt;
   if (Math.abs(G.x) > ROAD_HALF) {
@@ -1635,8 +1803,9 @@ function updatePlaying(rdt) {
   const dz = G.speed * dt;
   scrollWorld(dz);
 
-  // 점수
-  const onc = G.x < -0.3;
+  // 점수 — 역주행 차선: 우측통행 국가는 왼쪽, 좌측통행 국가는 오른쪽
+  G.ds = driveSign(G.distance);
+  const onc = G.x * G.ds < -0.3;
   if (onc) {
     G.oncomingDist += dz;
     addNitro(dt * 3);
@@ -1663,6 +1832,8 @@ function updatePlaying(rdt) {
   updatePool(conePool, dt, true, 0.24, 0.25, 'cone');
   updatePool(signPool, dt, true, 0.62, 0.2, 'sign');
   updatePool(puddlePool, dt, true, 1.0, 1.6, 'puddle');
+  for (const h of HAZARDS) updatePool(h.pool, dt, true, h.hw, h.hl, h.kind);
+  updateDropZones(dt, true);
   updateStalls(dt, true);
   if (G.state !== 'playing') return;
   updateCoins(dt, true);
@@ -1675,27 +1846,72 @@ function updatePlaying(rdt) {
 
 function startJump(c) {
   G.air = true;
+  G.isAirborne = true;
   G.airY = 0.4;
-  G.airVy = 7.5 + G.speed * 0.1;
+  G.airVy = 9 + G.speed * 0.12; // 공중 묘기를 할 수 있도록 체공 시간 확보
+  G.rotPitch = 0;
+  G.rotYaw = 0;
+  G.rotationCount = 0;
+  G.rotShown = 0;
   G.jumps++;
   c.passed = true;
   sfx.jump();
   vibrate(30);
-  popup('AIRBORNE', 'big');
+  popup('AIRBORNE', 'big', isTouchDevice ? 'STEER = SPIN · THROTTLE / BRAKE = FLIP' : 'LEFT/RIGHT = SPIN · UP/DOWN = FLIP');
+}
+
+// 가장 가까운 한 바퀴(2π 배수)까지 남은 각도
+const offLevel = (a) => Math.abs(a - Math.round(a / (Math.PI * 2)) * Math.PI * 2);
+
+function updateAirTricks(rdt, steer, throttle, brake) {
+  const flip = (throttle ? 1 : 0) - (brake ? 1 : 0);
+  G.rotYaw += steer * AIR_SPIN * rdt;
+  G.rotPitch += flip * AIR_FLIP * rdt;
+  // 입력이 없으면 가까운 수평 자세로 살짝 맞춰 줌 (착지 보조)
+  const snap = (a) => {
+    const t = Math.round(a / (Math.PI * 2)) * Math.PI * 2;
+    return Math.abs(t - a) < 0.6 ? approach(a, t, 3 * rdt) : a;
+  };
+  if (!steer) G.rotYaw = snap(G.rotYaw);
+  if (!flip) G.rotPitch = snap(G.rotPitch);
+  G.rotationCount = Math.floor((Math.abs(G.rotYaw) + Math.abs(G.rotPitch)) / (Math.PI * 2) + 0.08);
+  if (G.rotationCount > G.rotShown) {
+    G.rotShown = G.rotationCount;
+    popup(G.rotationCount === 1 ? '360!' : `${G.rotationCount * 360}!`, 'combo', `${G.rotationCount} ROTATION${G.rotationCount > 1 ? 'S' : ''}`);
+    sfx.near(true);
+  }
 }
 
 function land() {
   G.air = false;
+  G.isAirborne = false;
   G.airY = 0;
   G.airVy = 0;
+  // 착지 판정: 차체가 수평(한 바퀴 단위)에 가까워야 성공, 아니면 크래시
+  const clean = offLevel(G.rotPitch) < LAND_TOL && offLevel(G.rotYaw) < LAND_TOL;
+  const rots = G.rotationCount;
+  if (!clean) {
+    popup('CRASH LANDING!', 'big');
+    crash({ x: G.x - 0.5 });
+    return;
+  }
+  G.rotPitch = 0;
+  G.rotYaw = 0;
   G.invuln = Math.max(G.invuln, 0.5); // 착지 직후 잠깐 무적
-  const pts = Math.round(500 * (1 + Math.min(G.combo, 20) * 0.1) * (G.x2Time > 0 ? 2 : 1));
+  const base = TRICK_BONUS[Math.min(rots, 3)];
+  const pts = Math.round(base * (G.x2Time > 0 ? 2 : 1));
   G.score += pts;
-  addNitro(20);
+  if (rots > 0) G.tricks += rots;
+  addNitro(20 + rots * 10);
+  if (rots >= 3) {
+    G.slingT = 1.8; // 3회전 이상: 스피드 부스트
+    popup('INSANE TRICK!', 'perfect', `CLEAN LANDING x${rots} · +${fmt(pts)} · BOOST`);
+  } else {
+    popup(rots ? 'CLEAN LANDING!' : 'AIR JUMP!', 'perfect', `${rots ? `x${rots} · ` : ''}+${fmt(pts)}`);
+  }
   G.shake = 0.5;
   sfx.land();
   vibrate(40);
-  popup('AIR JUMP!', 'perfect', `+${pts}`);
 }
 
 function hitPuddle() {
@@ -1707,15 +1923,27 @@ function hitPuddle() {
   screenRain.splash(16);
 }
 
+const pivotTmp = new THREE.Vector3();
+const AIR_PIVOT = 0.9; // 공중 회전 중심 높이 (차체 가운데)
 function poseBike() {
-  bike.root.position.set(G.x, G.airY || 0, 0);
+  if (G.air && (G.rotPitch || G.rotYaw)) {
+    bike.root.rotation.set(G.rotPitch, G.rotYaw, 0, 'YXZ');
+    pivotTmp.set(0, AIR_PIVOT, 0).applyEuler(bike.root.rotation);
+    bike.root.position.set(G.x - pivotTmp.x, (G.airY || 0) + AIR_PIVOT - pivotTmp.y, -pivotTmp.z);
+  } else {
+    bike.root.rotation.set(0, 0, 0);
+    bike.root.position.set(G.x, G.airY || 0, 0);
+  }
+  // 거대화: 차체 1.8배
+  const gs = approach(bike.root.scale.x, G.giantT > 0 ? 1.8 : 1, 0.06);
+  bike.root.scale.setScalar(gs);
   bike.lean.rotation.z = G.lean;
   bike.lean.rotation.x = G.air ? clamp(-G.airVy * 0.03, -0.3, 0.25) : G.boostTime > 0 ? -0.06 : 0;
   bike.flame.visible = G.boostTime > 0;
   if (bike.flame.visible) bike.flame.scale.set(1, 1, rand(0.7, 1.3));
   shieldBubble.visible = G.shield;
   shieldBubble.material.opacity = 0.18 + Math.sin(G.time * 6) * 0.06;
-  bike.root.visible = G.invuln > 0 && G.boostTime <= 0 && !G.air ? Math.floor(G.time * 12) % 2 === 0 : true;
+  bike.root.visible = G.invuln > 0 && G.boostTime <= 0 && G.giantT <= 0 && !G.air ? Math.floor(G.time * 12) % 2 === 0 : true;
   // 브레이크: 스톱램프 점등 + 노면 반사 글로우
   const braking = G.braking && G.state === 'playing';
   if (bike.tailMat) bike.tailMat.emissiveIntensity = braking ? 5 : M.tailMat.emissiveIntensity;
@@ -1772,9 +2000,24 @@ function nearMiss(c, gap) {
 // kind: 'car' | 'small'(라바콘·표지판) | 'stall'(노점상)
 function hitObstacle(o, kind = 'car') {
   if (G.state !== 'playing') return;
-  if (G.invuln > 0 && G.boostTime <= 0) return; // 무적(깜빡임) 중엔 통과
-  if (G.boostTime > 0 || G.shield) {
-    if (G.boostTime <= 0) {
+  const smashing = G.boostTime > 0 || G.giantT > 0; // 니트로·거대화: 부딪힌 걸 날려버림
+  if (G.invuln > 0 && !smashing) return; // 무적(깜빡임) 중엔 통과
+  if (kind === 'hole') {
+    // 구멍은 날려버릴 수 없음: 니트로·거대화는 그냥 지나가고, 보호막은 깨지며 통과
+    if (smashing) return;
+    if (G.shield) {
+      G.shield = false;
+      G.invuln = 1.2;
+      popup('SHIELD BROKEN', 'power');
+      sfx.smash();
+      return;
+    }
+    popup('OPEN MANHOLE!', 'big');
+    crash(o);
+    return;
+  }
+  if (smashing || G.shield) {
+    if (!smashing) {
       G.shield = false;
       G.invuln = 1.2;
       popup('SHIELD BROKEN', 'power');
@@ -1836,6 +2079,8 @@ function updateCrashing(rdt) {
   updatePool(conePool, dt, false, 0, 0, 'cone');
   updatePool(signPool, dt, false, 0, 0, 'sign');
   updatePool(puddlePool, dt, false, 0, 0, 'puddle');
+  for (const h of HAZARDS) updatePool(h.pool, dt, false, 0, 0, h.kind);
+  updateDropZones(dt, false);
   updateStalls(dt, false);
   updateCoins(dt, false);
   updatePowerups(dt, false);
@@ -1910,9 +2155,10 @@ function show(id) {
 let stage = null;
 function mountStage(containerId, draggable) {
   stage = stage || new PreviewStage();
-  stage.setRider(riderOpts(), getBike(save.bike).color);
+  const look = myLook();
+  stage.setRider(look.opts, look.color);
   stage.mount($(containerId), { draggable });
-  setFlexLabel(`MY RIDE · ${getBike(save.bike).name.toUpperCase()}`, flagActive() ? save.flagCode : null);
+  setFlexLabel(`MY RIDE · ${getBike(save.bike).name.toUpperCase()}`, look.opts.flag);
 }
 function setFlexLabel(text, flag) {
   $('flexLabel').innerHTML = `${flag ? flagBadge(flag, 'flag') : ''}${escapeHtml(text)}`;
@@ -1958,6 +2204,8 @@ function nextToast() {
 
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 const fmt = (n) => Math.floor(n).toLocaleString('en-US');
+// 코인처럼 커질 수 있는 숫자: 1,000,000 이상은 1.25M 형태로 줄여 레이아웃 넘침 방지
+const fmtCoins = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e8 ? 0 : n >= 1e7 ? 1 : 2).replace(/\.?0+$/, '')}M` : fmt(n));
 
 const hud = {
   score: $('hudScore'), mult: $('hudMult'), combo: $('hudCombo'), best: $('hudBest'), tags: $('hudTags'),
@@ -1979,7 +2227,7 @@ function updateHud() {
   hud.best.textContent = `BEST ${fmt(Math.max(save.best, G.score))}`;
   hud.speed.textContent = Math.round(G.speed * 3.6);
   hud.dist.textContent = `${fmt(G.distance)} m`;
-  hud.coins.textContent = fmt(save.coins);
+  hud.coins.textContent = fmtCoins(save.coins);
   const maxSpd = (getBike(save.bike).maxKmh / 3.6) * 1.35;
   hud.speedArc.setAttribute('stroke-dasharray', `${(clamp(G.speed / maxSpd, 0, 1) * 100).toFixed(1)} 100`);
   hud.rpmArc.setAttribute('stroke-dasharray', `${(G.rpm * 100).toFixed(1)} 100`);
@@ -2009,6 +2257,8 @@ function updateHud() {
   const tags = [];
   if (G.feverT > 0) tags.push(tagHtml('bolt', `FEVER x3 ${Math.ceil(G.feverT)}s`, 'fever'));
   if (G.slingT > 0) tags.push(tagHtml('bolt', 'SLINGSHOT'));
+  if (G.giantT > 0) tags.push(tagHtml('giant', `GIANT ${Math.ceil(G.giantT)}s`, 'fever'));
+  if (G.air && G.rotationCount > 0) tags.push(tagHtml('flip', `TRICK x${G.rotationCount}`));
   else if (G.draftT > 0) tags.push(tagHtml('gauge', 'SLIPSTREAM'));
   if (G.onc) tags.push(tagHtml('warn', 'WRONG WAY x2', 'onc'));
   if (G.air) tags.push(tagHtml('jump', 'AIRBORNE'));
@@ -2048,7 +2298,10 @@ function refreshMenu() {
   $('menuName').textContent = s ? s.nickname : save.lastName || 'Rider';
   $('accountLabel').textContent = s ? s.nickname.toUpperCase() : 'SIGN IN';
   $('menuBest').textContent = fmt(save.best);
-  $('menuCoins').textContent = fmt(save.coins);
+  $('menuCoins').textContent = fmtCoins(save.coins);
+  $('adminBadge').classList.toggle('hidden', !isAdminMode());
+  $('guestNote').classList.toggle('hidden', Boolean(s) && isServerReady());
+  $('guestNote').textContent = s ? 'OFFLINE · progress is not being saved' : 'GUEST · sign in to save coins and items';
 }
 
 let backTo = 'menu';
@@ -2084,76 +2337,91 @@ for (const b of document.querySelectorAll('[data-back]')) {
   });
 }
 
-// ---------- 차고 (바이크 / 배달 상자 / 라이더 의상·헬멧)
+// ---------- 차고 (바이크 / 배달 상자 / 라이더 의상·헬멧 / 국기)
 let garageTab = 'bike';
 const SHOP = {
   box: { list: BOXES, owned: 'ownedBoxes', cur: 'box' },
   outfit: { list: OUTFITS, owned: 'ownedOutfits', cur: 'outfit' },
   helmet: { list: HELMETS, owned: 'ownedHelmets', cur: 'helmet' },
+  flag: { list: FLAGS, owned: 'ownedFlags', cur: 'flag' },
 };
 
 function shopButton(kind, item, owned, sel) {
   if (sel) return '<button class="btn" disabled>EQUIPPED</button>';
-  if (item.special && !owned) return '<button class="btn" disabled>7-DAY STREAK</button>';
-  if (owned) return `<button class="btn primary" data-kind="${kind}" data-id="${item.id}" data-act="select">EQUIP</button>`;
-  return `<button class="btn gold" data-kind="${kind}" data-id="${item.id}" data-act="buy" data-icon="coin" ${save.coins < item.price ? 'disabled' : ''}>${icon('coin')}${fmt(item.price)}</button>`;
+  // 관리자 모드: 구매 없이 모든 아이템 장착
+  if (owned || isAdminMode()) return `<button class="btn primary" data-kind="${kind}" data-id="${item.id}" data-act="select">EQUIP</button>`;
+  if (item.special === 'national') return '<button class="btn" disabled>#1 ONLY</button>';
+  if (item.special) return '<button class="btn" disabled>7-DAY STREAK</button>';
+  return `<button class="btn gold" data-kind="${kind}" data-id="${item.id}" data-act="buy" data-icon="coin" ${save.coins < item.price ? 'disabled' : ''}>${icon('coin')}${fmtCoins(item.price)}</button>`;
 }
 
 function renderShopItems(kind) {
   const { list, owned, cur } = SHOP[kind];
   return list.map((it) => {
     const o = save[owned].includes(it.id), sel = save[cur] === it.id;
-    return `<div class="bike-card ${sel ? 'selected' : ''}">
-      <div class="swatch" style="background:${it.swatch}"></div>
-      <div><h4>${it.name}</h4><p>${it.desc}</p></div>${shopButton(kind, it, o, sel)}</div>`;
+    const sw = kind === 'flag'
+      ? `<div class="swatch flag-swatch">${flagBadge(it.code, 'flag big')}</div>`
+      : `<div class="swatch" style="background:${it.swatch}"></div>`;
+    return `<div class="bike-card ${sel ? 'selected' : ''}">${sw}
+      <div><h4>${escapeHtml(it.name)}</h4><p>${escapeHtml(it.desc)}</p></div>${shopButton(kind, it, o, sel)}</div>`;
   }).join('');
 }
 
-// 단일 '국기' 아이템: 잠금(?) ↔ 국가 1위일 때만 해제
-function flagCard() {
+// 국가대표 바이크 카드 (국가 1위만 / 관리자)
+function nationalCard() {
+  const b = getBike('national');
   const here = countryName(save.country);
-  if (!save.flagUnlocked) {
-    const why = getSession() ? `Reach #1 in the ${escapeHtml(here)} ranking to unlock.` : `Sign in and reach #1 in the ${escapeHtml(here)} ranking to unlock.`;
-    return `<div class="bike-card flag-item locked">
-      <div class="swatch mystery">?</div>
-      <div><h4>National Flag</h4><p>${why} Helmet sticker, bike decal and box flag. Lose #1 and it locks again.</p></div>
-      <button class="btn" disabled>LOCKED</button></div>`;
-  }
-  const on = flagActive();
-  return `<div class="bike-card flag-item ${on ? 'selected' : ''}">
-      <div class="swatch flag-swatch">${flagBadge(save.flagCode, 'flag big')}</div>
-      <div><h4>National Flag · ${escapeHtml(countryName(save.flagCode))}</h4><p>You are #1 in ${escapeHtml(countryName(save.flagCode))}. Only the current #1 rider can wear this flag.</p></div>
-      <button class="btn ${on ? '' : 'primary'}" data-act="flag">${on ? 'UNEQUIP' : 'EQUIP'}</button></div>`;
+  const can = save.nationalUnlocked || isAdminMode();
+  const sel = save.bike === 'national';
+  const [c1, c2] = nationalLivery(myNationalCode()).map((c) => '#' + c.toString(16).padStart(6, '0'));
+  const lock = can ? '' : 'locked';
+  const desc = can
+    ? `${save.nationalUnlocked ? `You are #1 in ${escapeHtml(here)}.` : 'Admin mode.'} Painted in national colors · TOP ${b.maxKmh} KM/H`
+    : `Locked. Reach #1 in the ${escapeHtml(here)} ranking to ride it. Lose #1 and it is taken back.`;
+  return `<div class="bike-card national-item ${lock} ${sel ? 'selected' : ''}">
+    <div class="bike-icon ${can ? '' : 'mystery'}" style="${can ? `background:linear-gradient(135deg, ${c1} 50%, ${c2} 50%)` : ''}">${can ? flagBadge(myNationalCode(), 'flag big') : '?'}</div>
+    <div><h4>${escapeHtml(b.name)} · ${escapeHtml(here)}</h4><p>${desc}</p>
+      <div class="stat">SPEED<i><b style="width:${(b.maxKmh / 320) * 100}%"></b></i></div></div>
+    ${sel ? '<button class="btn" disabled>EQUIPPED</button>' : can ? '<button class="btn primary" data-kind="bike" data-id="national" data-act="select">EQUIP</button>' : '<button class="btn" disabled>#1 ONLY</button>'}</div>`;
 }
 
 function renderGarage() {
-  $('garageCoins').textContent = fmt(save.coins);
-  if (stage) stage.setRider(riderOpts(), getBike(save.bike).color);
+  $('garageCoins').textContent = fmtCoins(save.coins);
+  if (stage) {
+    const look = myLook();
+    stage.setRider(look.opts, look.color);
+  }
   $('btnGacha').disabled = save.coins < GACHA_PRICE;
   $('btnAdCoins').classList.toggle('hidden', !adsEnabled());
   updateAdCoinsLabel();
   for (const b of $('garageTabs').children) b.classList.toggle('on', b.dataset.tab === garageTab);
   const list = $('shopList');
+  const adminNote = isAdminMode() ? '<div class="admin-note">ADMIN MODE · every item unlocked · scores are not recorded</div>' : '';
   if (garageTab === 'bike') {
     $('garageHint').textContent = 'Faster bikes rack up distance points faster.';
-    list.innerHTML = BIKES.map((b) => {
+    list.innerHTML = adminNote + nationalCard() + BIKES.filter((b) => !b.special).map((b) => {
       const owned = save.ownedBikes.includes(b.id);
       const sel = save.bike === b.id;
       const hex = '#' + b.color.toString(16).padStart(6, '0');
       return `<div class="bike-card ${sel ? 'selected' : ''}">
         <div class="bike-icon" style="background:${hex}33;border:2px solid ${hex};color:${hex === '#f2f2f2' ? '#5b6470' : hex}">${icon('bike')}</div>
-        <div><h4>${b.name}</h4><p>${b.desc} · TOP ${b.maxKmh} KM/H</p>
-          <div class="stat">SPEED<i><b style="width:${(b.maxKmh / 300) * 100}%"></b></i></div>
+        <div><h4>${escapeHtml(b.name)}</h4><p>${escapeHtml(b.desc)} · TOP ${b.maxKmh} KM/H</p>
+          <div class="stat">SPEED<i><b style="width:${(b.maxKmh / 320) * 100}%"></b></i></div>
           <div class="stat">HANDLING<i><b style="width:${(b.handling / 1.6) * 100}%"></b></i></div>
-          <div class="stat">ACCEL<i><b style="width:${(b.accel / 1.6) * 100}%"></b></i></div>
+          <div class="stat">ACCEL<i><b style="width:${(b.accel / 1.7) * 100}%"></b></i></div>
         </div>${shopButton('bike', b, owned, sel)}</div>`;
     }).join('');
   } else if (garageTab === 'box') {
     $('garageHint').textContent = 'Delivery box skins (cosmetic only).';
-    list.innerHTML = renderShopItems('box');
+    list.innerHTML = adminNote + renderShopItems('box');
+  } else if (garageTab === 'flag') {
+    $('garageHint').textContent = 'World flags for your helmet, bike and delivery box.';
+    const none = `<div class="bike-card ${save.flag ? '' : 'selected'}"><div class="swatch mystery">-</div>
+      <div><h4>No Flag</h4><p>Ride without a flag</p></div>${save.flag ? '<button class="btn primary" data-kind="flag" data-id="" data-act="select">EQUIP</button>' : '<button class="btn" disabled>EQUIPPED</button>'}</div>`;
+    list.innerHTML = adminNote + none + renderShopItems('flag');
   } else {
     $('garageHint').textContent = 'Customize your rider outfit and helmet.';
-    list.innerHTML = `<div class="shop-section">NATIONAL #1</div>${flagCard()}<div class="shop-section">OUTFIT</div>${renderShopItems('outfit')}<div class="shop-section">HELMET</div>${renderShopItems('helmet')}`;
+    list.innerHTML = `${adminNote}<div class="shop-section">OUTFIT</div>${renderShopItems('outfit')}<div class="shop-section">HELMET</div>${renderShopItems('helmet')}`;
   }
 }
 
@@ -2169,29 +2437,22 @@ $('shopList').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-act]');
   if (!btn) return;
   const { kind, id, act } = btn.dataset;
-  if (act === 'flag') {
-    if (!save.flagUnlocked) return;
-    save.flagEquipped = !save.flagEquipped;
-    persist();
-    sfx.click();
-    buildBike();
-    resetBikePose();
-    renderGarage();
-    return;
-  }
   const isBike = kind === 'bike';
   const item = isBike ? getBike(id) : SHOP[kind].list.find((x) => x.id === id);
   const ownedKey = isBike ? 'ownedBikes' : SHOP[kind].owned;
   const curKey = isBike ? 'bike' : SHOP[kind].cur;
   if (act === 'buy') {
-    if (save.coins < item.price) return;
+    if (!item || item.price <= 0 || save.coins < item.price || isAdminMode()) return;
     save.coins -= item.price;
     save[ownedKey].push(id);
     sfx.power();
     toast(`UNLOCKED  ·  ${item.name}`);
   } else {
+    const allowed = isAdminMode() || id === '' || (id === 'national' ? save.nationalUnlocked : save[ownedKey].includes(id));
+    if (!allowed) return;
     sfx.click();
   }
+  if (isBike && id === 'national' && save.bike !== 'national') save.prevBike = save.bike;
   save[curKey] = id;
   persist();
   buildBike();
@@ -2205,7 +2466,7 @@ $('btnGacha').addEventListener('click', () => {
   if (save.coins < GACHA_PRICE) return;
   const pool = [];
   for (const [kind, cat] of Object.entries(SHOP)) {
-    for (const it of cat.list) if (it.price > 0 && !it.special && !save[cat.owned].includes(it.id)) pool.push({ kind, it });
+    if (kind !== 'flag') for (const it of cat.list) if (it.price > 0 && !it.special && !save[cat.owned].includes(it.id)) pool.push({ kind, it });
   }
   save.coins -= GACHA_PRICE;
   const reveal = $('gachaReveal');
@@ -2299,13 +2560,14 @@ function selectRankRow(i) {
   if (!stage) return;
   const r = rankRows[i];
   if (!r) {
-    stage.setRider(riderOpts(), getBike(save.bike).color);
-    setFlexLabel(`MY RIDE · ${getBike(save.bike).name.toUpperCase()}`, flagActive() ? save.flagCode : null);
+    const look = myLook();
+    stage.setRider(look.opts, look.color);
+    setFlexLabel(`MY RIDE · ${getBike(save.bike).name.toUpperCase()}`, look.opts.flag);
     return;
   }
-  const opts = rowOpts(r, i === 0);
-  stage.setRider(opts, getBike(r.bike).color);
-  setFlexLabel(`#${i + 1} ${String(r.nickname).toUpperCase()} · ${getBike(r.bike).name.toUpperCase()}`, opts.flag);
+  const look = rowLook(r);
+  stage.setRider(look.opts, look.color);
+  setFlexLabel(`#${i + 1} ${String(r.nickname).toUpperCase()} · ${getBike(r.bike).name.toUpperCase()}`, i === 0 ? r.country : look.opts.flag);
 }
 
 async function renderRanking() {
@@ -2328,7 +2590,7 @@ async function renderRanking() {
     return;
   }
   regionTops[country] = res.top;
-  if (country === save.country && res.me) applyFlagStatus(res.me.rank === 1, country);
+  if (country === save.country && res.me) applyNationalStatus(res.me.rank === 1, res.me.country);
   rankRows = res.top;
   rankSel = rankRows.length ? 0 : -1;
   list.innerHTML = rankRows.length
@@ -2402,9 +2664,7 @@ $('authForm').addEventListener('submit', async (e) => {
   $('authPw2').value = '';
   sfx.mission();
   toast(`WELCOME, ${res.user.nickname.toUpperCase()}`);
-  // 기존 기록 반영 후 국가 1위(국기) 여부 확인
-  (save.best > 0 ? leaderboard.submit(scoreEntry(save.best, save.bestDist)) : Promise.resolve()).then(() => checkFlagStatus());
-  refreshMenu();
+  await onSignedIn({ uploadBest: true });
   if (backTo === 'gameover') {
     backTo = 'menu';
     show('gameover');
@@ -2413,40 +2673,88 @@ $('authForm').addEventListener('submit', async (e) => {
     renderAuth();
   }
 });
-$('btnLogout').addEventListener('click', () => {
-  auth.signOut();
-  applyFlagStatus(false, '', { silent: true });
+$('btnLogout').addEventListener('click', async () => {
+  await auth.signOut(); // 서버에 마지막 저장 후 게스트 기본값으로
+  serverAdmin = false;
   authTab = 'login';
   sfx.click();
   toast('SIGNED OUT');
-  refreshMenu();
+  onDataReplaced();
   renderAuth();
 });
 
 // ======================================================================
-// 국가 1위 전용 '국기' 아이템: 서버 순위로 잠금 해제 / 재잠금
+// 계정 데이터 (서버) 불러오기 / 화면 반영
+// ======================================================================
+// 서버에서 불러온 설정·장착 상태를 화면/사운드/바이크에 반영
+function onDataReplaced() {
+  sanitizeEquip();
+  sfx.setEnabled(save.settings.sound);
+  sfx.setMusic(save.settings.music);
+  screenRain.setEnabled(save.settings.wetFx);
+  applyQuality();
+  applyControlSettings();
+  if (bikeKey !== currentBikeKey()) {
+    buildBike();
+    if (G.state !== 'playing' && G.state !== 'crashing') resetBikePose();
+  }
+  refreshMenu();
+  if (currentScreen === 'garage') renderGarage();
+  if (currentScreen === 'settings') renderSettings();
+}
+
+// 로그인(자동 로그인 포함) 직후: 서버 데이터 → 국가 고정 → 국가대표 검증 → 출석 보상
+async function onSignedIn({ uploadBest = false } = {}) {
+  const res = await loadPlayerData();
+  if (!res.ok) {
+    toast(`SERVER  ·  ${res.error}`);
+    refreshMenu();
+    return;
+  }
+  serverAdmin = res.isAdmin;
+  if (!res.country) await lockCountry();
+  onDataReplaced();
+  if (serverAdmin) toast('ADMIN MODE  ·  ALL ITEMS UNLOCKED  ·  SCORES NOT RECORDED');
+  // 새 계정이면 게스트로 세운 기록을 올림
+  if (uploadBest && res.fresh && save.best > 0) await leaderboard.submit(scoreEntry(save.best, save.bestDist), { admin: isAdminMode() });
+  regionTopsDirty(save.country);
+  await checkNationalStatus();
+  showDailyStreak();
+  if (backTo === 'gameover' && currentScreen === 'auth') {
+    backTo = 'menu';
+    show('gameover');
+    submitGlobal();
+  } else if (currentScreen === 'auth') {
+    renderAuth();
+  }
+}
+
+// ======================================================================
+// 국가대표 바이크: 서버 순위(my_rank_v4 = 1)로만 지급 / 회수
 // ======================================================================
 function regionTopsDirty(code) {
   delete regionFetchAt[code];
   fetchRegionTop(code, true);
 }
 
-// unlocked 가 바뀌었을 때만 처리. 해제 → 자동 장착, 재잠금 → 기본 상태로 리셋
-function applyFlagStatus(unlocked, code, { silent = false } = {}) {
-  const was = save.flagUnlocked, prev = save.flagCode;
-  if (was === unlocked && (!unlocked || prev === code)) return;
-  save.flagUnlocked = unlocked;
-  save.flagCode = unlocked ? code : '';
-  save.flagEquipped = unlocked; // 1위 달성 즉시 자동 장착, 뺏기면 해제
-  persist();
-  if (!silent) {
-    if (unlocked) {
-      toast(`#1 IN ${countryName(code).toUpperCase()}  ·  NATIONAL FLAG UNLOCKED`);
+// unlocked 가 바뀌었을 때만 처리. 지급 → 즉시 장착, 회수 → 원래 바이크로 리셋
+function applyNationalStatus(unlocked, code, { silent = false } = {}) {
+  const was = save.nationalUnlocked;
+  if (was === unlocked && (!unlocked || save.nationalCode === code)) return;
+  save.nationalUnlocked = unlocked;
+  save.nationalCode = unlocked ? code : '';
+  if (unlocked) {
+    if (save.bike !== 'national') save.prevBike = save.bike;
+    save.bike = 'national';
+    if (!silent) {
+      toast(`#1 IN ${countryName(code).toUpperCase()}  ·  NATIONAL TEAM BIKE UNLOCKED`);
       sfx.fireworks();
-    } else if (was) {
-      toast(`YOU LOST #1 IN ${countryName(prev).toUpperCase()}  ·  FLAG LOCKED`);
     }
+  } else {
+    if (save.bike === 'national' && !isAdminMode()) save.bike = save.ownedBikes.includes(save.prevBike) ? save.prevBike : 'rookie';
+    if (was && !silent) toast('YOU LOST #1  ·  NATIONAL TEAM BIKE LOCKED');
   }
+  persist();
   if (bikeKey !== currentBikeKey()) {
     buildBike();
     if (G.state !== 'playing' && G.state !== 'crashing') resetBikePose();
@@ -2455,38 +2763,33 @@ function applyFlagStatus(unlocked, code, { silent = false } = {}) {
   else if (currentScreen === 'ranking' && rankSel < 0) selectRankRow(-1);
 }
 
-let flagChecking = false;
-async function checkFlagStatus() {
-  if (flagChecking) return;
-  if (!getSession()) {
-    applyFlagStatus(false, '', { silent: true });
+let nationalChecking = false;
+async function checkNationalStatus() {
+  if (nationalChecking) return;
+  if (!getSession() || !isServerReady()) {
+    applyNationalStatus(false, '', { silent: true });
     return;
   }
-  flagChecking = true;
+  nationalChecking = true;
   try {
-    const r = await leaderboard.myRank(save.country);
-    applyFlagStatus(Boolean(r && r.rank === 1), r?.country || save.country);
+    const r = await leaderboard.myRank();
+    applyNationalStatus(Boolean(r && r.rank === 1), r?.country || save.country);
   } catch (e) {
     // 통신 실패 시 마지막으로 검증된 상태 유지
   } finally {
-    flagChecking = false;
+    nationalChecking = false;
   }
 }
 
 // 1위를 뺏기는 순간을 잡기 위해 주기적으로 재확인 (화면이 보일 때만)
 setInterval(() => {
-  if (document.visibilityState === 'visible') checkFlagStatus();
+  if (document.visibilityState === 'visible') checkNationalStatus();
 }, FLAG_CHECK_INTERVAL_SEC * 1000);
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') checkFlagStatus();
+  if (document.visibilityState === 'visible') checkNationalStatus();
+  else flushSave({ keepalive: true }); // 앱 전환·종료 직전 서버에 저장
 });
-
-// 국가가 바뀌면(IP 재판별/설정 변경) 내 최고 기록을 새 국가로 옮기고 1위 여부 재확인
-async function onCountryChanged() {
-  if (getSession() && save.best > 0) await leaderboard.submit(scoreEntry(save.best, save.bestDist));
-  regionTopsDirty(save.country);
-  await checkFlagStatus();
-}
+window.addEventListener('pagehide', () => flushSave({ keepalive: true }));
 
 // ---------- 미션
 function renderMissions() {
@@ -2512,24 +2815,21 @@ function renderSettings() {
   for (const b of document.querySelectorAll('[data-setting]')) {
     b.textContent = SETTING_LABELS[b.dataset.setting](save.settings[b.dataset.setting]);
   }
-  const sel = $('regionSelect');
-  sel.innerHTML = `<option value="auto">AUTO (IP) · ${escapeHtml(countryName(save.country))}</option>${countryOptions(save.country)}`;
-  sel.value = save.countrySource === 'manual' ? save.country : 'auto';
+  const src = { server: 'LOCKED', ip: 'IP', tz: 'ESTIMATED' }[save.countrySource] || '';
+  $('countryLabel').innerHTML = `${flagBadge(save.country)}${escapeHtml(countryName(save.country))} <small class="muted">${src}</small>`;
+  const showAdmin = ADMIN_DEBUG_TOGGLE && DEBUG && !serverAdmin;
+  $('adminRow').classList.toggle('hidden', !showAdmin && !serverAdmin);
+  $('btnAdmin').textContent = isAdminMode() ? 'ON' : 'OFF';
+  $('btnAdmin').disabled = serverAdmin;
 }
-$('regionSelect').addEventListener('change', async (e) => {
-  const v = e.target.value;
-  if (v === 'auto') {
-    save.countrySource = 'tz';
-    persist();
-    await detectCountry({ force: true });
-  } else {
-    save.country = v;
-    save.countrySource = 'manual';
-    persist();
-  }
+// 디버그 전용 관리자 토글 (?debug). 이번 접속에만 적용, 랭킹 기록 차단
+$('btnAdmin').addEventListener('click', () => {
+  if (serverAdmin || !DEBUG) return;
+  debugAdmin = !debugAdmin;
+  sfx.click();
+  toast(debugAdmin ? 'ADMIN MODE ON  ·  SCORES NOT RECORDED' : 'ADMIN MODE OFF');
+  onDataReplaced();
   renderSettings();
-  toast(`COUNTRY  ·  ${countryName(save.country).toUpperCase()}`);
-  onCountryChanged();
 });
 function applyControlSettings() {
   document.body.classList.toggle('drag-mode', save.settings.touchMode === 'drag');
@@ -2689,10 +2989,14 @@ async function submitGlobal() {
     box.classList.add('hidden');
     return;
   }
+  if (isAdminMode()) {
+    box.innerHTML = `${icon('gear')} ADMIN MODE · this run is not recorded on the ranking`;
+    return;
+  }
   if (G.globalSubmitted === score) return;
   G.globalSubmitted = score;
   box.innerHTML = `${flagBadge(save.country)} Posting to the ${cname} ranking...`;
-  const res = await leaderboard.submit(scoreEntry(score, G.distance));
+  const res = await leaderboard.submit(scoreEntry(score, G.distance), { admin: isAdminMode() });
   if (!res.ok) {
     box.innerHTML = `${flagBadge(save.country)} Could not post score: ${escapeHtml(res.error)}`;
     G.globalSubmitted = false;
@@ -2700,12 +3004,12 @@ async function submitGlobal() {
   }
   let rank = '-';
   try {
-    const r = await leaderboard.myRank(save.country);
+    const r = await leaderboard.myRank();
     if (r) rank = `#${r.rank}`;
-    applyFlagStatus(Boolean(r && r.rank === 1), save.country);
+    applyNationalStatus(Boolean(r && r.rank === 1), r?.country || save.country);
   } catch (e) { /* 순위 조회 실패 시 표시만 생략 */ }
   regionTopsDirty(save.country);
-  box.innerHTML = `${flagBadge(save.country)} ${cname.toUpperCase()} RANK <b>${rank}</b> · BEST <b>${fmt(res.best)}</b>${ONLINE ? '' : ' <small class="muted">(local mode)</small>'}`;
+  box.innerHTML = `${flagBadge(save.country)} ${cname.toUpperCase()} RANK <b>${rank}</b> · BEST <b>${fmt(res.best)}</b>`;
 }
 
 function finalizeRun() {
@@ -2735,7 +3039,7 @@ $('btnHome').addEventListener('click', () => {
   goMenu();
 });
 
-const scoreEntry = (score, dist) => ({ score, dist, bike: save.bike, box: save.box, outfit: save.outfit, helmet: save.helmet, country: save.country });
+const scoreEntry = (score, dist) => ({ score, dist, bike: save.bike, box: save.box, outfit: save.outfit, helmet: save.helmet, flag: myLook().opts.flag || '' });
 
 $('btnContinue').addEventListener('click', () => {
   if (G.continued || MP.active || save.coins < CONTINUE_COST) return;
@@ -2771,7 +3075,7 @@ function reviveRun() {
   // 주변 장애물 정리 후 부활
   for (let i = cars.length - 1; i >= 0; i--) if (cars[i].z > -50) releaseCar(cars[i]);
   for (let i = stalls.length - 1; i >= 0; i--) if (stalls[i].z > -50) releaseStall(stalls[i]);
-  for (const pool of [conePool, signPool]) for (const c of pool.items) if (c.z > -50) c.active = false;
+  for (const pool of [conePool, signPool, potholePool, manholePool, cargoPool]) for (const c of pool.items) if (c.z > -50) c.active = false;
   G.x = clamp(G.x, -ROAD_HALF, ROAD_HALF);
   G.vx = 0;
   G.lean = 0;
@@ -3069,13 +3373,14 @@ function frame(now) {
 
 // ---------- 시작
 hydrateIcons();
-if (new URLSearchParams(location.search).has('debug')) {
+if (DEBUG) {
   window.__G = G;
   window.__MP = MP;
   window.__models = M.models;
   window.__cars = cars;
   window.__scene = scene;
   window.__renderer = renderer;
+  window.__save = save;
   window.__net = net;
   window.__dbg = {
     car: (type, lane, z) => spawnCar(z, { type, lane }),
@@ -3097,18 +3402,23 @@ if (new URLSearchParams(location.search).has('debug')) {
     crash: () => crash({ x: G.x - 1 }),
     boards: activeBoards,
     board: spawnBillboard,
+    jump: () => startJump({}),
+    hazard: (kind, x, z) => spawnInPool(HAZARDS.find((h) => h.kind === kind).pool, { x, z, rot: 0 }),
+    drop: (x, z) => { spawnDropZone(); const d = dropZones.find((k) => k.active && k.z === SPAWN_Z); if (d) Object.assign(d, { x, z }); },
+    power: (type) => applyPower(type),
+    admin: (on) => { debugAdmin = on; onDataReplaced(); },
   };
 }
 goMenu();
 $('loading').remove();
-// 자동 로그인 → IP 로 국가 판별 → 국기(국가 1위) 상태 검증
-auth.restore()
-  .then(refreshMenu)
-  .then(() => detectCountry())
-  .then((changed) => (changed ? onCountryChanged() : checkFlagStatus()));
-// 7일 연속 출석: 어제도 접속했으면 연속 +1, 아니면 1일차부터. 7일차엔 특수 헬멧
-const today = new Date().toDateString();
-if (save.lastDaily !== today) {
+// 7일 연속 출석 (로그인 계정만: 서버에 저장되므로)
+// 어제도 접속했으면 연속 +1, 아니면 1일차부터. 7일차엔 특수 헬멧
+let dailyShown = false;
+function showDailyStreak() {
+  if (dailyShown || !getSession() || !isServerReady() || currentScreen !== 'menu') return;
+  const today = new Date().toDateString();
+  if (save.lastDaily === today) return;
+  dailyShown = true;
   const yesterday = new Date(Date.now() - 86400000).toDateString();
   const day = save.lastDaily === yesterday ? (save.streak % 7) + 1 : 1;
   $('streakGrid').innerHTML = STREAK_REWARDS.map((c, i) => `<div class="${i + 1 < day ? 'done' : i + 1 === day ? 'today' : ''} ${i === 6 ? 'special' : ''}">
@@ -3132,4 +3442,9 @@ if (save.lastDaily !== today) {
     show('menu');
   }, { once: true });
 }
+
+// 시작: IP 로 국가 판별 → 자동 로그인 → 서버 데이터 → 국가 고정 → 국가대표 검증
+detectCountry()
+  .then(() => auth.restore())
+  .then((s) => (s ? onSignedIn() : refreshMenu()));
 requestAnimationFrame(frame);

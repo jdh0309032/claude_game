@@ -3,45 +3,46 @@ export const ZONE_LENGTH = 1000; // 매 1,000m 마다 다음 나라로
 
 // building: ruko | tube | neon | modern | brick | haussmann (models.js BUILDING_STYLES)
 // tree: palm | sakura | ginkgo | round, curb: warung | vending | cafe | tent | planter
+// drive: 'L' 좌측통행 / 'R' 우측통행
 // traffic: 특수 차량 비율 (tuktuk / scooter / taxi 추가 가중치)
 export const THEMES = [
   {
-    code: 'ID', country: 'Indonesia', city: 'Jakarta', welcome: 'SELAMAT DATANG DI JAKARTA',
+    code: 'ID', drive: 'L', country: 'Indonesia', city: 'Jakarta', welcome: 'SELAMAT DATANG DI JAKARTA',
     building: { ruko: 1 }, tree: 'palm', curb: 'warung', landmark: 'monas',
     tint: 0xffe0b0, tintAmt: 0.08, traffic: { scooter: 0.12 },
   },
   {
-    code: 'VN', country: 'Vietnam', city: 'Hanoi', welcome: 'CHAO MUNG DEN HA NOI',
+    code: 'VN', drive: 'R', country: 'Vietnam', city: 'Hanoi', welcome: 'CHAO MUNG DEN HA NOI',
     building: { tube: 0.8, ruko: 0.2 }, tree: 'palm', curb: 'tent', landmark: 'pagoda',
     tint: 0xffc59a, tintAmt: 0.12, traffic: { scooter: 0.35 },
   },
   {
-    code: 'TH', country: 'Thailand', city: 'Bangkok', welcome: 'WELCOME TO BANGKOK',
+    code: 'TH', drive: 'L', country: 'Thailand', city: 'Bangkok', welcome: 'WELCOME TO BANGKOK',
     building: { ruko: 0.5, neon: 0.5 }, tree: 'palm', curb: 'warung', landmark: 'temple',
     tint: 0xffb6e6, tintAmt: 0.12, traffic: { tuktuk: 0.25, scooter: 0.1 },
   },
   {
-    code: 'KR', country: 'South Korea', city: 'Seoul', welcome: 'WELCOME TO SEOUL',
+    code: 'KR', drive: 'R', country: 'South Korea', city: 'Seoul', welcome: 'WELCOME TO SEOUL',
     building: { neon: 0.75, modern: 0.25 }, tree: 'ginkgo', curb: 'tent', landmark: 'namsan',
     tint: 0xa9b8ff, tintAmt: 0.12, traffic: {},
   },
   {
-    code: 'JP', country: 'Japan', city: 'Tokyo', welcome: 'WELCOME TO TOKYO',
+    code: 'JP', drive: 'L', country: 'Japan', city: 'Tokyo', welcome: 'WELCOME TO TOKYO',
     building: { neon: 0.85, modern: 0.15 }, tree: 'sakura', curb: 'vending', landmark: 'tokyotower',
     tint: 0xffb3d1, tintAmt: 0.14, traffic: {},
   },
   {
-    code: 'SG', country: 'Singapore', city: 'Marina Bay', welcome: 'WELCOME TO SINGAPORE',
+    code: 'SG', drive: 'L', country: 'Singapore', city: 'Marina Bay', welcome: 'WELCOME TO SINGAPORE',
     building: { modern: 1 }, tree: 'palm', curb: 'planter', landmark: 'mbs',
     tint: 0xb8fff0, tintAmt: 0.1, traffic: {},
   },
   {
-    code: 'US', country: 'USA', city: 'New York', welcome: 'WELCOME TO NEW YORK',
+    code: 'US', drive: 'R', country: 'USA', city: 'New York', welcome: 'WELCOME TO NEW YORK',
     building: { brick: 0.8, modern: 0.2 }, tree: 'round', curb: 'cafe', landmark: 'empire',
     tint: 0xffd6a5, tintAmt: 0.08, traffic: { taxi: 0.35 },
   },
   {
-    code: 'FR', country: 'France', city: 'Paris', welcome: 'BIENVENUE A PARIS',
+    code: 'FR', drive: 'R', country: 'France', city: 'Paris', welcome: 'BIENVENUE A PARIS',
     building: { haussmann: 1 }, tree: 'round', curb: 'cafe', landmark: 'eiffel',
     tint: 0xd7e3ff, tintAmt: 0.1, traffic: {},
   },
@@ -49,6 +50,8 @@ export const THEMES = [
 
 export const themeIndexAt = (distance) => Math.floor(Math.max(0, distance) / ZONE_LENGTH) % THEMES.length;
 export const themeAt = (distance) => THEMES[themeIndexAt(distance)];
+// 통행 방향: +1 = 우측통행(한국·베트남·미국·프랑스), -1 = 좌측통행(인도네시아·태국·일본·싱가포르)
+export const driveSign = (distance) => (themeAt(distance).drive === 'L' ? -1 : 1);
 
 // 가중치 객체에서 하나 고르기 ({ ruko: 0.5, neon: 0.5 })
 export function pickWeighted(weights, r = Math.random()) {
@@ -263,6 +266,17 @@ export function drawFlag(ctx, code, w, h, ox = 0, oy = 0) {
   }
   x.restore();
 }
+
+// 국가대표 바이크 도색 [차체, 포인트] — 국기 대표색
+const LIVERY = {
+  ID: [0xce1126, 0xffffff], VN: [0xda251d, 0xffcd00], TH: [0x2d2a4a, 0xa51931], KR: [0xf4f4f4, 0xcd2e3a],
+  JP: [0xf4f4f4, 0xbc002d], SG: [0xef3340, 0xffffff], US: [0x3c3b6e, 0xb22234], FR: [0x0055a4, 0xef4135],
+  MY: [0x010066, 0xffcc00], PH: [0x0038a8, 0xce1126], CN: [0xde2910, 0xffde00], IN: [0xff9933, 0x138808],
+  GB: [0x012169, 0xc8102e], DE: [0x111111, 0xffce00], IT: [0x009246, 0xce2b37], ES: [0xaa151b, 0xf1bf00],
+  NL: [0x21468b, 0xae1c28], CA: [0xd52b1e, 0xffffff], RU: [0x0039a6, 0xd52b1e], UA: [0x0057b7, 0xffd700],
+  PL: [0xdc143c, 0xffffff],
+};
+export const nationalLivery = (code) => LIVERY[code] || [0x00b14f, 0xffd700];
 
 const flagCache = {};
 // 국기 캔버스 (DOM 배지 / 3D 텍스처 공용)

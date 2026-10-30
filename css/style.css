@@ -787,3 +787,48 @@ body.modal-open #touchControls { display: none !important; }
 }
 .swatch.flag-swatch { display: grid; place-items: center; background: #fff; }
 .swatch.flag-swatch .flag { width: 44px; height: 30px; margin: 0; }
+/* ======================================================================
+   관리자 모드 / 게스트 안내 / 국가대표 바이크
+   ====================================================================== */
+.menu-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.admin-badge { background: #ff006e; color: #fff; font-family: var(--display); font-size: 11px; letter-spacing: 1px; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.hud-admin { position: absolute; left: 50%; top: calc(max(10px, env(safe-area-inset-top)) + 106px); transform: translateX(-50%); z-index: 3; opacity: 0.9; font-size: 10px; padding: 3px 8px; }
+.guest-note { background: rgba(255, 255, 255, 0.2); color: #fff; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.admin-note { background: #ffe3ef; color: #b0004b; font-weight: 800; font-size: 12px; padding: 8px 12px; border-radius: 12px; margin-bottom: 8px; }
+.country-label { display: flex; align-items: center; gap: 4px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
+.national-item { border: 2px solid #ffd34d; background: linear-gradient(90deg, #fff8dc, #fff); }
+.national-item.locked { border: 2px dashed rgba(0, 0, 0, 0.15); background: #fff; }
+.bike-icon.mystery { display: grid; place-items: center; color: #fff; font-family: var(--display); font-size: 28px; background: repeating-linear-gradient(45deg, #2b2d42 0 8px, #3a3d58 8px 16px); border: 0; }
+.national-item .bike-icon .flag { margin: 0; box-shadow: 0 0 0 2px #fff; }
+
+/* ======================================================================
+   텍스트/숫자 넘침 방지 (큰 코인·점수·긴 닉네임)
+   ====================================================================== */
+.stat-pill, .stat-pill b, .stat-pill span, #hudScore, #hudBest, #hudDist, #hudCoins, #menuName, #accountLabel,
+.hero-score, .final-score, .rank-table td, .flex-label, .bike-card h4, .rank-me, #goGlobal, .challenge-chip {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.stat-pill { max-width: 46vw; min-width: 0; }
+.stat-pill b, .stat-pill span { min-width: 0; }
+#menuName { display: inline-block; max-width: 48vw; vertical-align: bottom; }
+.account-chip { max-width: 40vw; min-width: 0; }
+#accountLabel { display: block; min-width: 0; }
+.hero-info { min-width: 0; flex: 1; }
+.hero-score { font-size: clamp(26px, 9vw, 44px); }
+.final-score { font-size: clamp(34px, 12vw, 64px); max-width: 100%; }
+.rank-table { table-layout: fixed; }
+.rank-table th:first-child, .rank-table td:first-child { width: 36px; }
+.rank-table th.num, .rank-table td.num { width: 26%; }
+.rank-table th:last-child, .rank-table td:last-child { width: 26%; }
+.rank-table td small { display: block; overflow: hidden; text-overflow: ellipsis; }
+.bike-card > div:nth-child(2) { min-width: 0; }
+.bike-card h4 { display: block; }
+.bike-card .btn { white-space: nowrap; flex-shrink: 0; }
+#hudBest { max-width: 44vw; }
+.flex-label { max-width: calc(100% - 24px); }
+#goGlobal, .rank-me { white-space: normal; overflow-wrap: anywhere; }
+
+/* 모달이 열리면 터치 조작부는 숨기고, 화면(모달)보다 항상 아래 레이어 */
+.touch-layer { z-index: 10; }
+#hud { z-index: 5; }
+body.modal-open .touch-layer { display: none !important; pointer-events: none !important; }

@@ -33,8 +33,9 @@
 
     <!-- In-game HUD -->
     <div id="hud" class="hidden">
+      <span id="hudAdmin" class="admin-badge hud-admin hidden">ADMIN MODE · NOT RECORDED</span>
       <!-- Touch controls: left = steering / right cluster = NOS + brake lever + throttle grip -->
-      <div id="touchControls" class="hidden">
+      <div id="touchControls" class="touch-layer hidden">
         <div class="thumb left">
           <div id="steerBtns" class="steer-btns">
             <button id="btnLeft" class="tbtn steer" aria-label="Steer left" data-icon="left"></button>
@@ -98,6 +99,7 @@
           </div>
         </div>
         <p class="greet">Hi, <b id="menuName">Rider</b>. Ready to deliver?</p>
+        <div class="menu-chips"><span id="adminBadge" class="admin-badge hidden">ADMIN MODE</span><span id="guestNote" class="guest-note hidden"></span></div>
         <div id="challengeChip" class="challenge-chip hidden"><span data-icon="flag"></span><span id="challengeText">CHALLENGE ROAD</span><button id="btnClearChallenge" aria-label="Clear challenge">&times;</button></div>
       </header>
       <div class="app-sheet">
@@ -185,6 +187,7 @@
           <button data-tab="bike" class="on">BIKES</button>
           <button data-tab="box">BOXES</button>
           <button data-tab="rider">RIDER</button>
+          <button data-tab="flag">FLAGS</button>
         </div>
         <p id="garageHint" class="muted"></p>
         <div id="shopList" class="shop-list"></div>
@@ -225,17 +228,22 @@
         <div class="setting"><span><i data-icon="drop"></i>SCREEN WET EFFECT</span><button class="btn toggle" data-setting="wetFx"></button></div>
         <div class="setting"><span><i data-icon="gauge"></i>THROTTLE</span><button class="btn toggle" data-setting="throttle"></button></div>
         <div class="setting"><span><i data-icon="hand"></i>TOUCH STEERING</span><button class="btn toggle" data-setting="touchMode"></button></div>
-        <div class="setting"><span><i data-icon="globe"></i>MY COUNTRY</span><select id="regionSelect" class="select small"></select></div>
+        <div class="setting"><span><i data-icon="globe"></i>MY COUNTRY</span><span id="countryLabel" class="country-label"></span></div>
+        <div id="adminRow" class="setting hidden"><span><i data-icon="gear"></i>ADMIN MODE</span><button id="btnAdmin" class="btn toggle">OFF</button></div>
         <h3>HOW TO PLAY</h3>
         <ul class="howto">
           <li><b>NEAR MISS</b> — brush past cars for bonus points. Within 0.35 m is a <b class="gold">PERFECT</b> (x2).</li>
           <li><b>COMBO</b> — chain near misses within 3 s to raise your multiplier.</li>
-          <li><b>WRONG WAY</b> — the oncoming lanes on the left score x2. Watch out for head-on traffic.</li>
+          <li><b>KEEP LEFT / KEEP RIGHT</b> — Indonesia, Thailand, Japan and Singapore drive on the left; Korea, Vietnam, the USA and France drive on the right. Check the sign at each border gate.</li>
+          <li><b>WRONG WAY</b> — riding in the oncoming lanes scores x2. Watch out for head-on traffic.</li>
           <li><b>NITRO</b> — fill the gauge, then fire for 4 s of speed and invincibility. Smash cars out of the way.</li>
-          <li><b>RAMP TRUCK</b> — ride up the yellow ramp for an <b>AIR JUMP</b> bonus.</li>
+          <li><b>RAMP TRUCK</b> — ride up the yellow ramp to get airborne. In the air, steer to <b>SPIN</b> and use throttle / brake to <b>FLIP</b>. Land level for +500 (1 rotation), +1,200 (2) or +2,500 and a boost (3+). Land crooked and you crash.</li>
           <li><b>SQUALL</b> — 30 s of heavy rain (score x1.3). Puddles make you slide.</li>
           <li>Avoid roadside stalls, center-line cones and road signs, and cars drifting over the center line.</li>
-          <li><b>POWER-UPS</b> — Shield, Magnet, x2 Score, Slow-Mo.</li>
+          <li><b>POWER-UPS</b> (every 100-150 m) — Shield, Magnet, <b>Giant Mode</b> (huge and unstoppable), x2 Score, Slow-Mo.</li>
+          <li><b>ROAD HAZARDS</b> — potholes slow you down; open manholes and fallen cargo boxes end your run.</li>
+          <li><b>DROP ZONE</b> — ride straight through the glowing green zone at the road edge for +30 coins and a boost.</li>
+          <li><b>NATIONAL TEAM BIKE</b> — be #1 in your country to ride it. Lose #1 and it is taken back.</li>
         </ul>
         <button id="btnReset" class="btn danger">RESET PROGRESS</button>
         <button class="btn back" data-back data-icon="back"><span>BACK</span></button>

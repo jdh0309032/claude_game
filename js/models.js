@@ -431,6 +431,15 @@ export function createBike(color, opts = {}) {
   const out = OUTFIT_STYLES[opts.outfit] || OUTFIT_STYLES.jacket;
   const hel = HELMET_STYLES[opts.helmet] || HELMET_STYLES.basic;
   bikeShape(opts.style || 'scooter', body, det, glow, opts.accent);
+  if (opts.national) {
+    // 국가대표 바이크: 포인트 색 레이싱 스트라이프 + 금색 트림 + 번호판 #1
+    const ac = opts.accent ?? 0xffd700;
+    det.push(box(0.41, 0.07, 0.66, 0, 0.99, -0.3, ac, -0.35));
+    det.push(box(0.12, 0.31, 0.64, 0, 0.83, -0.3, ac, -0.35));
+    glow.push(box(0.43, 0.03, 0.03, 0, 0.92, -0.62, 0xffd700));
+    det.push(box(0.2, 0.14, 0.02, 0, 0.82, 0.82, 0xffffff));
+    det.push(box(0.04, 0.1, 0.025, 0, 0.82, 0.83, 0x111111));
+  }
   const JACKET = out.top;
   const PANTS = out.pants;
 
@@ -630,6 +639,100 @@ export function coneGeometry() {
   const band = new THREE.CylinderGeometry(0.15, 0.18, 0.12, 10);
   band.translate(0, 0.48, 0);
   return merge([base, paint(cone, 0xff6a00), paint(band, 0xf5f5f5)]);
+}
+
+// ---------- 도로 돌발 위험 요소
+// 공사 포트홀: 울퉁불퉁한 검은 구멍 + 부서진 아스팔트 조각
+export function potholeGeometry() {
+  const hole = new THREE.CircleGeometry(0.7, 14);
+  const pos = hole.attributes.position;
+  for (let i = 1; i < pos.count; i++) {
+    const k = 0.75 + ((i * 37) % 11) / 30;
+    pos.setXY(i, pos.getX(i) * k, pos.getY(i) * (k * 0.85));
+  }
+  hole.rotateX(-Math.PI / 2);
+  hole.translate(0, 0.02, 0);
+  const parts = [paint(hole.toNonIndexed(), 0x141414)];
+  for (const [x, z, r] of [[0.75, 0.2, 0.12], [-0.6, -0.45, 0.1], [0.2, -0.7, 0.09]]) {
+    const chip = new THREE.DodecahedronGeometry(r, 0);
+    chip.translate(x, r * 0.5, z);
+    parts.push(paint(chip, 0x4a4a4a));
+  }
+  return merge(parts);
+}
+
+// 열린 맨홀: 검은 구멍 + 옆으로 밀려난 뚜껑 + 경고 링
+export function manholeGeometry() {
+  const hole = new THREE.CircleGeometry(0.55, 18).rotateX(-Math.PI / 2).translate(0, 0.025, 0);
+  const rim = new THREE.RingGeometry(0.55, 0.68, 18).rotateX(-Math.PI / 2).translate(0, 0.03, 0);
+  const cover = new THREE.CylinderGeometry(0.55, 0.55, 0.06, 18).translate(0.75, 0.05, 0.55);
+  const tape = new THREE.TorusGeometry(0.85, 0.035, 4, 20).rotateX(-Math.PI / 2).translate(0, 0.45, 0);
+  const posts = [0, 1, 2, 3].map((i) => {
+    const a = (i / 4) * Math.PI * 2 + 0.4;
+    return box(0.06, 0.5, 0.06, Math.cos(a) * 0.85, 0.25, Math.sin(a) * 0.85, 0xff6a00);
+  });
+  return merge([paint(hole.toNonIndexed(), 0x050505), paint(rim.toNonIndexed(), 0x6c757d), paint(cover, 0x3d4247), paint(tape, 0xff6a00), ...posts]);
+}
+
+// 트럭에서 떨어진 화물 상자 더미
+export function cargoGeometry() {
+  return merge([
+    box(0.9, 0.6, 0.7, -0.15, 0.3, 0, 0xc68b59),
+    box(0.62, 0.5, 0.55, 0.35, 0.25, 0.25, 0xb07a4b),
+    box(0.55, 0.45, 0.5, -0.05, 0.83, -0.05, 0xd4a373, 0.3),
+    box(0.92, 0.08, 0.12, -0.15, 0.61, 0, 0xe9d8a6),
+    box(0.57, 0.07, 0.12, -0.05, 1.06, -0.05, 0xe9d8a6, 0.3),
+  ]);
+}
+
+// 배달 드롭존: 도로 가장자리 반투명 구역 + "DROP ZONE" 라벨
+let dropTex = null;
+function dropTexture() {
+  if (dropTex) return dropTex;
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 64;
+  const x = c.getContext('2d');
+  x.fillStyle = 'rgba(0,0,0,0.55)';
+  x.fillRect(0, 0, 256, 64);
+  x.fillStyle = '#39ff88';
+  x.font = 'bold 38px "Russo One", "Arial Black", sans-serif';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.fillText('DROP ZONE', 128, 34, 240);
+  dropTex = new THREE.CanvasTexture(c);
+  dropTex.colorSpace = THREE.SRGBColorSpace;
+  return dropTex;
+}
+export const DROP_ZONE = { width: 2.0, length: 8 };
+export function createDropZone() {
+  const grp = new THREE.Group();
+  const area = new THREE.Mesh(
+    new THREE.PlaneGeometry(DROP_ZONE.width, DROP_ZONE.length).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: 0x39ff88, transparent: true, opacity: 0.28, depthWrite: false }),
+  );
+  area.position.y = 0.04;
+  area.renderOrder = 1;
+  const edgeMat = new THREE.MeshBasicMaterial({ color: 0x39ff88 });
+  const edges = [
+    [DROP_ZONE.width, 0.06, 0, -DROP_ZONE.length / 2], [DROP_ZONE.width, 0.06, 0, DROP_ZONE.length / 2],
+    [0.06, DROP_ZONE.length, -DROP_ZONE.width / 2, 0], [0.06, DROP_ZONE.length, DROP_ZONE.width / 2, 0],
+  ].map(([w, l, x, z]) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, l).rotateX(-Math.PI / 2), edgeMat);
+    m.position.set(x, 0.05, z);
+    return m;
+  });
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: dropTexture(), transparent: true, depthWrite: false }));
+  label.scale.set(2.6, 0.65, 1);
+  label.position.set(0, 1.9, 0);
+  const beam = new THREE.Mesh(
+    new THREE.BoxGeometry(DROP_ZONE.width, 1.4, DROP_ZONE.length),
+    new THREE.MeshBasicMaterial({ color: 0x39ff88, transparent: true, opacity: 0.07, depthWrite: false }),
+  );
+  beam.position.y = 0.7;
+  grp.add(area, ...edges, beam, label);
+  grp.area = area;
+  return grp;
 }
 
 export function coinGeometry() {
@@ -1005,6 +1108,27 @@ export function createBorderGate(theme) {
     if (zf < 0) sign.rotation.y = Math.PI;
     grp.add(sign);
   }
+  // 통행 방향 안내판 (국경을 넘으면 좌/우측 통행이 바뀔 수 있음)
+  const kc = document.createElement('canvas');
+  kc.width = 512;
+  kc.height = 64;
+  const kx = kc.getContext('2d');
+  kx.fillStyle = '#ffd60a';
+  kx.fillRect(0, 0, 512, 64);
+  kx.fillStyle = '#111111';
+  kx.font = 'bold 40px "Russo One", "Arial Black", sans-serif';
+  kx.textAlign = 'center';
+  kx.textBaseline = 'middle';
+  const left = theme.drive === 'L';
+  kx.fillText(left ? '<<  KEEP LEFT' : 'KEEP RIGHT  >>', 256, 34, 480);
+  const ktex = new THREE.CanvasTexture(kc);
+  ktex.colorSpace = THREE.SRGBColorSpace;
+  for (const zf of [0.51, -0.51]) {
+    const k = new THREE.Mesh(new THREE.PlaneGeometry(7, 0.875), new THREE.MeshBasicMaterial({ map: ktex }));
+    k.position.set(0, 6.35, zf);
+    if (zf < 0) k.rotation.y = Math.PI;
+    grp.add(k);
+  }
   // 기둥 위 국기
   grp.flags = [];
   for (const sx of [-1, 1]) {
@@ -1267,6 +1391,7 @@ const POWER_STYLE = {
   magnet: { color: 0xff4d6d, icon: 'magnet' },
   x2:     { color: 0xffd60a, icon: 'x2' },
   slow:   { color: 0x80ed99, icon: 'clock' },
+  giant:  { color: 0xb5179e, icon: 'giant' },
 };
 
 export function createPowerUp(type) {
@@ -1277,6 +1402,7 @@ export function createPowerUp(type) {
   if (type === 'shield') geo = new THREE.IcosahedronGeometry(0.55, 0);
   else if (type === 'magnet') geo = new THREE.TorusGeometry(0.42, 0.15, 8, 16, Math.PI);
   else if (type === 'x2') geo = new THREE.OctahedronGeometry(0.6);
+  else if (type === 'giant') geo = new THREE.BoxGeometry(0.75, 0.75, 0.75);
   else { geo = new THREE.CylinderGeometry(0.5, 0.5, 0.18, 20); geo.rotateX(Math.PI / 2); }
   const core = new THREE.Mesh(geo, mat);
   core.position.y = 1.2;

@@ -18,6 +18,8 @@ const P = {
   left: '<path d="M15 5l-7 7 7 7"/>',
   right: '<path d="M9 5l7 7-7 7"/>',
   back: '<path d="M15 5l-7 7 7 7M8 12h12"/>',
+  giant: '<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/><path d="M9 15l6-6"/>',
+  flip: '<path d="M20 12a8 8 0 1 1-3-6.2"/><path d="M20 4v4h-4"/>',
   bolt: '<path d="M13 3L5 13h6l-1 8 8-10h-6z"/>',
   retry: '<path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4h4"/>',
   next: '<path d="M5 12h14M13 6l6 6-6 6"/>',

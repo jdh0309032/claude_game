@@ -18,11 +18,10 @@ export const GEO_IP_ENDPOINTS = [
   { url: 'https://get.geojs.io/v1/ip/country.json', pick: (j) => j.country },
   { url: 'https://ipapi.co/json/', pick: (j) => j.country_code || j.country },
 ];
-// 국가 재조회 주기 (시간). 사용자가 설정에서 직접 고른 국가는 덮어쓰지 않습니다.
-export const GEO_REFRESH_HOURS = 24;
+// 로그인 계정은 처음 판별된 국가가 서버(player_data.country_code)에 고정되어 이후 바뀌지 않습니다.
 
-// ---------- 국가 1위 전용 '국기' 아이템
-// 내 국가 랭킹 1위 여부를 서버(my_rank_v3)에서 이 주기(초)로 다시 확인합니다.
+// ---------- 국가 1위 전용 '국가대표 바이크'
+// 내 국가 랭킹 1위 여부를 서버(my_rank_v4)에서 이 주기(초)로 다시 확인합니다.
 export const FLAG_CHECK_INTERVAL_SEC = 30;
 
 // ---------- 1v1 멀티플레이 (PeerJS)
@@ -82,7 +81,19 @@ export const BIKES = [
   { id: 'enduro',  name: 'Off-Road Enduro',    price: 8000,  maxKmh: 235, accel: 1.35, handling: 1.42, color: 0xffd60a, style: 'enduro',  desc: 'Shrugs off puddles' },
   { id: 'phantom', name: 'Phantom X',          price: 12000, maxKmh: 280, accel: 1.5,  handling: 1.45, color: 0x7b2cbf, style: 'sport',   desc: 'Legendary hyperbike' },
   { id: 'cyber',   name: 'Cyber Pulse 3000',   price: 15000, maxKmh: 310, accel: 1.65, handling: 1.55, color: 0x101820, style: 'cyber',   desc: 'Neon-lit future machine' },
+  // 국가대표 바이크: 구매 불가. 내 국가 랭킹 실시간 1위일 때만 자동 지급·장착, 1위를 뺏기면 회수
+  { id: 'national', name: 'National Team',    price: -1,    maxKmh: 320, accel: 1.7,  handling: 1.6,  color: 0xffffff, style: 'sport',   desc: 'Only for the current #1 rider of your country', special: 'national' },
 ];
+
+// 상점 국기 (헬멧 스티커 + 차체 데칼 + 배달 상자 깃발). 주행 테마 8개국 10,000 / 그 외 8,000 코인
+export const FLAG_SHOP_CODES = ['ID', 'VN', 'TH', 'KR', 'JP', 'SG', 'US', 'FR', 'MY', 'PH', 'CN', 'IN', 'GB', 'DE', 'IT', 'ES', 'NL', 'CA', 'RU', 'UA', 'PL'];
+export const FLAG_PRICE_THEME = 10000;
+export const FLAG_PRICE_OTHER = 8000;
+
+// ---------- 관리자 모드
+// 관리자 계정은 Supabase 의 player_data.is_admin = true 로 지정합니다 (004 마이그레이션 참고).
+// ?debug 로 열었을 때 설정 화면에 ADMIN MODE 토글을 보여줄지 (이 기기·이번 접속에만 적용)
+export const ADMIN_DEBUG_TOGGLE = true;
 
 // 배달 상자 / 라이더 의상 / 헬멧: 기본 1종(무료) + 유료 6종 (500 ~ 3,000 코인)
 export const BOXES = [

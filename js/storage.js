@@ -1,10 +1,12 @@
-// 저장 데이터(코인, 랭킹, 바이크, 커스텀 파츠, 미션, 설정) — localStorage 기반
-// + 계정 인증 / 글로벌 랭킹 API (Supabase 설정 시 온라인, 아니면 로컬 모드)
-import { SUPABASE_URL, SUPABASE_ANON_KEY, ID_EMAIL_DOMAIN, GEO_IP_ENDPOINTS, GEO_REFRESH_HOURS } from './config.js';
+// 플레이어 데이터(코인, 보유 아이템, 최고 기록, 미션, 설정) — Supabase 서버 저장
+// 기기에는 로그인 토큰만 보관하고, 게임 데이터는 localStorage 에 저장하지 않습니다.
+// 게스트(비로그인)는 메모리에서만 플레이하며 새로고침하면 진행이 사라집니다.
+import { SUPABASE_URL, SUPABASE_ANON_KEY, ID_EMAIL_DOMAIN, GEO_IP_ENDPOINTS } from './config.js';
 
-const KEY = 'motorush.save.v1';
+// 로그인 유지용 토큰 (게임 데이터 아님)
 const SESSION_KEY = 'grabrider.session.v1';
-const LOCAL_DB_KEY = 'grabrider.localdb.v1';
+// 이전 버전이 기기에 남긴 게임 데이터 키 — 읽지 않고 지움
+const LEGACY_KEYS = ['motorush.save.v1', 'grabrider.localdb.v1'];
 
 // 상점 가격표는 config.js 에서 관리
 export { BIKES, BOXES, OUTFITS, HELMETS } from './config.js';
@@ -27,75 +29,153 @@ export const MISSION_DEFS = {
   jump:     { label: (n) => `Air jump off ${n} ramp trucks`,         targets: [1, 2, 3, 5, 8, 12] },
 };
 
+// 서버(player_data.data)에 저장하는 키
+const SERVER_KEYS = [
+  'coins', 'best', 'bestDist', 'ownedBikes', 'bike', 'prevBike', 'ownedBoxes', 'box', 'ownedOutfits', 'outfit',
+  'ownedHelmets', 'helmet', 'ownedFlags', 'flag', 'streak', 'lastDaily', 'adCooldownUntil', 'lastName',
+  'missions', 'missionLevels', 'settings', 'stats',
+];
+
 function defaults() {
   return {
     coins: 0,
     best: 0,
+    bestDist: 0,
     ownedBikes: ['rookie'],
     bike: 'rookie',
+    prevBike: 'rookie', // 국가대표 바이크 회수 시 돌아갈 바이크
     ownedBoxes: ['basic'],
     box: 'basic',
     ownedOutfits: ['jacket'],
     outfit: 'jacket',
     ownedHelmets: ['basic'],
-    country: guessRegion(), // 랭킹 국가 (IP 조회로 갱신)
-    countrySource: 'tz', // 'tz' 시간대 추정 | 'ip' IP 조회 | 'manual' 사용자가 설정에서 선택
-    countryCheckedAt: 0,
-    flagUnlocked: false, // 국가 1위 전용 국기 (서버 검증 결과)
-    flagCode: '',
-    flagEquipped: true,
-    bestDist: 0,
-    streak: 0,
-    adCooldownUntil: 0,
     helmet: 'basic',
-    lastName: '',
+    ownedFlags: [],
+    flag: '', // 장착한 상점 국기 ('' = 없음)
+    streak: 0,
     lastDaily: '',
+    adCooldownUntil: 0,
+    lastName: '',
     missions: [],
     missionLevels: {},
     settings: { sound: true, music: true, vibrate: true, quality: 'high', touchMode: 'buttons', throttle: 'auto', wetFx: true },
     stats: { runs: 0, totalDist: 0, totalNear: 0 },
+    // ---- 아래는 서버 data 에 저장하지 않는 런타임 상태
+    country: guessRegion(), // 랭킹 국가 (IP 판별 → 로그인 시 서버에 고정된 값)
+    countrySource: 'tz',    // 'tz' 시간대 추정 | 'ip' IP 판별 | 'server' 서버 고정값
+    nationalUnlocked: false, // 국가대표 바이크 (서버 순위 검증 결과)
+    nationalCode: '',
   };
 }
 
-function load() {
+export const save = defaults();
+
+try { for (const k of LEGACY_KEYS) localStorage.removeItem(k); } catch (e) { /* ignore */ }
+
+// 서버 데이터로 save 를 통째로 교체 (없는 키는 기본값)
+function applyData(d) {
   const def = defaults();
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) {
-      const d = JSON.parse(raw);
-      const merged = {
-        ...def,
-        ...d,
-        settings: { ...def.settings, ...(d.settings || {}) },
-        stats: { ...def.stats, ...(d.stats || {}) },
-        missionLevels: { ...(d.missionLevels || {}) },
-      };
-      if (merged.settings.touchMode === 'zones') merged.settings.touchMode = 'buttons';
-      merged.ownedBikes = [...new Set(merged.ownedBikes.map((id) => LEGACY_BIKES[id] || id))];
-      merged.bike = LEGACY_BIKES[merged.bike] || merged.bike;
-      // 이전 버전: 지역(region) → 국가(country), 기기 로컬 랭킹 삭제
-      if (!d.country && isCountryCode(d.region)) merged.country = d.region;
-      if (!isCountryCode(merged.country)) merged.country = guessRegion();
-      delete merged.region;
-      delete merged.ranking;
-      delete merged.lastRankId;
-      return merged;
-    }
-  } catch (e) { /* 저장소 사용 불가 시 기본값 */ }
-  return def;
+  const keep = { country: save.country, countrySource: save.countrySource, nationalUnlocked: save.nationalUnlocked, nationalCode: save.nationalCode };
+  for (const k of Object.keys(save)) delete save[k];
+  Object.assign(save, def, keep);
+  for (const k of SERVER_KEYS) if (d && d[k] !== undefined) save[k] = d[k];
+  save.settings = { ...def.settings, ...(d?.settings || {}) };
+  save.stats = { ...def.stats, ...(d?.stats || {}) };
+  save.missionLevels = { ...(d?.missionLevels || {}) };
+  for (const k of ['ownedBikes', 'ownedBoxes', 'ownedOutfits', 'ownedHelmets', 'ownedFlags']) {
+    if (!Array.isArray(save[k])) save[k] = def[k];
+  }
+  save.ownedBikes = [...new Set(save.ownedBikes.map((id) => LEGACY_BIKES[id] || id))].filter((id) => id !== 'national');
+  save.bike = LEGACY_BIKES[save.bike] || save.bike;
+  if (save.settings.touchMode === 'zones') save.settings.touchMode = 'buttons';
+  save.coins = Math.max(0, Math.floor(Number(save.coins) || 0));
+  ensureMissions();
 }
 
-export const save = load();
+const serverData = () => Object.fromEntries(SERVER_KEYS.map((k) => [k, save[k]]));
 
+// ---------- 서버 동기화
+let serverReady = false; // 현재 로그인 계정의 데이터를 서버에서 불러왔는지
+let saveTimer = null;
+let saving = null;
+let saveAgain = false;
+export const isServerReady = () => serverReady;
+export const syncState = { lastError: '', lastSavedAt: 0 };
+
+// 변경 즉시 서버로 저장 (짧게 묶어서 전송). 게스트·서버 미준비 상태에선 아무것도 안 함
 export function persist() {
-  try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* ignore */ }
+  if (!serverReady || !session) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => flushSave(), 300);
+}
+
+export async function flushSave({ keepalive = false } = {}) {
+  clearTimeout(saveTimer);
+  if (!serverReady || !session) return false;
+  if (saving) {
+    saveAgain = true;
+    return saving;
+  }
+  saving = (async () => {
+    try {
+      await ensureFreshToken();
+      await sb('/rest/v1/rpc/save_player_data', { method: 'POST', auth: true, body: { p_data: serverData() }, keepalive });
+      syncState.lastError = '';
+      syncState.lastSavedAt = Date.now();
+      return true;
+    } catch (e) {
+      syncState.lastError = friendly(e);
+      console.warn('[save] failed', e);
+      return false;
+    } finally {
+      saving = null;
+      if (saveAgain) {
+        saveAgain = false;
+        flushSave();
+      }
+    }
+  })();
+  return saving;
+}
+
+// 로그인 직후 서버 데이터 불러오기. 서버에 데이터가 없으면(새 계정) 지금까지의 게스트 진행을 올림
+// 반환: { ok, isAdmin, country, fresh } / 실패 시 { ok: false, error }
+export async function loadPlayerData() {
+  serverReady = false;
+  if (!session) return { ok: false, error: 'Sign in required' };
+  try {
+    await ensureFreshToken();
+    const rows = await sb('/rest/v1/rpc/load_player_data', { method: 'POST', auth: true, body: {} });
+    const row = rows && rows[0];
+    const empty = !row || !row.data || !Object.keys(row.data).length;
+    if (empty) {
+      ensureMissions();
+    } else {
+      applyData(row.data);
+    }
+    serverReady = true;
+    if (empty) await flushSave();
+    if (row?.country_code) {
+      save.country = row.country_code;
+      save.countrySource = 'server';
+    }
+    return { ok: true, isAdmin: Boolean(row?.is_admin), country: row?.country_code || null, fresh: empty };
+  } catch (e) {
+    return { ok: false, error: isMissingSchema(e) ? 'Server needs the 004 database migration' : friendly(e) };
+  }
+}
+
+// 로그아웃: 메모리 데이터를 게스트 기본값으로
+export function resetToGuest() {
+  serverReady = false;
+  clearTimeout(saveTimer);
+  applyData({});
+  save.nationalUnlocked = false;
+  save.nationalCode = '';
 }
 
 export function resetSave() {
-  const def = defaults();
-  for (const k of Object.keys(save)) delete save[k];
-  Object.assign(save, def);
-  ensureMissions();
+  applyData({});
   persist();
 }
 
@@ -133,44 +213,31 @@ export function missionText(m) {
 ensureMissions();
 
 // ======================================================================
-// 계정 인증 & 글로벌 랭킹
+// 계정 인증 & 국가 랭킹 (Supabase)
 // ======================================================================
 export const ONLINE = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 const ID_RULE = /^[a-z0-9_]{3,12}$/;
 
-function readJSON(key, fallback) {
-  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch (e) { return fallback; }
+function readSession() {
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch (e) { return null; }
 }
-function writeJSON(key, v) {
-  try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { /* ignore */ }
-}
-
-let session = readJSON(SESSION_KEY, null);
+let session = readSession();
+if (session && session.mode !== 'online') session = null; // 예전 로컬 모드 계정은 폐지
 export const getSession = () => session;
 function setSession(s) {
   session = s;
-  if (s) writeJSON(SESSION_KEY, s);
-  else try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
+  try {
+    if (s) localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    else localStorage.removeItem(SESSION_KEY);
+  } catch (e) { /* ignore */ }
 }
-
-async function hashPassword(pw, salt) {
-  const data = new TextEncoder().encode(salt + ':' + pw);
-  if (globalThis.crypto && crypto.subtle) {
-    const buf = await crypto.subtle.digest('SHA-256', data);
-    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-  }
-  // 보안 컨텍스트가 아닐 때(http://사설IP 등) 대체 해시 — 로컬 모드 전용
-  let h = 2166136261;
-  for (const b of data) h = Math.imul(h ^ b, 16777619);
-  return (h >>> 0).toString(16);
-}
-const randomToken = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
 
 // ---------- Supabase REST
-async function sb(path, { method = 'GET', body, auth = false, headers = {} } = {}) {
+async function sb(path, { method = 'GET', body, auth = false, headers = {}, keepalive = false } = {}) {
+  if (!ONLINE) throw new Error('No server configured (js/config.js)');
   const h = { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json', ...headers };
   if (auth && session?.token) h.Authorization = `Bearer ${session.token}`;
-  const res = await fetch(SUPABASE_URL + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(SUPABASE_URL + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined, keepalive });
   const text = await res.text();
   const json = text ? JSON.parse(text) : null;
   if (!res.ok) {
@@ -188,14 +255,13 @@ function sessionFromToken(t, id) {
 }
 
 async function ensureFreshToken() {
-  if (!ONLINE || !session || session.mode !== 'online') return;
+  if (!session) return;
   if (Date.now() < session.expiresAt - 60000) return;
   const t = await sb('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: { refresh_token: session.refresh } });
   setSession(sessionFromToken(t, session.id));
 }
 
-// ---------- 로컬 모드 DB (이 브라우저 안에서만 공유)
-const localDB = () => readJSON(LOCAL_DB_KEY, { users: {}, board: {} });
+const isMissingSchema = (e) => e && (e.status === 400 || e.status === 404) && /column|function|schema cache|does not exist|relation/i.test(e.message);
 
 const friendly = (e) => {
   const m = String(e?.message || e);
@@ -203,6 +269,8 @@ const friendly = (e) => {
   if (/invalid login|invalid credentials/i.test(m)) return 'Wrong ID or password';
   if (/failed to fetch|network/i.test(m)) return 'Cannot reach the server';
   if (/rate limit/i.test(m)) return 'Too many attempts, try again later';
+  if (/country not locked/i.test(m)) return 'Country not detected yet';
+  if (isMissingSchema(e)) return 'Server needs the 004 database migration';
   return m;
 };
 
@@ -218,18 +286,9 @@ export const auth = {
     const err = this.validate(id, pw);
     if (err) return { ok: false, error: err };
     try {
-      if (ONLINE) {
-        const t = await sb('/auth/v1/signup', { method: 'POST', body: { email: `${id}@${ID_EMAIL_DOMAIN}`, password: pw, data: { nickname: id } } });
-        if (!t.access_token) return { ok: false, error: 'Turn off "Confirm email" in Supabase Auth settings' };
-        setSession(sessionFromToken(t, id));
-      } else {
-        const db = localDB();
-        if (db.users[id]) return { ok: false, error: 'That ID is already taken' };
-        const salt = randomToken();
-        db.users[id] = { salt, hash: await hashPassword(pw, salt), created: Date.now() };
-        writeJSON(LOCAL_DB_KEY, db);
-        setSession({ mode: 'local', id, nickname: id, token: randomToken() });
-      }
+      const t = await sb('/auth/v1/signup', { method: 'POST', body: { email: `${id}@${ID_EMAIL_DOMAIN}`, password: pw, data: { nickname: id } } });
+      if (!t.access_token) return { ok: false, error: 'Turn off "Confirm email" in Supabase Auth settings' };
+      setSession(sessionFromToken(t, id));
       return { ok: true, user: session };
     } catch (e) {
       return { ok: false, error: friendly(e) };
@@ -240,14 +299,8 @@ export const auth = {
     id = id.trim().toLowerCase();
     if (!id || !pw) return { ok: false, error: 'Enter your ID and password' };
     try {
-      if (ONLINE) {
-        const t = await sb('/auth/v1/token?grant_type=password', { method: 'POST', body: { email: `${id}@${ID_EMAIL_DOMAIN}`, password: pw } });
-        setSession(sessionFromToken(t, id));
-      } else {
-        const u = localDB().users[id];
-        if (!u || (await hashPassword(pw, u.salt)) !== u.hash) return { ok: false, error: 'Wrong ID or password' };
-        setSession({ mode: 'local', id, nickname: id, token: randomToken() });
-      }
+      const t = await sb('/auth/v1/token?grant_type=password', { method: 'POST', body: { email: `${id}@${ID_EMAIL_DOMAIN}`, password: pw } });
+      setSession(sessionFromToken(t, id));
       return { ok: true, user: session };
     } catch (e) {
       return { ok: false, error: friendly(e) };
@@ -257,14 +310,12 @@ export const auth = {
   // 앱 시작 시 저장된 토큰으로 자동 로그인
   async restore() {
     if (!session) return null;
+    if (!ONLINE) {
+      setSession(null);
+      return null;
+    }
     try {
-      if (session.mode === 'online') {
-        if (!ONLINE) { setSession(null); return null; }
-        await ensureFreshToken();
-      } else if (!localDB().users[session.id]) {
-        setSession(null);
-        return null;
-      }
+      await ensureFreshToken();
       return session;
     } catch (e) {
       if (e.status === 400 || e.status === 401) setSession(null);
@@ -272,9 +323,11 @@ export const auth = {
     }
   },
 
-  signOut() {
-    if (ONLINE && session?.mode === 'online') sb('/auth/v1/logout', { method: 'POST', auth: true }).catch(() => {});
+  async signOut() {
+    await flushSave();
+    if (session) sb('/auth/v1/logout', { method: 'POST', auth: true }).catch(() => {});
     setSession(null);
+    resetToGuest();
   },
 };
 
@@ -294,77 +347,58 @@ async function fetchCountry(ep) {
   }
 }
 
-// 반환: 바뀐 경우 새 국가 코드, 그대로면 null. 사용자가 직접 고른 국가는 건드리지 않음
-export async function detectCountry({ force = false } = {}) {
-  if (save.countrySource === 'manual' && !force) return null;
-  const fresh = save.countrySource === 'ip' && Date.now() - save.countryCheckedAt < GEO_REFRESH_HOURS * 3600e3;
-  if (fresh && !force) return null;
+// 접속마다 IP 로 판별 (사용자가 직접 바꿀 수 없음). 서버에 고정된 국가가 있으면 그 값이 우선
+export async function detectCountry() {
+  if (save.countrySource === 'server') return save.country;
   for (const ep of GEO_IP_ENDPOINTS || []) {
     const code = await fetchCountry(ep);
     if (!code) continue;
-    const changed = code !== save.country;
     save.country = code;
     save.countrySource = 'ip';
-    save.countryCheckedAt = Date.now();
-    persist();
-    return changed ? code : null;
+    return code;
   }
   return null;
 }
 
-// 랭킹 DB 버전: 3 = country_code (003 마이그레이션), 2 = region (002), 1 = 기본 스키마
-let schema = 3;
-const COLS = {
-  3: 'user_id,nickname,score,bike,dist,country_code,box,outfit,helmet',
-  2: 'user_id,nickname,score,bike,dist,region,box,outfit,helmet',
-  1: 'user_id,nickname,score,bike',
-};
-const isMissingSchema = (e) => e && (e.status === 400 || e.status === 404) && /column|function|schema cache|does not exist/i.test(e.message);
-function downgrade(err) {
-  if (!isMissingSchema(err) || schema <= 1) throw err;
-  schema -= 1;
-  console.warn(`[leaderboard] DB schema v${schema + 1} not found, falling back to v${schema}. Run supabase/migrations/003_country_flag.sql`);
+// 로그인 계정의 국가를 서버에 고정 (이미 고정돼 있으면 그 값이 돌아옴)
+export async function lockCountry() {
+  if (!session) return null;
+  if (save.countrySource === 'server') return save.country;
+  try {
+    await ensureFreshToken();
+    const cc = await sb('/rest/v1/rpc/lock_country', { method: 'POST', auth: true, body: { p_country: save.country } });
+    if (isCountryCode(cc)) {
+      save.country = cc;
+      save.countrySource = 'server';
+    }
+    return cc;
+  } catch (e) {
+    console.warn('[country] lock failed', e);
+    return null;
+  }
 }
-const rowCountry = (r) => r.country_code || r.region || null;
-export const schemaLevel = () => schema;
 
-// entry: { score, dist, bike, box, outfit, helmet, country }
+const COLS = 'user_id,nickname,score,bike,dist,country_code,box,outfit,helmet,flag';
+
+// entry: { score, dist, bike, box, outfit, helmet, flag }
 export const leaderboard = {
-  // 게임 오버 시 최고 점수 전송 (서버/로컬 모두 본인 최고점만 유지)
-  async submit(entry) {
+  // 게임 오버 시 최고 점수 전송. 국가는 서버에 고정된 값을 사용 (클라이언트가 보내지 않음)
+  // admin: true 면 전송 자체를 하지 않음 (서버에서도 관리자 계정은 기록 거부)
+  async submit(entry, { admin = false } = {}) {
+    if (admin) return { ok: false, skipped: true, error: 'Admin mode: scores are not recorded' };
     if (!session) return { ok: false, error: 'Sign in required' };
-    const e = { ...entry, score: Math.floor(entry.score), dist: Math.floor(entry.dist || 0) };
     try {
-      if (session.mode === 'online') {
-        await ensureFreshToken();
-        for (;;) {
-          try {
-            let best;
-            if (schema === 3) {
-              best = await sb('/rest/v1/rpc/submit_score_v3', {
-                method: 'POST', auth: true,
-                body: { p_score: e.score, p_dist: e.dist, p_bike: e.bike, p_box: e.box, p_outfit: e.outfit, p_helmet: e.helmet, p_country: e.country, p_nickname: session.nickname },
-              });
-            } else if (schema === 2) {
-              best = await sb('/rest/v1/rpc/submit_score_v2', {
-                method: 'POST', auth: true,
-                body: { p_score: e.score, p_dist: e.dist, p_bike: e.bike, p_box: e.box, p_outfit: e.outfit, p_helmet: e.helmet, p_region: e.country, p_nickname: session.nickname },
-              });
-            } else {
-              best = await sb('/rest/v1/rpc/submit_score', { method: 'POST', auth: true, body: { p_score: e.score, p_bike: e.bike, p_nickname: session.nickname } });
-            }
-            return { ok: true, best };
-          } catch (err) {
-            downgrade(err);
-          }
-        }
-      }
-      const db = localDB();
-      const cur = db.board[session.id];
-      if (!cur || e.score > cur.score) db.board[session.id] = { nickname: session.nickname, ...e, updatedAt: Date.now() };
-      else db.board[session.id].country = e.country;
-      writeJSON(LOCAL_DB_KEY, db);
-      return { ok: true, best: db.board[session.id].score };
+      await ensureFreshToken();
+      if (save.countrySource !== 'server') await lockCountry();
+      const best = await sb('/rest/v1/rpc/submit_score_v4', {
+        method: 'POST', auth: true,
+        body: {
+          p_score: Math.floor(entry.score), p_dist: Math.floor(entry.dist || 0), p_bike: entry.bike, p_box: entry.box,
+          p_outfit: entry.outfit, p_helmet: entry.helmet, p_flag: entry.flag || '', p_nickname: session.nickname,
+        },
+      });
+      if (best === null) return { ok: false, skipped: true, error: 'Admin account: scores are not recorded' };
+      return { ok: true, best };
     } catch (err) {
       return { ok: false, error: friendly(err) };
     }
@@ -373,74 +407,28 @@ export const leaderboard = {
   // 국가별 TOP 10 + 내 순위
   async fetchTop({ country } = {}) {
     try {
-      if (ONLINE) {
-        let top;
-        for (;;) {
-          if (schema === 1) return { ok: false, error: 'Country ranking needs the 003 database migration' };
-          const col = schema === 3 ? 'country_code' : 'region';
-          const order = schema === 3 ? 'score.desc,best_at.asc' : 'score.desc';
-          try {
-            top = await sb(`/rest/v1/leaderboard?select=${COLS[schema]}&${col}=eq.${encodeURIComponent(country)}&score=gt.0&order=${order}&limit=10`);
-            break;
-          } catch (err) {
-            downgrade(err);
-          }
-        }
-        let me = null;
-        if (session?.mode === 'online') {
-          await ensureFreshToken();
-          const r = await this.myRank(country);
-          if (r) me = { ...r, nickname: session.nickname };
-        }
-        return {
-          ok: true, online: true, schema,
-          top: top.map((t) => ({ ...t, country: rowCountry(t), isMe: t.user_id === session?.userId })),
-          me,
-        };
+      const top = await sb(`/rest/v1/leaderboard?select=${COLS}&country_code=eq.${encodeURIComponent(country)}&score=gt.0&order=score.desc,best_at.asc&limit=10`);
+      let me = null;
+      if (session && country === save.country) {
+        const r = await this.myRank();
+        if (r) me = { ...r, nickname: session.nickname };
       }
-      const all = Object.entries(localDB().board)
-        .map(([id, v]) => ({ id, ...v, country: v.country || v.region }))
-        .filter((r) => r.country === country && r.score > 0)
-        .sort((a, b) => b.score - a.score || a.updatedAt - b.updatedAt);
-      const idx = session ? all.findIndex((r) => r.id === session.id) : -1;
       return {
-        ok: true,
-        online: false,
-        schema: 3,
-        top: all.slice(0, 10).map((r) => ({ ...r, isMe: r.id === session?.id })),
-        me: idx >= 0 ? { rank: idx + 1, score: all[idx].score, country, nickname: all[idx].nickname } : null,
+        ok: true, online: true,
+        top: top.map((t) => ({ ...t, country: t.country_code, isMe: t.user_id === session?.userId })),
+        me,
       };
     } catch (err) {
       return { ok: false, error: friendly(err) };
     }
   },
 
-  // 내 국가 순위 (country 생략 시 DB 에 저장된 내 국가 기준). 기록 없음 → null, 통신 실패 → throw
-  async myRank(country = null) {
+  // 내 국가 순위 (서버에 고정된 국가 기준). 기록 없음 → null, 통신 실패 → throw
+  async myRank() {
     if (!session) return null;
-    if (session.mode !== 'online') {
-      const db = localDB();
-      const mine = db.board[session.id];
-      const cc = country || mine?.country || mine?.region;
-      if (!mine || mine.score <= 0 || (mine.country || mine.region) !== cc) return null;
-      const all = Object.values(db.board).filter((r) => (r.country || r.region) === cc && r.score > 0)
-        .sort((a, b) => b.score - a.score || a.updatedAt - b.updatedAt);
-      return { rank: all.indexOf(mine) + 1, score: mine.score, country: cc };
-    }
     await ensureFreshToken();
-    for (;;) {
-      try {
-        let r;
-        if (schema === 3) r = await sb('/rest/v1/rpc/my_rank_v3', { method: 'POST', auth: true, body: { p_country: country } });
-        else if (schema === 2) {
-          if (!country) return null; // v2 에는 "내 국가" 조회가 없음
-          r = await sb('/rest/v1/rpc/my_rank_v2', { method: 'POST', auth: true, body: { p_region: country } });
-        } else return null;
-        if (!r || !r[0]) return null;
-        return { rank: Number(r[0].rank), score: r[0].score, country: r[0].country_code || country };
-      } catch (err) {
-        downgrade(err);
-      }
-    }
+    const r = await sb('/rest/v1/rpc/my_rank_v4', { method: 'POST', auth: true, body: {} });
+    if (!r || !r[0]) return null;
+    return { rank: Number(r[0].rank), score: r[0].score, country: r[0].country_code };
   },
 };
