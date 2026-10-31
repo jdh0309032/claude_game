@@ -1383,7 +1383,7 @@ const ACCENTS = {
     A.ico(0.07, [0, 0.92, -1.21], 0x6b6f78, [1.3, 0.8, 0.9]);
     A.seg([[-0.03, 0.89, -1.28], [0, 0.875, -1.29], [0.03, 0.89, -1.28]], 0.006, 0.006, 0xfcd116);
     for (const s of [-1, 1]) {
-      A.seg([[s * 0.08, 1.04, -1.08], [s * 0.18, 1.07, -1.06], [s * 0.26, 1.09, -1.0], [s * 0.3, 1.14, -0.92], [s * 0.3, 1.2, -0.86]], 0.028, 0.008, 0xe9e2cf);
+      A.seg([[s * 0.08, 1.04, -1.08], [s * 0.15, 1.07, -1.07], [s * 0.2, 1.1, -1.03], [s * 0.21, 1.15, -0.98]], 0.028, 0.008, 0xbfb59a); // 머리와 함께 커지므로 짧게 (뒤에서 배달통 옆으로 튀어나오지 않게)
       A.eye(0.035, [s * 0.06, 1.0, -1.2], 0xfcd116, s * 0.3);
     }
     A.oct(0.035, [0, 0.98, 1.04], 0xfcd116);
@@ -1414,101 +1414,82 @@ const ACCENTS = {
   },
 };
 
-// ---------- 동남아 국가대표: 동물 형태 차체 (큰 각진 머리 → 목 → 어깨 → 등 → 엉덩이 → 꼬리로 자연스럽게 이어짐)
-// 척추(spine) 단면을 이어 붙인 각진(7각) 몸통. 각 점: [z, y 중심, x 반폭, y 반높이]
-function animalLoft(spine, seg = 7) {
-  const rings = spine.map(([z, y, rx, ry]) => {
-    const r = [];
-    for (let j = 0; j < seg; j++) {
-      const a = -Math.PI / 2 + (j / seg) * Math.PI * 2;
-      r.push(new THREE.Vector3(Math.cos(a) * rx, y + Math.sin(a) * ry, z));
-    }
-    return r;
-  });
-  const pos = [];
-  const tri = (a, b, c) => pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
-  for (let i = 0; i < rings.length - 1; i++) {
-    for (let j = 0; j < seg; j++) {
-      const a = rings[i][j], b = rings[i][(j + 1) % seg], c = rings[i + 1][j], d = rings[i + 1][(j + 1) % seg];
-      tri(a, c, b);
-      tri(b, c, d);
-    }
-  }
-  // 양 끝 마개
-  const cap = (ring, flip) => {
-    const ctr = ring.reduce((s, v) => s.add(v), new THREE.Vector3()).multiplyScalar(1 / ring.length);
-    for (let j = 0; j < seg; j++) (flip ? tri(ctr, ring[(j + 1) % seg], ring[j]) : tri(ctr, ring[j], ring[(j + 1) % seg]));
-  };
-  cap(rings[0], false);
-  cap(rings[rings.length - 1], true);
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(new Array((pos.length / 3) * 2).fill(0), 2));
-  g.computeVertexNormals();
-  return sideUV(g);
-}
-// 목이 위로 솟아 큰 머리로 이어지고, 어깨·엉덩이에 볼륨 (안장 z 0~0.43 / 배달통 z 0.44~ 아래는 y 1.02 이하, 부츠 자리는 y 0.75 위)
-const QUAD_SPINE = [[-1.0, 1.1, 0.12, 0.12], [-0.9, 1.06, 0.18, 0.18], [-0.72, 1.02, 0.21, 0.22], [-0.5, 0.98, 0.2, 0.21], [-0.25, 0.92, 0.15, 0.17],
-  [0.05, 0.88, 0.14, 0.14], [0.35, 0.88, 0.17, 0.14], [0.65, 0.87, 0.15, 0.13], [0.92, 0.88, 0.08, 0.08]];
-const BIRD_SPINE = [[-1.0, 1.12, 0.11, 0.11], [-0.88, 1.06, 0.16, 0.17], [-0.68, 1.0, 0.2, 0.2], [-0.42, 0.95, 0.18, 0.19], [-0.15, 0.9, 0.14, 0.15],
-  [0.15, 0.88, 0.13, 0.13], [0.5, 0.88, 0.13, 0.12], [0.8, 0.88, 0.09, 0.08], [1.0, 0.9, 0.05, 0.05]];
-const SERPENT_SPINE = [[-1.0, 1.12, 0.11, 0.11], [-0.88, 1.08, 0.15, 0.15], [-0.7, 1.05, 0.16, 0.17], [-0.48, 0.98, 0.16, 0.18], [-0.25, 0.92, 0.14, 0.16],
-  [0.05, 0.9, 0.13, 0.13], [0.3, 0.86, 0.13, 0.12], [0.55, 0.9, 0.12, 0.11], [0.8, 0.86, 0.09, 0.09], [1.0, 0.9, 0.05, 0.05]];
-const bulk = (sp, k) => sp.map(([z, y, rx, ry]) => [z, y, rx * k, ry]);
-// 각진 다리: 어깨/엉덩이 → 무릎 → 발 (바퀴 바깥 x ±0.17~0.19, 부츠 자리 피함)
-function animalLegs(A, color, alt = null, thick = 1, front = true, rear = true) {
-  for (const s of [-1, 1]) {
-    if (front) {
-      A.seg([[s * 0.17, 1.0, -0.62], [s * 0.2, 0.74, -0.7], [s * 0.19, 0.53, -0.64]], 0.075 * thick, 0.05 * thick, color, alt);
-      A.ico(0.075 * thick, [s * 0.19, 0.5, -0.69], color, [1, 0.55, 1.35]);
-    }
-    if (rear) {
-      A.seg([[s * 0.16, 0.95, 0.38], [s * 0.2, 0.72, 0.6], [s * 0.19, 0.53, 0.5]], 0.085 * thick, 0.05 * thick, color, alt);
-      A.ico(0.075 * thick, [s * 0.19, 0.5, 0.45], color, [1, 0.55, 1.35]);
-    }
-  }
-}
-// 날개: 어깨에서 옆·뒤로 펼친 깃털 (2단)
-function animalWings(A, c1, c2, spread = 1) {
-  for (const s of [-1, 1]) for (let row = 0; row < 2; row++) for (let i = 0; i < 6; i++) {
-    const len = (0.5 - i * 0.05) * (row ? 0.7 : 1) * spread;
-    const ang = 0.5 + i * 0.16;
-    A.cone(0.05, len, [s * (0.2 + Math.sin(ang) * len * 0.5), 1.0 + Math.cos(ang) * len * 0.45 + row * 0.02, -0.5 + i * 0.07 + row * 0.03], row ? c2 : (i % 2 ? c1 : 0xffd34d), [0, s * 0.3, -s * ang], 4, [1, 1, 0.22]);
-  }
-}
-const ANIMAL_FORM = {
-  SG: { spine: QUAD_SPINE, extra(A) { // 멀라이언: 앞은 사자(앞다리), 뒤는 물고기(비늘)
-    animalLegs(A, 0xe9ecef, null, 1, true, false);
-    for (let i = 0; i < 7; i++) for (const s of [-1, 1]) A.oct(0.045, [s * 0.135, 0.89 + (i % 2) * 0.04, 0.2 + i * 0.1], i % 2 ? 0xd9dde1 : 0xef3340, [0.35, 1, 1.4]);
-  } },
-  MY: { spine: bulk(QUAD_SPINE, 1.05), extra(A) { animalLegs(A, 0xf3901e, 0x1b1b1b); } },
-  ID: { spine: BIRD_SPINE, extra(A) { animalWings(A, 0xe6b422, 0xce1126); for (const s of [-1, 1]) A.seg([[s * 0.12, 0.82, 0.3], [s * 0.15, 0.6, 0.45], [s * 0.15, 0.5, 0.4]], 0.035, 0.02, 0xe6b422); } },
-  TH: { spine: bulk(QUAD_SPINE, 1.12), extra(A) { animalLegs(A, 0xd9d4cc, null, 1.45); for (const s of [-1, 1]) A.blk(0.02, 0.05, 0.6, [s * 0.235, 1.0, -0.4], 0xe8b923); } },
-  VN: { spine: SERPENT_SPINE, extra(A) {
-    animalLegs(A, 0xc1121f, 0x8b0a18, 0.7);
-    SERPENT_SPINE.forEach(([z, y, , ry], i) => { if (i > 0 && i < SERPENT_SPINE.length - 1) A.cone(0.03, 0.11, [0, y + ry + 0.03, z], 0xffcd00, [-0.5, 0, 0], 3, [0.4, 1, 1]); });
-  } },
-  PH: { spine: bulk(QUAD_SPINE, 1.15), extra(A) { animalLegs(A, 0x4a4e57, null, 1.35); } },
-  KH: { spine: SERPENT_SPINE, extra(A) { SERPENT_SPINE.forEach(([z, y, rx, ry], i) => { if (i % 2 && i < SERPENT_SPINE.length - 1) A.blk(rx * 2.15, 0.025, 0.04, [0, y, z], 0xe8b923); }); } },
-  MM: { spine: BIRD_SPINE, extra(A) { for (const s of [-1, 1]) for (let i = 0; i < 4; i++) A.oct(0.1, [s * 0.15, 0.92 + i * 0.015, -0.3 + i * 0.12], [0x1b998b, 0x2a9df4, 0x34b233, 0x1b998b][i], [0.2, 0.6, 1.4], [0, 0, s * 0.3]); } },
+// ---------- 동남아 국가대표: 동물 머리 페어링 슈퍼바이크 (무게감 있는 머신)
+// 큰 각진 동물 머리가 앞바퀴 위 프런트 페어링이 되고, 갈기·깃털 가닥이 탱크와 옆구리를 따라 뒤로 흐름.
+// 가운데는 기어·배기관이 드러난 기계식 엔진, 뒤는 짧게 치켜 올라간 테일. (다리·날개 없이 하나의 머신)
+const ANIMAL_PALETTE = {
+  SG: { main: 0xf2f2f0, second: 0xc1121f, metal: 0xd9dde1, strand: [0xe9ecef, 0xc9ced3, 0xc1121f] },  // 멀라이언: 펄 화이트 + 레드
+  MY: { main: 0xf3901e, second: 0x1b1b1b, metal: 0xd98a2b, strand: [0xf3901e, 0x1b1b1b, 0xfff3e0] },  // 호랑이: 오렌지·블랙·화이트
+  ID: { main: 0xb3121f, second: 0x5a0a10, metal: 0xd4a017, strand: [0xb3121f, 0x7a0d16, 0xe6b422] },  // 가루다: 레드 + 골드
+  TH: { main: 0xe9e4da, second: 0xd4a017, metal: 0xd4a017, strand: [0xe9e4da, 0xd4a017, 0x1b1d4a] },  // 흰 코끼리: 아이보리 + 골드 + 네이비
+  VN: { main: 0xc1121f, second: 0xffcd00, metal: 0xd4a017, strand: [0xc1121f, 0x8b0a18, 0xffcd00] },  // 용: 레드 + 골드
+  PH: { main: 0x3d4149, second: 0xe9e2cf, metal: 0xc9ced3, strand: [0x3d4149, 0x0038a8, 0xce1126] },  // 카라바오: 차콜 + 아이보리 뿔
+  KH: { main: 0xc8b28a, second: 0xd4a017, metal: 0xd4a017, strand: [0xc8b28a, 0xa8926a, 0xd4a017] },  // 나가: 사암 + 골드
+  MM: { main: 0x167a6e, second: 0xe6b422, metal: 0xe6b422, strand: [0x167a6e, 0x2a6fd4, 0xe6b422] },  // 공작: 에메랄드 + 블루 + 골드
 };
+// 갈기·깃털 가닥: 머리 뒤에서 시작해 몸통을 따라 뒤로 흐르며 가늘어지는 각진 날
+function strand(A, pts, r0, c) { A.seg(pts, r0, r0 * 0.25, c); }
+function animalMachine(K, code, led) {
+  const P = ANIMAL_PALETTE[code];
+  const A = facetKit(K.facet, K.glow, { k: 2.3, dz: 0.35, dy: 0.0 });
+  // 1) 큰 동물 머리 = 프런트 페어링 (기존 머리 디자인을 2.3배로 앞바퀴 위에) + 꼬리 장식
+  ACCENTS[code](A, led);
+  // 머리 뒤를 감싸는 페어링 칼라(목) — 머리와 탱크를 잇는 무게감 있는 덩어리
+  A.ico(0.24, [0, 0.98, -0.62], P.main, [1.0, 0.95, 0.9]);
+  A.ico(0.2, [0, 0.82, -0.66], P.second, [1.05, 0.7, 0.85]);
+  // 2) 갈기·깃털 가닥: 머리 뒤에서 탱크 위·옆구리로 흘러감
+  const S = P.strand;
+  for (let i = 0; i < 5; i++) { // 탱크 위로 흐르는 굵은 가닥 (서로 겹쳐 한 덩어리 갈기처럼)
+    const x = (i - 2) * 0.06, h = 1.2 - Math.abs(i - 2) * 0.03;
+    strand(A, [[x, h, -0.64], [x * 1.1, h - 0.02, -0.42], [x * 1.2, h - 0.08, -0.2], [x * 1.25, h - 0.18, 0.0]], 0.075, S[i % S.length]);
+  }
+  for (const s of [-1, 1]) for (let i = 0; i < 4; i++) { // 옆구리로 흐르는 굵은 가닥 (부츠 높이 0.75 위)
+    const y = 1.1 - i * 0.09;
+    strand(A, [[s * 0.18, y, -0.68], [s * 0.21, y - 0.03, -0.44], [s * 0.2, y - 0.07, -0.2], [s * 0.16, 0.98 - i * 0.045, 0.0]], 0.08, S[(i + (s > 0 ? 1 : 0)) % S.length]);
+  }
+  // 3) 무게감 있는 탱크 (나라 래핑, 각진) — 라이더 무릎 앞
+  K.body.push(sideUV((() => { const g = new THREE.IcosahedronGeometry(0.21, 1); g.scale(1.1, 0.75, 1.5); g.translate(0, 1.0, -0.28); return g.toNonIndexed(); })()));
+  // 4) 드러난 기계식 엔진: 블록 + V 실린더 + 측면 기어 + 황동 배기관
+  K.det.push(box(0.24, 0.3, 0.46, 0, 0.6, -0.12, 0x24272c));
+  for (const [z, rx] of [[-0.28, -0.35], [0.0, 0.35]]) {
+    const c = new THREE.CylinderGeometry(0.075, 0.085, 0.26, 10);
+    c.rotateX(rx);
+    c.translate(0, 0.83, z);
+    K.metal.push(paint(c, 0x9aa0a6));
+    for (let k = 0; k < 4; k++) { const f = new THREE.CylinderGeometry(0.1, 0.1, 0.012, 10); f.rotateX(rx); f.translate(0, 0.76 + k * 0.045, z + (rx > 0 ? 1 : -1) * k * 0.016); K.det.push(paint(f, 0x3d4148)); }
+  }
+  for (const s of [-1, 1]) { // 측면 기어 (커버 + 톱니 + 볼트)
+    const gx = s * 0.135;
+    K.metal.push(cylX(0.11, 0.03, gx, 0.55, 0.06, P.metal, 16));
+    for (let t = 0; t < 12; t++) { const a = (t / 12) * Math.PI * 2; K.metal.push(box(0.035, 0.03, 0.03, gx, 0.55 + Math.cos(a) * 0.115, 0.06 + Math.sin(a) * 0.115, P.metal)); }
+    K.det.push(cylX(0.05, 0.04, gx, 0.55, 0.06, 0x24272c, 12));
+    for (let t = 0; t < 5; t++) { const a = (t / 5) * Math.PI * 2; K.metal.push(cylX(0.012, 0.05, gx, 0.55 + Math.cos(a) * 0.075, 0.06 + Math.sin(a) * 0.075, 0xc9ced3, 6)); }
+    K.metal.push(cylX(0.075, 0.025, s * 0.125, 0.58, -0.3, P.metal, 14));
+  }
+  // 황동·크롬 배기관: 실린더 앞에서 내려와 엔진 아래를 지나 테일 아래 머플러로
+  for (const s of [-1, 1]) A.seg([[s * 0.04, 0.8, -0.38], [s * 0.1, 0.62, -0.46], [s * 0.12, 0.4, -0.36], [s * 0.12, 0.34, -0.05], [s * 0.1, 0.38, 0.3]], 0.026, 0.026, P.metal);
+  for (const s of [-1, 1]) { const m = new THREE.CylinderGeometry(0.05, 0.065, 0.36, 12); m.rotateX(Math.PI / 2 - 0.25); m.translate(s * 0.1, 0.45, 0.48); K.metal.push(paint(m, P.metal)); }
+  // 5) 짧게 치켜 올라간 테일 카울 + 위로 휘는 깃·갈기 (배달통 z 0.44~1.0, y 1.06 아래·뒤만 사용)
+  A.seg([[0, 0.9, 0.08], [0, 0.94, 0.4], [0, 0.95, 0.72], [0, 0.98, 0.95]], 0.12, 0.06, P.main);
+  for (const s of [-1, 1]) for (let i = 0; i < 3; i++) strand(A, [[s * 0.08, 0.92 - i * 0.03, 0.4], [s * 0.12, 0.9 - i * 0.04, 0.75], [s * 0.1, 0.96 - i * 0.03, 1.02], [s * 0.06, 1.1 - i * 0.05, 1.16]], 0.04, S[(i + 1) % S.length]);
+  // 6) 프런트 흙받이 (머리 아래 바퀴 위) + 휠 림 컬러 링
+  A.seg([[0, 0.83, -1.0], [0, 0.88, -0.78], [0, 0.85, -0.55]], 0.07, 0.06, P.second);
+  for (const z of [-0.72, 0.7]) K.det.push(paint(new THREE.TorusGeometry(0.29, 0.02, 8, 28).rotateY(Math.PI / 2).translate(0, 0.4, z), P.metal));
+}
 
 function nationalSuperbike(K, code, accent) {
   const kit = SEA_NATIONAL[code];
   const rim = kit ? kit.rim : accent ?? 0xffd700;
   const led = kit ? kit.led : 0xffffff;
   const B = (g) => K.body.push(sideUV(g));
-  const form = ANIMAL_FORM[code];
+  const form = ANIMAL_PALETTE[code];
+  if (form) {
+    // 동물 머리 페어링 머신 (무게감 있는 슈퍼바이크)
+    animalMachine(K, code, led);
+  } else {
   // 엔진 (카울 안쪽보다 좁게 → 옆면이 카울 면과 겹치지 않음) + 냉각 핀
   K.det.push(box(0.2, 0.3, 0.5, 0, 0.6, -0.12, 0x2b2e33));
   for (let k = 0; k < 4; k++) K.det.push(box(0.22, 0.012, 0.36, 0, 0.5 + k * 0.05, -0.15, 0x3d4148));
-  if (form) {
-    // 동물 형태: 각진 몸통(나라 래핑) + 큰 머리 + 다리·날개 등 + 꼬리
-    K.body.push(animalLoft(form.spine));
-    const A = facetKit(K.facet, K.glow, { k: 1.8, dz: 0.02, dy: 0.13 });
-    form.extra(A);
-    ACCENTS[code](A, led);
-  } else {
   // 앞 페어링(노즈): 끝이 뾰족하고 위로 갈수록 좁아짐
   B(sideExtrude([[-1.04, 0.9], [-0.98, 1.0], [-0.8, 1.11], [-0.62, 1.15], [-0.5, 1.06], [-0.47, 0.84], [-0.62, 0.7], [-0.92, 0.76]], 0.36, 0.03,
     (z) => lerpT(1, 0.45, (-z - 0.6) / 0.44)));
@@ -1551,7 +1532,7 @@ function nationalSuperbike(K, code, accent) {
     f.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
     K.metal.push(paint(f, 0xd4a017));
   }
-  K.body.push(sideUV(sideExtrude([[-0.97, 0.83], [-0.72, 0.91], [-0.48, 0.83], [-0.53, 0.8], [-0.72, 0.87], [-0.94, 0.79]], 0.14, 0.01)));
+  if (!form) K.body.push(sideUV(sideExtrude([[-0.97, 0.83], [-0.72, 0.91], [-0.48, 0.83], [-0.53, 0.8], [-0.72, 0.87], [-0.94, 0.79]], 0.14, 0.01)));
   // 스윙암 (양쪽) + 체인 가드
   for (const s of [-1, 1]) {
     const a = new THREE.BoxGeometry(0.035, 0.07, 0.7);
@@ -1562,8 +1543,8 @@ function nationalSuperbike(K, code, accent) {
   // 휠: 포인트 색 5스포크 + 브레이크 디스크 + 캘리퍼
   for (const z of [-0.72, 0.7]) {
     for (let i = 0; i < 5; i++) {
-      const sp = new THREE.BoxGeometry(0.03, 0.17, 0.03); // 허브(반지름 0.13) 밖에서 시작 → 스포크끼리 중심에서 겹치지 않음
-      sp.translate(0, 0.205, 0);
+      const sp = new THREE.BoxGeometry(0.03, 0.15, 0.03); // 허브(0.13) 밖 ~ 림 링 안쪽(0.27): 스포크끼리·림 링과 면이 겹치지 않음
+      sp.translate(0, 0.195, 0);
       sp.rotateX((i / 5) * Math.PI * 2);
       sp.translate(0, 0.4, z);
       K.det.push(paint(sp, rim));
@@ -1784,7 +1765,7 @@ export function createBike(color, opts = {}) {
   const PANTS = out.pants;
 
   for (const z of [-0.72, 0.7]) {
-    const t = new THREE.TorusGeometry(0.3, 0.1, 8, 18);
+    const t = superbike ? new THREE.TorusGeometry(0.29, 0.125, 10, 24) : new THREE.TorusGeometry(0.3, 0.1, 8, 18); // 국가대표: 두꺼운 타이어
     t.rotateY(Math.PI / 2);
     t.translate(0, 0.4, z);
     det.push(paint(t, 0x111111));
