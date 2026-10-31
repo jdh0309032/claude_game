@@ -46,8 +46,8 @@ const GIANT_TIME = 6;
 const LANE_BLINK = 1.0, LANE_MOVE = 1.5;
 // 공중 묘기: 회전 속도(rad/s), 착지 허용 각도(rad), 착지 무적 시간(s), 회전 종류별 점수(1바퀴당)
 const AIR_FLIP = 9.5, AIR_SPIN = 9.5, LAND_TOL = 0.68, LAND_IFRAMES = 1.8;
-// 착지 보조: 땅에 닿기 0.7초 전부터, 수평과의 각도가 100° 안이면 바퀴가 바닥을 향하도록 자동으로 돌려 줌 (여러 축으로 돌려도 착지가 쉬움)
-const LAND_ASSIST_TIME = 0.7, LAND_ASSIST_ANGLE = 1.75, LAND_ASSIST_RATE = 9;
+// 착지 보조: 땅에 닿기 0.55초 전부터, 수평과의 각도가 약 86° 안이면 바퀴가 바닥을 향하도록 자동으로 돌려 줌 (여러 축으로 돌려도 착지가 쉬움)
+const LAND_ASSIST_TIME = 0.55, LAND_ASSIST_ANGLE = 1.5, LAND_ASSIST_RATE = 8;
 const TRICK_POINTS = { jump: 200, flip: 500, spin: 1200, diagonal: 3000 };
 
 // ---------- 시드 기반 월드 난수 (PRNG: mulberry32)
@@ -538,12 +538,16 @@ function spawnCar(z = SPAWN_Z, forced = null) {
       speed: lerp(def.speed[0], def.speed[1], r[4]) * (dir < 0 ? 1.1 : 1),
       passed: false, minGap: 99, changing: false, changeT: 0, flying: false, honked: false,
       wob: r[5] * Math.PI * 2,
-      wobAmp: (type === 'bus' || type === 'truck' || type === 'ramp' ? 0.1 : 0.22) * (1 + clamp(G.distance / 8000, 0, 1) * 0.8),
+      wobAmp: (type === 'bus' || type === 'doubledecker' || type === 'truck' || type === 'ramp' ? 0.1 : 0.22) * (1 + clamp(G.distance / 8000, 0, 1) * 0.8),
       // 앞서가는 같은 방향 차량일수록 깜빡이 후 급차선 변경을 자주 함
       canChange: type !== 'ramp' && r[6] < Math.min(dir > 0 ? 0.7 : 0.4, (dir > 0 ? 0.3 : 0.12) + G.distance / 8000),
     });
-    const col = type === 'taxi' ? 0xffc300 : type === 'police' ? 0xf4f4f4 : type === 'bus' ? [0x2e86de, 0x10ac84, 0xee5253][(r[8] * 3) | 0]
-      : type === 'ramp' ? 0xff8c1a : CAR_COLORS[(r[8] * CAR_COLORS.length) | 0];
+    // 나라별 색: 택시(방콕 핑크·싱가포르 블루 등)·버스·특수 차량·일반 차 팔레트
+    const pal = themeAt(sd).colors || {};
+    const from = (arr) => arr[(r[8] * arr.length) | 0];
+    const col = pal[type] ? from(pal[type])
+      : type === 'taxi' ? 0xffc300 : type === 'police' ? 0xf4f4f4 : type === 'bus' ? from([0x2e86de, 0x10ac84, 0xee5253])
+        : type === 'ramp' ? 0xff8c1a : type === 'sedan' || type === 'suv' ? from(pal.car || CAR_COLORS) : CAR_COLORS[(r[8] * CAR_COLORS.length) | 0];
     c.bodyMat.color.setHex(col);
     c.blinkMatL.emissiveIntensity = 0;
     c.blinkMatR.emissiveIntensity = 0;
@@ -660,7 +664,7 @@ function updateCars(dt, collide) {
     if (!solid || G.air || c.ghost || G.state !== 'playing') continue;
     const dx = Math.abs(c.x - G.x), dz = Math.abs(c.z);
     // 슬립스트림: 같은 방향 대형차(트럭·버스·견인트럭) 바로 뒤
-    if (c.dir > 0 && (c.type === 'truck' || c.type === 'bus' || c.type === 'ramp')) {
+    if (c.dir > 0 && (c.type === 'truck' || c.type === 'bus' || c.type === 'doubledecker' || c.type === 'ramp')) {
       const gap = -(c.z + c.len / 2) - BIKE_HL;
       if (gap > 0 && gap < DRAFT_GAP && dx < DRAFT_LANE) draftingNow = true;
     }

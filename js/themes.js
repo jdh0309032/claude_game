@@ -6,48 +6,57 @@ export const ZONE_LENGTH = 1000; // 매 1,000m 마다 다음 나라로
 // curb: warung | vending | cafe | tent | planter | mamak | sarisari | juicecart | teashop
 // overhead: 도로 위 축제 장식 (lanterns | bunting_ph | bunting_my | bunting_id | flags_th | flags_kh | flags_mm), 없으면 ''
 // drive: 'L' 좌측통행 / 'R' 우측통행
-// traffic: 특수 차량 비율 (tuktuk / scooter / taxi / jeepney 추가 가중치)
+// traffic: 특수 차량 비율 (tuktuk / scooter / taxi / jeepney / doubledecker / angkot / songthaew / tricycle / remork / trishaw)
+// colors: 나라별 차량 색 (taxi / bus / car / 특수 차량 이름별 팔레트)
 // 동남아 8개국(SG MY ID TH VN PH KH MM)만 주행. 한국·일본·미국·프랑스 맵은 archive/world_themes.js 에 보관 (스폰 안 함)
 export const THEMES = [
   {
     code: 'SG', drive: 'L', country: 'Singapore', city: 'Marina Bay', welcome: 'WELCOME TO SINGAPORE',
     building: { modern: 0.55, peranakan: 0.45 }, tree: 'raintree', curb: 'planter', landmark: 'mbs', overhead: '',
-    tint: 0xb8fff0, tintAmt: 0.1, traffic: { taxi: 0.15 },
+    tint: 0xb8fff0, tintAmt: 0.1, traffic: { taxi: 0.2, doubledecker: 0.12 },
+    colors: { taxi: [0x1e6fd9, 0xffd400, 0xd9dde1], bus: [0x6a2c91, 0xd62828], doubledecker: [0x6a2c91, 0xd62828, 0xf4f4f4], car: [0xf4f4f4, 0xbfc5ca, 0x151515, 0x2a3d55, 0x8d99ae] },
   },
   {
     code: 'MY', drive: 'L', country: 'Malaysia', city: 'Kuala Lumpur', welcome: 'SELAMAT DATANG KE KUALA LUMPUR',
     building: { peranakan: 0.5, modern: 0.3, ruko: 0.2 }, tree: 'palm', curb: 'mamak', landmark: 'petronas', overhead: 'bunting_my',
-    tint: 0xfff0b0, tintAmt: 0.1, traffic: { scooter: 0.12 },
+    tint: 0xfff0b0, tintAmt: 0.1, traffic: { scooter: 0.12, taxi: 0.1 },
+    colors: { taxi: [0xc8102e, 0xf4f4f4], bus: [0xd62828, 0x0057b8], car: [0xf4f4f4, 0xc8102e, 0xbfc5ca, 0x151515, 0x2a9df4] },
   },
   {
     code: 'ID', drive: 'L', country: 'Indonesia', city: 'Jakarta', welcome: 'SELAMAT DATANG DI JAKARTA',
     building: { ruko: 0.8, modern: 0.2 }, tree: 'palm', curb: 'warung', landmark: 'monas', overhead: 'bunting_id',
-    tint: 0xffe0b0, tintAmt: 0.08, traffic: { scooter: 0.22, tuktuk: 0.06 },
+    tint: 0xffe0b0, tintAmt: 0.08, traffic: { scooter: 0.22, tuktuk: 0.06, angkot: 0.14 },
+    colors: { taxi: [0x2a7fd4], tuktuk: [0x2a6fd4], angkot: [0x2a9df4, 0x2ec27e, 0xe63946, 0xf2c230], bus: [0xe76f51, 0x2a6fd4], car: [0xf4f4f4, 0x151515, 0xbfc5ca, 0x8d99ae, 0xd62828] },
   },
   {
     code: 'TH', drive: 'L', country: 'Thailand', city: 'Bangkok', welcome: 'SAWASDEE! WELCOME TO BANGKOK',
     building: { ruko: 0.45, neon: 0.4, colonial: 0.15 }, tree: 'frangipani', curb: 'warung', landmark: 'temple', overhead: 'flags_th',
-    tint: 0xffb6e6, tintAmt: 0.12, traffic: { tuktuk: 0.28, scooter: 0.1 },
+    tint: 0xffb6e6, tintAmt: 0.12, traffic: { tuktuk: 0.25, songthaew: 0.12, scooter: 0.08, taxi: 0.12 },
+    colors: { taxi: [0xff4fa3, 0x7ac943, 0xff8c1a, 0x2a9df4], tuktuk: [0x1d3557, 0x2a9d8f, 0xe63946], songthaew: [0xc1121f, 0x2a6fd4, 0xf2c230], bus: [0xd62828, 0x1d6fd8], car: [0xf4f4f4, 0x151515, 0xbfc5ca, 0x1d3557] },
   },
   {
     code: 'VN', drive: 'R', country: 'Vietnam', city: 'Hanoi', welcome: 'CHAO MUNG DEN HA NOI',
     building: { tube: 0.8, ruko: 0.2 }, tree: 'palm', curb: 'tent', landmark: 'pagoda', overhead: 'lanterns',
-    tint: 0xffc59a, tintAmt: 0.12, traffic: { scooter: 0.45 },
+    tint: 0xffc59a, tintAmt: 0.12, traffic: { scooter: 0.45, taxi: 0.08 },
+    colors: { taxi: [0x2ec27e, 0xf4f4f4], bus: [0xf2c230, 0x2ec27e], car: [0xf4f4f4, 0xbfc5ca, 0x151515, 0xd62828] },
   },
   {
     code: 'PH', drive: 'R', country: 'Philippines', city: 'Manila', welcome: 'MABUHAY! WELCOME TO MANILA',
     building: { ruko: 0.45, colonial: 0.3, neon: 0.25 }, tree: 'palm', curb: 'sarisari', landmark: 'mayon', overhead: 'bunting_ph',
-    tint: 0xbfe3ff, tintAmt: 0.1, traffic: { jeepney: 0.35, tuktuk: 0.08 },
+    tint: 0xbfe3ff, tintAmt: 0.1, traffic: { jeepney: 0.3, tricycle: 0.15, tuktuk: 0.0 },
+    colors: { taxi: [0xf4f4f4], jeepney: [0x2a9df4, 0xe63946, 0x2ec27e, 0xd9dde1, 0xffd60a], tricycle: [0xe63946, 0x2a9df4, 0xffd60a, 0x2ec27e], bus: [0x2a9df4, 0xe63946], car: [0xf4f4f4, 0x151515, 0xbfc5ca, 0x8d99ae] },
   },
   {
     code: 'KH', drive: 'R', country: 'Cambodia', city: 'Siem Reap', welcome: 'SOUR SDEY! WELCOME TO SIEM REAP',
     building: { teak: 0.65, ruko: 0.35 }, tree: 'frangipani', curb: 'juicecart', landmark: 'angkor', overhead: 'flags_kh',
-    tint: 0xffd59a, tintAmt: 0.12, traffic: { tuktuk: 0.35, scooter: 0.15 },
+    tint: 0xffd59a, tintAmt: 0.12, traffic: { remork: 0.3, scooter: 0.15 },
+    colors: { taxi: [0x1d3557], remork: [0x1d3557, 0x7a1f2b, 0x2a9d8f], bus: [0x2a9d8f, 0xf2c230], car: [0xf4f4f4, 0x151515, 0xbfc5ca, 0x7f5539] },
   },
   {
     code: 'MM', drive: 'R', country: 'Myanmar', city: 'Yangon', welcome: 'MINGALABA! WELCOME TO YANGON',
     building: { colonial: 0.6, teak: 0.4 }, tree: 'raintree', curb: 'teashop', landmark: 'shwedagon', overhead: 'flags_mm',
-    tint: 0xffe7a3, tintAmt: 0.12, traffic: { taxi: 0.2 },
+    tint: 0xffe7a3, tintAmt: 0.12, traffic: { trishaw: 0.12, taxi: 0.2, bus: 0.1 },
+    colors: { taxi: [0xe0e0e0, 0xf4f4f4], trishaw: [0x1d3557, 0x2a9d8f, 0x7a1f2b], bus: [0x1e6fd9, 0xf4f4f4], car: [0xf4f4f4, 0xbfc5ca, 0x151515, 0x8d99ae] },
   },
 ];
 

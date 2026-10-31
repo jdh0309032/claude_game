@@ -174,6 +174,12 @@ export const CAR_DEFS = {
   tuktuk: { len: 2.9, w: 1.45, speed: [7, 11] }, // 태국 툭툭
   scooter:{ len: 1.9, w: 0.75, speed: [9, 14] }, // 베트남 오토바이 물결
   jeepney:{ len: 5.6, w: 2.0, speed: [8, 12] },  // 필리핀 지프니
+  doubledecker: { len: 11.5, w: 2.5, speed: [8, 11] }, // 싱가포르 2층 버스
+  angkot: { len: 4.0, w: 1.7, speed: [9, 13] },   // 인도네시아 앙콧(합승 미니밴)
+  songthaew: { len: 4.8, w: 1.9, speed: [9, 13] }, // 태국 송태우(픽업 합승)
+  tricycle: { len: 2.2, w: 1.6, speed: [7, 10] },  // 필리핀 트라이시클
+  remork: { len: 3.4, w: 1.6, speed: [7, 10] },    // 캄보디아 레모크(툭툭)
+  trishaw: { len: 2.0, w: 1.4, speed: [4.5, 6.5] }, // 미얀마 트라이쇼(자전거 인력거)
 };
 
 const GLASS = 0x1b2735;
@@ -194,11 +200,12 @@ function buildCar(type) {
   const d = CAR_DEFS[type];
   const L = d.len, W = d.w, hl = L / 2, hw = W / 2;
   const body = [], det = [], tail = [], head = [], bl = [], br = [];
-  const big = type === 'truck' || type === 'bus';
+  const big = type === 'truck' || type === 'bus' || type === 'doubledecker';
   const small = type === 'tuktuk' || type === 'scooter';
   const wr = big ? 0.5 : small ? 0.28 : 0.36;
-  const wheelZ = type === 'bus' ? [-hl + 2, hl - 2.2] : type === 'truck' ? [-hl + 1.2, hl - 1.4, hl - 2.6] : small ? [-hl + 0.4, hl - 0.45] : [-hl + 0.85, hl - 0.85];
-  if (type !== 'scooter') {
+  const wheelZ = type === 'bus' || type === 'doubledecker' ? [-hl + 2, hl - 2.2] : type === 'truck' ? [-hl + 1.2, hl - 1.4, hl - 2.6] : small ? [-hl + 0.4, hl - 0.45] : [-hl + 0.85, hl - 0.85];
+  const ownWheels = type === 'scooter' || type === 'tricycle' || type === 'remork' || type === 'trishaw';
+  if (!ownWheels) {
     for (const z of wheelZ) {
       for (const s of [-1, 1]) {
         if (type === 'tuktuk' && z < 0 && s > 0) continue; // 앞바퀴 1개
@@ -255,6 +262,89 @@ function buildCar(type) {
     det.push(box(0.6, 0.2, 0.04, 0, 1.9, -hl + 1.6, 0xffd60a));
     det.push(box(W * 0.8, 0.12, 0.05, 0, 2.05, hl + 0.01, 0xe63946));
     lightY = 0.8;
+  } else if (type === 'doubledecker') {
+    // 싱가포르 2층 버스: 높은 차체 + 위·아래 창 띠 + 앞 2층 창 + 행선지 LED
+    body.push(box(W, 3.9, L, 0, 2.3, 0));
+    det.push(box(W + 0.03, 0.8, L * 0.9, 0, 1.95, 0.3, GLASS));
+    det.push(box(W + 0.03, 0.85, L * 0.95, 0, 3.45, 0, GLASS));
+    det.push(box(W * 0.9, 1.0, 0.05, 0, 1.9, -hl - 0.02, GLASS));
+    det.push(box(W * 0.92, 0.85, 0.05, 0, 3.45, -hl - 0.02, GLASS));
+    det.push(box(W + 0.03, 0.22, L + 0.03, 0, 0.55, 0, TRIM));
+    for (let k = 0; k < 7; k++) for (const sx of [-1, 1]) for (const y of [1.95, 3.45]) det.push(box(0.05, 0.82, 0.1, sx * (hw + 0.03), y, -hl + 1.6 + k * 1.35, 0x2b2b2b));
+    det.push(box(0.05, 1.6, 1.0, hw + 0.03, 1.25, -hl + 0.9, 0x1f2b38));
+    det.push(box(W * 0.7, 0.22, 0.05, 0, 2.75, -hl - 0.03, 0x101010));
+    head.push(box(W * 0.5, 0.1, 0.03, 0, 2.75, -hl - 0.06));
+    for (const sx of [-1, 1]) det.push(box(0.04, 0.12, L * 0.86, sx * (hw + 0.02), 2.7, 0, 0xffffff));
+    det.push(box(W, 0.06, L, 0, 4.27, 0, 0xd9dde1));
+    lightY = 0.85;
+  } else if (type === 'angkot') {
+    // 인도네시아 앙콧(미니밴 합승): 짧은 보닛 + 박스형 차체 + 옆 창 + 미닫이문 + 색 띠
+    body.push(box(W, 1.25, L * 0.78, 0, 1.05, hl - L * 0.39));
+    body.push(box(W, 0.65, L * 0.24, 0, 0.75, -hl + L * 0.12));
+    det.push(paint(taperTop(new THREE.BoxGeometry(W * 0.94, 0.5, 0.5), 0.95, 0.4).translate(0, 1.32, -hl + L * 0.25), GLASS));
+    for (const sx of [-1, 1]) {
+      det.push(box(0.03, 0.45, L * 0.6, sx * (hw + 0.012), 1.35, 0.25, GLASS));
+      det.push(box(0.03, 0.12, L * 0.78, sx * (hw + 0.015), 0.85, hl - L * 0.39, 0xffffff));
+      det.push(box(0.02, 0.85, 0.03, sx * (hw + 0.012), 1.0, -0.15, 0x1b1d22));
+    }
+    det.push(box(W + 0.04, 0.18, 0.2, 0, 0.42, -hl, TRIM));
+    det.push(box(W * 0.95, 0.06, L * 0.7, 0, 1.71, 0.3, 0x555b62));
+    lightY = 0.7;
+  } else if (type === 'songthaew') {
+    // 태국 송태우: 픽업 캡 + 지붕 덮인 짐칸(양옆 벤치) + 뒤 손잡이
+    body.push(box(W, 1.0, 1.5, 0, 0.95, -hl + 0.75));
+    body.push(box(W * 0.94, 0.55, 1.1, 0, 1.72, -hl + 0.85));
+    det.push(box(W * 0.85, 0.45, 0.05, 0, 1.7, -hl + 0.28, GLASS));
+    det.push(box(W, 0.4, L - 1.5, 0, 0.65, hl - (L - 1.5) / 2, 0x3a3d42));
+    for (const sx of [-1, 1]) {
+      body.push(box(0.06, 0.45, L - 1.6, sx * (hw - 0.03), 1.07, hl - (L - 1.6) / 2));
+      for (let k = 0; k < 3; k++) det.push(box(0.05, 0.85, 0.05, sx * (hw - 0.03), 1.72, -hl + 1.6 + k * ((L - 1.7) / 2), 0xc9ced3));
+      det.push(box(0.35, 0.08, L - 1.8, sx * (hw - 0.3), 1.0, hl - (L - 1.8) / 2 - 0.05, 0x7a4a22));
+    }
+    body.push(box(W + 0.1, 0.08, L - 1.4, 0, 2.17, hl - (L - 1.4) / 2));
+    det.push(box(0.05, 0.6, 0.05, 0, 1.5, hl - 0.02, 0xc9ced3));
+    lightY = 0.75;
+  } else if (type === 'tricycle' || type === 'remork' || type === 'trishaw') {
+    // 필리핀 트라이시클(오토바이 + 지붕 달린 사이드카) / 캄보디아 레모크(오토바이 + 뒤 객차) / 미얀마 트라이쇼(자전거 + 옆 좌석)
+    const wheel = (x, z, r, w = 0.1) => { det.push(cylX(r, w, x, r, z, RUBBER, 12)); det.push(cylX(r * 0.45, w + 0.02, x, r, z, 0x9aa0a6, 8)); };
+    const rider = (x, z, shirt) => {
+      det.push(box(0.3, 0.45, 0.25, x, 1.15, z, shirt, -0.3));
+      det.push(paint(new THREE.SphereGeometry(0.14, 8, 6).translate(x, 1.5, z - 0.05), 0xf1c8a0));
+      det.push(paint(new THREE.SphereGeometry(0.15, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2).translate(x, 1.54, z - 0.05), type === 'trishaw' ? 0x2b2b2b : 0xe63946));
+      for (const sx of [-1, 1]) det.push(box(0.09, 0.4, 0.1, x + sx * 0.1, 0.78, z - 0.1, 0x2b2b2b, 0.4));
+    };
+    if (type === 'tricycle') {
+      const mx = hw - 0.25;
+      wheel(mx, -hl + 0.35, 0.28); wheel(mx, hl - 0.4, 0.28); wheel(-hw + 0.2, 0.15, 0.24);
+      det.push(box(0.25, 0.3, 1.2, mx, 0.6, 0, 0x2b2f33));
+      rider(mx, 0.05, 0xffd60a);
+      body.push(box(0.9, 0.7, 1.3, -0.25, 0.75, 0.1));
+      det.push(box(0.85, 0.06, 1.25, -0.25, 1.12, 0.1, 0x3a2a1a));
+      for (const [px, pz] of [[-0.68, -0.5], [0.18, -0.5], [-0.68, 0.7], [0.18, 0.7]]) det.push(box(0.04, 0.85, 0.04, px, 1.5, pz, 0xc9ced3));
+      body.push(box(1.0, 0.08, 1.4, -0.25, 1.95, 0.1));
+      det.push(box(0.75, 0.35, 0.03, -0.25, 1.6, -0.52, GLASS));
+      det.push(box(0.05, 0.12, 1.3, -0.72, 1.85, 0.1, 0xce1126));
+      det.push(box(0.05, 0.12, 1.3, -0.72, 1.73, 0.1, 0x0038a8));
+    } else if (type === 'remork') {
+      wheel(0, -hl + 0.3, 0.27); wheel(0, -hl + 1.25, 0.27);
+      det.push(box(0.25, 0.3, 1.1, 0, 0.6, -hl + 0.78, 0x2b2f33));
+      rider(0, -hl + 0.9, 0x2a9d8f);
+      det.push(box(0.06, 0.06, 0.7, 0, 0.6, -hl + 1.7, 0x555b62));
+      for (const sx of [-1, 1]) wheel(sx * (hw - 0.1), hl - 0.55, 0.28, 0.08);
+      det.push(box(W - 0.1, 0.08, 1.7, 0, 0.62, hl - 0.85, 0x5a3e2b));
+      for (const sx of [-1, 1]) det.push(box(0.4, 0.4, 1.5, sx * 0.45, 0.85, hl - 0.85, 0x7a1f2b));
+      for (const [px, pz] of [[-1, -1.65], [1, -1.65], [-1, -0.05], [1, -0.05]]) det.push(box(0.04, 1.2, 0.04, px * (hw - 0.08), 1.25, hl + pz + 0.02, 0xc9ced3));
+      body.push(box(W, 0.08, 1.8, 0, 1.88, hl - 0.85));
+      for (const sx of [-1, 1]) det.push(box(0.03, 0.18, 1.8, sx * (hw + 0.01), 1.8, hl - 0.85, 0xe8b923));
+    } else {
+      wheel(hw - 0.2, -hl + 0.35, 0.33, 0.05); wheel(hw - 0.2, hl - 0.35, 0.33, 0.05); wheel(-hw + 0.15, 0.1, 0.25, 0.06);
+      det.push(box(0.05, 0.05, L - 0.7, hw - 0.2, 0.55, 0, 0x555b62));
+      rider(hw - 0.2, 0.25, 0xffffff);
+      body.push(box(0.7, 0.4, 0.8, -0.2, 0.6, 0.05));
+      det.push(box(0.7, 0.4, 0.08, -0.2, 0.95, 0.42, 0x7a4a22));
+      det.push(box(0.65, 0.06, 0.7, -0.2, 0.82, 0.05, 0x1d3557));
+    }
+    lightY = 0.75;
   } else if (type === 'ramp') {
     // 앞 캡 + 평판 적재함 + 후면 경사판 (뒤쪽 +Z 가 땅에 닿음)
     body.push(box(W, 1.3, 2.3, 0, 1.25, -hl + 1.15));
@@ -340,13 +430,24 @@ function buildCar(type) {
     }
   }
 
-  for (const s of [-1, 1]) {
-    tail.push(box(0.36, 0.18, 0.05, s * (hw - 0.3), lightY, hl + 0.02));
-    head.push(box(0.36, 0.16, 0.05, s * (hw - 0.3), lightY, -hl - 0.02));
-  }
-  for (const z of [hl + 0.03, -hl - 0.03]) {
-    bl.push(box(0.12, 0.12, 0.05, -hw + 0.06, lightY, z));
-    br.push(box(0.12, 0.12, 0.05, hw - 0.06, lightY, z));
+  if (type === 'tricycle' || type === 'remork' || type === 'trishaw') {
+    // 삼륜·인력거: 오토바이(자전거) 앞에 헤드램프 1개, 차체 뒤에 후미등 1개, 깜빡이는 차체 모서리에 붙임
+    // [앞등 x, z, y], [뒷등 x, z, y]: 각각 오토바이 앞끝 / 사이드카·객차 뒤끝에 붙임
+    const [hx, hz, hy] = type === 'tricycle' ? [hw - 0.25, -0.62, 0.72] : type === 'remork' ? [0, -hl + 0.2, 0.72] : [hw - 0.2, -hl + 0.32, 0.95];
+    const [tx, tz, ty] = type === 'tricycle' ? [-0.25, 0.77, 0.75] : type === 'remork' ? [0, hl - 0.02, 0.62] : [-0.2, 0.47, 0.6];
+    head.push(box(0.12, 0.1, 0.04, hx, hy, hz));
+    tail.push(box(0.22, 0.07, 0.03, tx, ty, tz));
+    bl.push(box(0.05, 0.05, 0.04, hx - 0.1, hy, hz), box(0.05, 0.05, 0.03, tx - 0.15, ty, tz));
+    br.push(box(0.05, 0.05, 0.04, hx + 0.1, hy, hz), box(0.05, 0.05, 0.03, tx + 0.15, ty, tz));
+  } else {
+    for (const s of [-1, 1]) {
+      tail.push(box(0.36, 0.18, 0.05, s * (hw - 0.3), lightY, hl + 0.02));
+      head.push(box(0.36, 0.16, 0.05, s * (hw - 0.3), lightY, -hl - 0.02));
+    }
+    for (const z of [hl + 0.03, -hl - 0.03]) {
+      bl.push(box(0.12, 0.12, 0.05, -hw + 0.06, lightY, z));
+      br.push(box(0.12, 0.12, 0.05, hw - 0.06, lightY, z));
+    }
   }
 
   return {
