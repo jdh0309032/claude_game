@@ -99,18 +99,8 @@
       </header>
       <div class="scene-window"></div>
       <div class="app-sheet menu-sheet">
-        <div class="menu-hello">
-          <div class="hello-text">
-            <p class="greet">Hi, <b id="menuName">Rider</b> · <span class="loc-label">DELIVERING IN</span> <span id="menuFlag" class="loc-country"></span></p>
-            <h3>Ready to deliver?</h3>
-          </div>
-          <div class="menu-stats">
-            <div><small>BEST</small><b id="menuBest" class="hero-score">0</b></div>
-            <div><small>FARTHEST</small><b id="menuDist">0 m</b></div>
-            <div class="hidden"><b id="menuCountry">-</b></div>
-          </div>
-        </div>
-        <button id="btnPlay" class="btn play-btn" data-icon="play"><span>START RIDE</span><em class="go-arrow">&rsaquo;&rsaquo;</em></button>
+        <div class="hidden"><b id="menuName">Rider</b><span id="menuFlag"></span><b id="menuCountry">-</b></div>
+        <button id="btnPlay" class="btn play-btn" data-icon="play"><span class="play-txt">START RIDE<small class="play-sub">BEST <b id="menuBest">0</b> · <b id="menuDist">0 m</b></small></span></button>
         <div id="boostBar" class="boost-bar"></div>
         <div class="service-grid">
           <button id="btnGarage" class="svc s-garage"><i data-icon="bike"></i><span>GARAGE</span></button>

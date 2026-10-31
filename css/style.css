@@ -1134,3 +1134,10 @@ body.touch #menu .help { display: none; }
   /* 가로 화면: 시트를 오른쪽에 띄워 가운데 라이더와 거리가 가려지지 않게 */
   #menu .menu-sheet { position: absolute; right: 24px; bottom: 24px; width: 420px; max-width: 420px; border-radius: 28px; }
 }
+
+/* 시작 화면: 인사·국가 줄 없이 버튼 안에 최고 기록만 작게 */
+#menu .play-txt { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.05; }
+#menu .play-sub { font-family: var(--hud); font-size: 11px; font-weight: 700; letter-spacing: 1px; opacity: 0.85; }
+#menu .play-sub b { font-weight: 800; }
+#menu .btn.play-btn { padding: 12px 18px; }
+#menu .menu-sheet { gap: 9px; padding-top: 12px; }
