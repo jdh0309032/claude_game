@@ -173,6 +173,7 @@ export const CAR_DEFS = {
   ramp:   { len: 9.5, w: 2.4, speed: [7, 10] }, // 경사판 견인트럭 (뒤에서 올라타면 점프)
   tuktuk: { len: 2.9, w: 1.45, speed: [7, 11] }, // 태국 툭툭
   scooter:{ len: 1.9, w: 0.75, speed: [9, 14] }, // 베트남 오토바이 물결
+  jeepney:{ len: 5.6, w: 2.0, speed: [8, 12] },  // 필리핀 지프니
 };
 
 const GLASS = 0x1b2735;
@@ -234,6 +235,26 @@ function buildCar(type) {
     det.push(box(W * 0.8, 0.6, 0.05, 0, 1.35, -0.55, GLASS));
     det.push(box(W * 0.9, 0.35, 0.6, 0, 1.0, hl - 0.6, 0x7a1f2b));
     lightY = 0.72;
+  } else if (type === 'jeepney') {
+    // 필리핀 지프니: 크롬 보닛 + 긴 승객칸(옆 창 뚫림) + 화려한 줄무늬 + 지붕 랙 + 보닛 위 은빛 말 장식
+    body.push(box(W, 0.9, 1.6, 0, 0.75, -hl + 0.8));
+    det.push(box(W * 0.92, 0.12, 1.5, 0, 1.24, -hl + 0.8, 0xd9dde1));
+    det.push(box(W * 0.7, 0.5, 0.05, 0, 0.85, -hl - 0.02, 0xd9dde1));
+    for (let k = 0; k < 5; k++) det.push(box(0.04, 0.45, 0.06, -W * 0.28 + k * W * 0.14, 0.85, -hl - 0.05, 0x8a8f96));
+    det.push(box(W * 0.9, 0.55, 0.06, 0, 1.6, -hl + 1.62, GLASS));
+    body.push(box(W, 1.0, L - 1.6, 0, 0.95, 0.8));
+    det.push(box(W + 0.02, 0.65, L - 1.8, 0, 1.78, 0.85, 0x1b1d22));
+    for (let k = 0; k < 7; k++) for (const sx of [-1, 1]) det.push(box(0.06, 0.66, 0.1, sx * (hw + 0.01), 1.78, -hl + 1.75 + k * ((L - 1.9) / 6), 0xd9dde1));
+    det.push(box(W + 0.12, 0.12, L - 1.4, 0, 2.15, 0.8, 0xd9dde1));
+    for (let k = 0; k < 4; k++) det.push(box(W * 0.9, 0.08, 0.05, 0, 2.3, -hl + 2.2 + k * 1.0, 0x555555));
+    for (const sx of [-1, 1]) {
+      for (const [y, c] of [[0.6, 0xffd60a], [0.75, 0xe63946], [0.9, 0x2a9df4], [1.25, 0x2ec27e]]) det.push(box(0.03, 0.08, L - 1.8, sx * (hw + 0.015), y, 0.8, c));
+      det.push(box(0.08, 0.3, 0.08, sx * (hw + 0.2), 1.45, -hl + 1.5, 0xd9dde1));
+    }
+    for (const sx of [-1, 1]) { const horse = new THREE.ConeGeometry(0.08, 0.35, 4); horse.rotateX(-0.6); horse.translate(sx * 0.3, 1.45, -hl + 0.4); det.push(paint(horse, 0xe9ecef)); }
+    det.push(box(0.6, 0.2, 0.04, 0, 1.9, -hl + 1.6, 0xffd60a));
+    det.push(box(W * 0.8, 0.12, 0.05, 0, 2.05, hl + 0.01, 0xe63946));
+    lightY = 0.8;
   } else if (type === 'ramp') {
     // 앞 캡 + 평판 적재함 + 후면 경사판 (뒤쪽 +Z 가 땅에 닿음)
     body.push(box(W, 1.3, 2.3, 0, 1.25, -hl + 1.15));
@@ -1144,6 +1165,201 @@ function deliveryBox(det, glow, style, mats = {}) {
   }
 }
 
+// ======================================================================
+// 동남아 8개국 국가대표 바이크: 나라 특색을 살린 전용 래핑 + 3D 장식 (그 외 나라는 기존 국기 래핑)
+// ======================================================================
+const star = (x, cx, cy, r, n = 5, inner = 0.45, rot = -Math.PI / 2) => {
+  x.beginPath();
+  for (let i = 0; i < n * 2; i++) {
+    const a = rot + (i * Math.PI) / n, rr = i % 2 ? r * inner : r;
+    x.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+  }
+  x.closePath();
+  x.fill();
+};
+const crescent = (x, cx, cy, r, bg, off = 0.35) => {
+  x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill();
+  const f = x.fillStyle; x.fillStyle = bg;
+  x.beginPath(); x.arc(cx + r * off, cy, r * 0.85, 0, Math.PI * 2); x.fill();
+  x.fillStyle = f;
+};
+const SEA_PAINT = {
+  SG(x, W, H) { // 빨강/흰 투톤 + 초승달·별 5개 + 사자 갈기 물결
+    x.fillStyle = '#ef3340'; x.fillRect(0, 0, W, H / 2);
+    x.fillStyle = '#ffffff'; x.fillRect(0, H / 2, W, H / 2);
+    x.fillStyle = '#ffffff';
+    crescent(x, 70, 62, 38, '#ef3340');
+    for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5; star(x, 112 + Math.cos(a) * 20, 62 + Math.sin(a) * 20, 8); }
+    x.strokeStyle = '#ef3340'; x.lineWidth = 6;
+    for (let i = 0; i < 6; i++) { x.beginPath(); x.moveTo(180 + i * 50, H); x.quadraticCurveTo(205 + i * 50, H * 0.62, 230 + i * 50, H); x.stroke(); }
+  },
+  MY(x, W, H) { // 말레이 호랑이(하리마우): 노랑 + 검은 줄무늬 + 남색 띠 초승달·14각 별
+    x.fillStyle = '#ffcc00'; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#16120c';
+    for (let i = 0; i < 9; i++) {
+      const cx = 20 + i * 58;
+      x.beginPath(); x.moveTo(cx, 0); x.quadraticCurveTo(cx + 34, H * 0.3, cx + 6, H * 0.55); x.quadraticCurveTo(cx + 22, H * 0.3, cx - 14, 0); x.fill();
+      x.beginPath(); x.moveTo(cx + 20, H); x.quadraticCurveTo(cx - 10, H * 0.72, cx + 14, H * 0.5); x.quadraticCurveTo(cx + 4, H * 0.75, cx + 38, H); x.fill();
+    }
+    x.fillStyle = '#010066'; x.fillRect(0, H * 0.4, W, H * 0.2);
+    x.fillStyle = '#cc0001'; x.fillRect(0, H * 0.4 - 6, W, 6); x.fillRect(0, H * 0.6, W, 6);
+    x.fillStyle = '#ffcc00'; crescent(x, 60, H / 2, 20, '#010066', 0.4); star(x, 92, H / 2, 16, 14, 0.5);
+  },
+  ID(x, W, H) { // 빨강/흰 + 바틱 메가 멘둥(구름 물결) + 금빛 가루다 깃털 줄
+    x.fillStyle = '#ce1126'; x.fillRect(0, 0, W, H / 2);
+    x.fillStyle = '#fff8f0'; x.fillRect(0, H / 2, W, H / 2);
+    x.lineWidth = 5;
+    for (let i = 0; i < 7; i++) for (let k = 0; k < 4; k++) {
+      x.strokeStyle = k % 2 ? '#8b0a18' : '#d94a5a';
+      x.beginPath(); x.arc(40 + i * 72, H * 0.78, 30 - k * 7, Math.PI, Math.PI * 2); x.stroke();
+    }
+    x.fillStyle = '#ffd34d';
+    for (let i = 0; i < 16; i++) { x.beginPath(); x.ellipse(16 + i * 32, H * 0.5, 7, 20, 0.5, 0, Math.PI * 2); x.fill(); }
+  },
+  TH(x, W, H) { // 짙은 남색 + 금빛 카녹(불꽃 덩굴) 문양 + 빨·흰·파 삼선
+    x.fillStyle = '#1b1d4a'; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#e8b923';
+    for (let i = 0; i < 10; i++) for (const y of [H * 0.25, H * 0.78]) {
+      const cx = 22 + i * 52;
+      x.beginPath(); x.moveTo(cx, y + 18); x.quadraticCurveTo(cx - 18, y, cx + 4, y - 20); x.quadraticCurveTo(cx + 2, y - 4, cx + 16, y + 2); x.quadraticCurveTo(cx + 10, y + 12, cx, y + 18); x.fill();
+    }
+    for (const [y, c] of [[0.44, '#a51931'], [0.48, '#f4f5f8'], [0.52, '#2d2a4a'], [0.56, '#f4f5f8'], [0.6, '#a51931']]) { x.fillStyle = c; x.fillRect(0, H * y, W, H * 0.04); }
+  },
+  VN(x, W, H) { // 빨강 + 큰 금별 + 연꽃 윤곽
+    const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#e1251b'); g.addColorStop(1, '#a3150e');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#ffcd00'; star(x, 80, H / 2, 52);
+    x.strokeStyle = '#ffd966'; x.lineWidth = 5;
+    for (let k = -2; k <= 2; k++) { x.beginPath(); x.ellipse(300 + k * 26, H * 0.55, 16, 48, k * 0.35, 0, Math.PI * 2); x.stroke(); }
+    x.fillStyle = '#ffcd00'; x.fillRect(0, H - 14, W, 6); x.fillRect(0, 8, W, 6);
+  },
+  PH(x, W, H) { // 파랑/빨강 + 흰 삼각형 안 8줄기 태양·별 3개 + 지프니 무지개 핀스트라이프
+    x.fillStyle = '#0038a8'; x.fillRect(0, 0, W, H / 2);
+    x.fillStyle = '#ce1126'; x.fillRect(0, H / 2, W, H / 2);
+    x.fillStyle = '#ffffff'; x.beginPath(); x.moveTo(0, 0); x.lineTo(H * 0.86, H / 2); x.lineTo(0, H); x.fill();
+    x.fillStyle = '#fcd116';
+    x.beginPath(); x.arc(70, H / 2, 22, 0, Math.PI * 2); x.fill();
+    for (let i = 0; i < 8; i++) { x.save(); x.translate(70, H / 2); x.rotate((i * Math.PI) / 4); x.fillRect(-4, -48, 8, 22); x.restore(); }
+    star(x, 18, 22, 11); star(x, 18, H - 22, 11); star(x, H * 0.74, H / 2, 11);
+    ['#ffd60a', '#2ec27e', '#ff70a6', '#ffffff'].forEach((c, i) => { x.fillStyle = c; x.fillRect(H * 0.8, H / 2 - 18 + i * 9, W, 4); });
+  },
+  KH(x, W, H) { // 파랑/빨강/파랑 + 사암색 패널에 앙코르와트 실루엣(금색)
+    x.fillStyle = '#032ea1'; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#e00025'; x.fillRect(0, H * 0.25, W, H * 0.5);
+    x.fillStyle = '#cdb68a'; x.fillRect(120, H * 0.3, 280, H * 0.4);
+    x.fillStyle = '#e8b923';
+    const base = H * 0.66;
+    x.fillRect(140, base - 8, 240, 8);
+    for (const [cx, h] of [[180, 34], [220, 46], [260, 64], [300, 46], [340, 34]]) { x.beginPath(); x.moveTo(cx - 14, base - 8); x.quadraticCurveTo(cx - 12, base - h * 0.6, cx, base - h - 8); x.quadraticCurveTo(cx + 12, base - h * 0.6, cx + 14, base - 8); x.fill(); }
+    x.fillStyle = '#ffffff'; x.fillRect(0, H * 0.25 - 4, W, 4); x.fillRect(0, H * 0.75, W, 4);
+  },
+  MM(x, W, H) { // 황금 바탕 + 미얀마 전통 기하 문양 + 노랑·초록·빨강 띠 + 흰 별
+    x.fillStyle = '#d9a514'; x.fillRect(0, 0, W, H);
+    x.strokeStyle = '#a87808'; x.lineWidth = 4;
+    for (let i = 0; i < 18; i++) { x.beginPath(); x.moveTo(i * 30, 0); x.lineTo(i * 30 + 15, 22); x.lineTo(i * 30 + 30, 0); x.stroke(); x.beginPath(); x.moveTo(i * 30, H); x.lineTo(i * 30 + 15, H - 22); x.lineTo(i * 30 + 30, H); x.stroke(); }
+    for (const [y, c] of [[0.36, '#fecb00'], [0.46, '#34b233'], [0.56, '#ea2839']]) { x.fillStyle = c; x.fillRect(0, H * y, W, H * 0.1); }
+    x.fillStyle = '#ffffff'; star(x, 80, H * 0.51, 30);
+  },
+};
+const seaWrapCache = {};
+function seaWrapTexture(code) {
+  if (seaWrapCache[code]) return seaWrapCache[code];
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 256;
+  const x = c.getContext('2d');
+  SEA_PAINT[code](x, 512, 256);
+  // 공통: 흰 원 #1 배지
+  x.fillStyle = '#ffffff';
+  x.beginPath(); x.arc(440, 128, 34, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#111111';
+  x.font = 'bold 46px "Russo One", "Arial Black", sans-serif';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText('1', 440, 131);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  seaWrapCache[code] = t;
+  return t;
+}
+
+// 나라별 3D 장식 (바이크 좌표: 앞 -z, 위 +y, 뒤 배달통 z 0.43~0.93 · y 1.06 이상은 비움)
+const SEA_NATIONAL = {
+  SG: { name: 'MERLION RACER', style: 'sport', metal: 0.25, parts(d, gl, mt) {
+    // 헤드라이트를 둘러싼 사자 갈기 + 뒤 물고기 꼬리 지느러미(은빛)
+    for (let i = 0; i < 9; i++) { const a = -Math.PI * 0.5 + (i / 8) * Math.PI; const c = new THREE.ConeGeometry(0.035, 0.16, 4); c.rotateX(-Math.PI / 2); c.rotateZ(a); c.translate(Math.sin(a) * 0.17, 0.95 + Math.cos(a) * 0.12, -0.72); d.push(paint(c, 0xffffff)); }
+    for (const s of [-1, 1]) { const f = new THREE.ConeGeometry(0.09, 0.42, 4); f.scale(0.3, 1, 1); f.rotateX(-1.1); f.rotateZ(s * 0.5); f.translate(s * 0.14, 0.86, 1.0); mt.push(paint(f, 0xd9dde1)); }
+    gl.push(box(0.3, 0.025, 0.025, 0, 0.62, -0.7, 0xff3b30));
+  } },
+  MY: { name: 'HARIMAU GT', style: 'sport', metal: 0.25, parts(d, gl, mt) {
+    // 앞 페어링 양옆 트윈타워 핀 + 호랑이 귀 + 노란 눈매 라이트
+    for (const s of [-1, 1]) {
+      for (let i = 0; i < 3; i++) mt.push(paint(new THREE.CylinderGeometry(0.03 - i * 0.006, 0.034 - i * 0.006, 0.12, 8).translate(s * 0.23, 0.98 + i * 0.12, -0.5), 0xdfe6ec));
+      mt.push(paint(new THREE.ConeGeometry(0.012, 0.12, 6).translate(s * 0.23, 1.38, -0.5), 0xffffff));
+      const ear = new THREE.ConeGeometry(0.05, 0.1, 3); ear.translate(s * 0.12, 1.22, -0.64); d.push(paint(ear, 0x16120c));
+      gl.push(box(0.1, 0.03, 0.02, s * 0.08, 0.95, -0.76, 0xffcc00, s * 0.3));
+    }
+    mt.push(box(0.06, 0.02, 0.02, 0, 1.14, -0.5, 0xdfe6ec));
+  } },
+  ID: { name: 'GARUDA WING', style: 'sport', metal: 0.25, parts(d, gl, mt) {
+    // 페어링 양옆에 금빛 가루다 날개 (깃털 7장 부채꼴)
+    for (const s of [-1, 1]) for (let i = 0; i < 7; i++) {
+      const len = 0.46 - i * 0.035;
+      const f = new THREE.ConeGeometry(0.045, len, 4);
+      f.scale(1, 1, 0.25);
+      f.translate(0, len / 2, 0);
+      f.rotateX(0.35 + i * 0.12);
+      f.rotateZ(-s * 0.55);
+      f.translate(s * 0.25, 0.92, -0.45 + i * 0.045);
+      mt.push(paint(f, i % 2 ? 0xffd34d : 0xe6b422));
+    }
+    mt.push(paint(new THREE.SphereGeometry(0.05, 10, 8).translate(0, 1.0, -0.72), 0xe6b422));
+  } },
+  TH: { name: 'CHOFA ROYAL', style: 'sport', metal: 0.3, parts(d, gl, mt) {
+    // 사원 지붕 끝 장식(초파) 금빛 뿔 + 금테 라인 + 꼬리 나가(뱀) 비늘 띠
+    for (const s of [-1, 1]) {
+      for (let i = 0; i < 4; i++) { const c = new THREE.CylinderGeometry(0.018, 0.026, 0.1, 6); c.rotateX(-0.35 - i * 0.32); c.translate(s * 0.2, 1.0 + i * 0.07, -0.66 + i * 0.045 - (i > 2 ? 0.02 : 0)); mt.push(paint(c, 0xe8b923)); }
+      mt.push(paint(new THREE.ConeGeometry(0.02, 0.08, 6).rotateX(-1.4).translate(s * 0.2, 1.27, -0.6), 0xffd34d));
+      for (let i = 0; i < 6; i++) gl.push(box(0.02, 0.03, 0.05, s * 0.2, 0.78, -0.2 + i * 0.12, i % 2 ? 0xe8b923 : 0xffd34d));
+    }
+  } },
+  VN: { name: 'LOTUS CLASSIC', style: 'classic', metal: 0.2, parts(d, gl, mt) {
+    // 레트로 스쿠터 + 앞 방패에 연꽃 엠블럼 + 금별 + 크롬 보조등 2개
+    for (let k = -2; k <= 2; k++) { const p = new THREE.SphereGeometry(0.05, 8, 6); p.scale(0.55, 1.4, 0.3); p.rotateZ(k * 0.4); p.translate(k * 0.03, 0.82, -0.79); d.push(paint(p, k % 2 ? 0xffb3c7 : 0xff8fab)); }
+    mt.push(paint(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 10).rotateX(Math.PI / 2).translate(0, 0.74, -0.8), 0xffcd00));
+    for (const s of [-1, 1]) { mt.push(cylX(0.06, 0.05, s * 0.22, 1.08, -0.62, 0xd9dde1, 12)); gl.push(paint(new THREE.CylinderGeometry(0.045, 0.045, 0.02, 12).rotateX(Math.PI / 2).translate(s * 0.22, 1.08, -0.65), 0xfff3b0)); }
+    mt.push(box(0.5, 0.03, 0.03, 0, 1.08, -0.62, 0xd9dde1));
+  } },
+  PH: { name: 'JEEPNEY KING', style: 'sport', metal: 0.3, parts(d, gl, mt) {
+    // 지프니 감성: 앞 흙받이 은빛 말 장식 2개 + 크롬 미러·안테나 여러 개 + 무지개 술
+    for (const s of [-1, 1]) {
+      const h = new THREE.ConeGeometry(0.035, 0.18, 4); h.scale(0.4, 1, 1); h.rotateX(-0.9); h.translate(s * 0.06, 0.82, -0.86); mt.push(paint(h, 0xe9ecef));
+      for (let k = 0; k < 2; k++) { mt.push(box(0.012, 0.22, 0.012, s * (0.3 + k * 0.05), 1.18, -0.5 - k * 0.04, 0xd9dde1)); mt.push(paint(new THREE.SphereGeometry(0.035, 8, 6).translate(s * (0.3 + k * 0.05), 1.3, -0.5 - k * 0.04), 0xd9dde1)); }
+      [0xe63946, 0xffd60a, 0x2a9df4, 0x2ec27e].forEach((c, i) => d.push(box(0.012, 0.12, 0.012, s * 0.27, 0.62, -0.1 + i * 0.03, c)));
+    }
+    gl.push(box(0.3, 0.025, 0.025, 0, 0.62, -0.72, 0xffd60a));
+  } },
+  KH: { name: 'ANGKOR STONE', style: 'sport', metal: 0.2, parts(d, gl, mt) {
+    // 앞 페어링 위 연꽃봉오리 탑 3개(금) + 사암 측면 패널
+    for (const [x, s] of [[-0.1, 0.8], [0, 1], [0.1, 0.8]]) {
+      for (let i = 0; i < 3; i++) mt.push(paint(new THREE.CylinderGeometry((0.035 - i * 0.008) * s, (0.04 - i * 0.008) * s, 0.05 * s, 8).translate(x, 1.12 + i * 0.05 * s, -0.6), 0xe8b923));
+      mt.push(paint(new THREE.ConeGeometry(0.018 * s, 0.08 * s, 8).translate(x, 1.12 + 0.17 * s, -0.6), 0xffd34d));
+    }
+    for (const s of [-1, 1]) d.push(box(0.02, 0.18, 0.4, s * 0.21, 0.8, -0.3, 0xcdb68a, -0.35));
+  } },
+  MM: { name: 'GOLDEN PAGODA', style: 'sport', metal: 0.75, parts(d, gl, mt) {
+    // 황금 몸체 + 앞 페어링 종 모양 탑 첨탑 + 공작 깃 장식(꼬리 양옆)
+    mt.push(paint(new THREE.SphereGeometry(0.07, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.6).scale(1, 1.2, 1).translate(0, 1.1, -0.6), 0xf2c230));
+    for (let i = 0; i < 3; i++) mt.push(paint(new THREE.CylinderGeometry(0.03 - i * 0.007, 0.035 - i * 0.007, 0.03, 10).translate(0, 1.18 + i * 0.03, -0.6), 0xffd34d));
+    mt.push(paint(new THREE.ConeGeometry(0.014, 0.12, 8).translate(0, 1.32, -0.6), 0xffd34d));
+    gl.push(paint(new THREE.SphereGeometry(0.012, 6, 4).translate(0, 1.39, -0.6), 0xffffff));
+    for (const s of [-1, 1]) for (let i = 0; i < 4; i++) {
+      const f = new THREE.SphereGeometry(0.035, 8, 6); f.scale(0.3, 1, 1.5); f.translate(s * 0.2, 0.86 + i * 0.03, 0.15 + i * 0.07); d.push(paint(f, [0x1b998b, 0x2a9df4, 0x34b233, 0x1b998b][i]));
+      gl.push(paint(new THREE.SphereGeometry(0.012, 6, 4).translate(s * 0.212, 0.86 + i * 0.03, 0.15 + i * 0.07), 0xffd34d));
+    }
+  } },
+};
+export const SEA_NATIONAL_NAMES = Object.fromEntries(Object.entries(SEA_NATIONAL).map(([k, v]) => [k, v.name]));
+
 // 바이크 차종별 외형 (config.js BIKES[].style)
 function bikeShape(style, body, det, glow, accent) {
   if (style === 'classic') {
@@ -1187,7 +1403,11 @@ export function createBike(color, opts = {}) {
     return { root, lean, bodyMat: new THREE.MeshLambertMaterial({ color }), flame };
   }
   let bodyMat;
-  if (opts.national && opts.nationalCode) {
+  // 동남아 8개국 국가대표: 나라별 전용 래핑 + 장식, 그 외 나라는 국기 래핑
+  const seaKit = opts.national ? SEA_NATIONAL[opts.nationalCode] : null;
+  if (seaKit) {
+    bodyMat = new THREE.MeshStandardMaterial({ map: seaWrapTexture(opts.nationalCode), roughness: 0.3, metalness: seaKit.metal, envMap: envTexture(), envMapIntensity: 1.1 });
+  } else if (opts.national && opts.nationalCode) {
     // 국가대표: 국기 + 레이싱 패턴 풀 바디 래핑
     bodyMat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: nationalWrapTexture(opts.nationalCode, opts.accent ?? 0xffd700) });
   } else if (opts.paint) {
@@ -1199,13 +1419,17 @@ export function createBike(color, opts = {}) {
   const body = [], det = [], head = [], tail = [], glow = [];
   const out = OUTFIT_STYLES[opts.outfit] || OUTFIT_STYLES.jacket;
   const hel = HELMET_STYLES[opts.helmet] || HELMET_STYLES.basic;
-  bikeShape(opts.style || 'scooter', body, det, glow, opts.accent);
+  const gloss = [], metal = []; // 광택(헬멧 쉘·바이저·일부 배달통) / 금속 반사(골드·크롬·국가대표 장식)
+  bikeShape(seaKit?.style || opts.style || 'scooter', body, det, glow, opts.accent);
+  if (seaKit) seaKit.parts(det, glow, metal);
   if (opts.national) {
-    // 국가대표 바이크: 포인트 색 레이싱 스트라이프 + 금색 트림 + 번호판 #1
+    // 국가대표 바이크: 번호판 #1 (+ 동남아 외 나라는 포인트 색 레이싱 스트라이프 + 금색 트림)
     const ac = opts.accent ?? 0xffd700;
-    det.push(box(0.44, 0.08, 0.68, 0, 1.0, -0.3, ac, -0.35));
-    det.push(box(0.12, 0.34, 0.68, 0, 0.83, -0.3, ac, -0.35));
-    glow.push(box(0.43, 0.03, 0.03, 0, 0.92, -0.62, 0xffd700));
+    if (!seaKit) {
+      det.push(box(0.44, 0.08, 0.68, 0, 1.0, -0.3, ac, -0.35));
+      det.push(box(0.12, 0.34, 0.68, 0, 0.83, -0.3, ac, -0.35));
+      glow.push(box(0.43, 0.03, 0.03, 0, 0.92, -0.62, 0xffd700));
+    }
     det.push(box(0.2, 0.14, 0.02, 0, 0.82, 0.82, 0xffffff));
     det.push(box(0.04, 0.1, 0.02, 0, 0.82, 0.845, 0x111111));
   }
@@ -1239,7 +1463,6 @@ export function createBike(color, opts = {}) {
   // 라이더 (의상 + 헤드기어)
   rider(det, glow, out);
   const helmetShell = [];
-  const gloss = [], metal = []; // 광택(헬멧 쉘·바이저·일부 배달통) / 금속 반사(골드·크롬)
   headgear(det, glow, hel, opts.helmetPaint, helmetShell, { gloss, metal });
 
   // 배달 박스 (뒷좌석 랙 위) — 외부 'box' 모델이 있으면 그것으로 교체
@@ -1752,11 +1975,143 @@ export function buildingStyle(style) {
     for (let k = 0; k < 3; k++) b.push(box(0.3, 0.9, 1.0, face + 0.1, h + 1.3, -3 + k * 3, 0x2b3a4a));
     return { base: merge(b), glow: merge(g) };
   }
+  if (style === 'peranakan') {
+    // 싱가포르·말레이시아 페라나칸 숍하우스: 파스텔 2칸 + 5피트 아케이드 + 덧창 + 코니스 + 기와지붕
+    for (const [z, c, sh] of [[-2.5, 0x9ad1c4, 0x2d6a4f], [2.5, 0xf6bfd0, 0x3a5a8c]]) {
+      const h = 9;
+      b.push(box(W, h, 4.9, 0, h / 2, z, c));
+      // 1층 아케이드(오각기둥 + 어두운 안쪽)
+      b.push(box(0.1, 2.8, 4.3, face - 1.2, 1.4, z, 0x4a3b2e));
+      b.push(box(1.3, 0.35, 4.9, face - 0.55, 3.0, z, c));
+      for (const pz of [z - 2.2, z + 2.2]) b.push(box(0.35, 2.8, 0.35, face - 0.2, 1.4, pz, 0xf4efe6));
+      b.push(box(0.06, 0.25, 4.0, face + 0.04, 3.0, z, 0xffffff));
+      // 2층: 덧창 3개 (아치 위 + 루버)
+      for (const wz of [z - 1.4, z, z + 1.4]) {
+        b.push(box(0.08, 2.0, 0.9, face + 0.04, 5.2, wz, sh));
+        for (let r = 0; r < 5; r++) b.push(box(0.1, 0.05, 0.86, face + 0.06, 4.45 + r * 0.38, wz, 0xf4efe6));
+        b.push(paint(new THREE.CylinderGeometry(0.45, 0.45, 0.08, 10, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2).translate(face + 0.05, 6.2, wz), 0xf4efe6));
+      }
+      // 코니스 + 타일 띠 + 박공
+      b.push(box(0.45, 0.3, 4.9, face + 0.18, 7.3, z, 0xffffff));
+      for (let k = 0; k < 6; k++) b.push(box(0.06, 0.32, 0.6, face + 0.04, 6.85, z - 1.9 + k * 0.76, k % 2 ? 0x2f7fe0 : 0xe9c46a));
+      const roof = new THREE.BoxGeometry(W + 0.4, 0.22, 5.1);
+      roof.rotateZ(0.32);
+      roof.translate(0, h + 0.6, z);
+      b.push(paint(roof, 0xb5532d));
+      g.push(paint(new THREE.SphereGeometry(0.22, 8, 6).translate(face + 0.4, 2.6, z), 0xff3b30));
+    }
+    return { base: merge(b), glow: merge(g) };
+  }
+  if (style === 'colonial') {
+    // 양곤·마닐라 식민지풍: 바랜 크림색 3층 + 아치 창 + 철제 발코니 + 몰딩 + 1층 가게 차양
+    const h = 13;
+    b.push(box(W, h, L, 0, h / 2, 0, 0xe8d9a8));
+    b.push(box(W + 0.1, 0.5, L + 0.1, 0, h - 0.2, 0, 0xf6efd6));
+    b.push(box(W + 0.2, 0.25, L + 0.2, 0, 4.0, 0, 0xf6efd6));
+    for (let fl = 0; fl < 2; fl++) {
+      for (let k = 0; k < 4; k++) {
+        const wz = -3.6 + k * 2.4, wy = 5.6 + fl * 3.4;
+        b.push(box(0.08, 1.8, 1.0, face + 0.04, wy, wz, 0x3d5a6c));
+        b.push(paint(new THREE.CylinderGeometry(0.5, 0.5, 0.1, 10, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2).translate(face + 0.05, wy + 0.9, wz), 0xf6efd6));
+      }
+      b.push(box(0.6, 0.1, L * 0.86, face + 0.3, 4.75 + fl * 3.4, 0, 0x5b5b5b));
+      for (let k = 0; k < 12; k++) b.push(box(0.04, 0.7, 0.04, face + 0.58, 5.1 + fl * 3.4, -4.2 + k * 0.76, 0x3b3b3b));
+      b.push(box(0.04, 0.05, L * 0.86, face + 0.58, 5.45 + fl * 3.4, 0, 0x3b3b3b));
+    }
+    // 1층 가게: 셔터 + 줄무늬 차양 + 간판
+    for (let k = 0; k < 2; k++) {
+      const z = -2.5 + k * 5;
+      b.push(box(0.1, 2.6, 4.0, face + 0.04, 1.3, z, 0x8d99ae));
+      const aw = new THREE.BoxGeometry(1.4, 0.06, 4.2);
+      aw.rotateZ(-0.3);
+      aw.translate(face + 0.7, 3.0, z);
+      b.push(paint(aw, k ? 0x2a9d8f : 0xe76f51));
+      g.push(paint(box(0.12, 0.5, 2.6, face + 0.08, 3.55, z), k ? 0xffd166 : 0xffffff));
+    }
+    // 바랜 얼룩 + 옥상 물탱크
+    for (const [y, z] of [[9, -2], [6.5, 3.5], [11.5, 1]]) b.push(box(0.05, 0.9, 1.4, face + 0.03, y, z, 0xcbbb88));
+    b.push(paint(new THREE.CylinderGeometry(0.8, 0.8, 1.4, 10).translate(-1, h + 0.7, 2.5), 0x3b6ea5));
+    return { base: merge(b), glow: merge(g) };
+  }
+  if (style === 'teak') {
+    // 캄보디아·미얀마 목조 가옥: 높은 기둥(필로티) + 판자벽 + 가파른 박공지붕 + 1층 가게 + 화분
+    for (const [z, c] of [[-2.5, 0x8a5a35], [2.5, 0x9c6b3c]]) {
+      // 1층: 기둥 + 가게(콘크리트)
+      b.push(box(W * 0.9, 2.6, 4.4, -0.2, 1.3, z, 0xd8cfc0));
+      for (const pz of [z - 2.1, z + 2.1]) b.push(box(0.3, 3.2, 0.3, face - 0.2, 1.6, pz, 0x5a3e2b));
+      b.push(box(0.1, 2.2, 3.4, face - 0.62, 1.1, z, 0x3a3f45));
+      // 2층: 판자벽 + 창 + 발코니 난간
+      b.push(box(W, 3.2, 4.8, 0, 4.5, z, c));
+      for (let r = 0; r < 6; r++) b.push(box(0.06, 0.05, 4.7, face + 0.03, 3.1 + r * 0.55, z, 0x5a3e2b));
+      for (const wz of [z - 1.2, z + 1.2]) {
+        b.push(box(0.08, 1.2, 0.9, face + 0.05, 4.6, wz, 0x2b2015));
+        b.push(box(0.1, 1.2, 0.35, face + 0.06, 4.6, wz - 0.65, 0x2d6a4f));
+        b.push(box(0.1, 1.2, 0.35, face + 0.06, 4.6, wz + 0.65, 0x2d6a4f));
+      }
+      b.push(box(0.9, 0.1, 4.6, face + 0.45, 3.0, z, 0x6b4a2e));
+      for (let k = 0; k < 8; k++) b.push(box(0.05, 0.8, 0.05, face + 0.85, 3.45, z - 2.1 + k * 0.6, 0x6b4a2e));
+      b.push(box(0.05, 0.06, 4.5, face + 0.85, 3.85, z, 0x6b4a2e));
+      // 가파른 박공지붕 (양쪽 경사판) + 끝 장식
+      for (const s of [-1, 1]) {
+        const r = new THREE.BoxGeometry(W * 0.62, 0.15, 5.2);
+        r.rotateZ(-s * 0.75);
+        r.translate(s * 1.36, 7.4, z);
+        b.push(paint(r, 0x7a2e1f));
+      }
+      b.push(paint(new THREE.ConeGeometry(0.15, 0.9, 4).translate(0, 9.0, z - 2.4), 0xd4a017));
+      b.push(paint(new THREE.ConeGeometry(0.15, 0.9, 4).translate(0, 9.0, z + 2.4), 0xd4a017));
+      for (const pz of [z - 1.6, z + 1.6]) b.push(paint(new THREE.IcosahedronGeometry(0.3, 0).translate(face + 0.6, 3.35, pz), 0x2f9e44));
+      g.push(paint(box(0.1, 0.4, 2.4, face + 0.06, 2.5, z), 0xffd166));
+    }
+    return { base: merge(b), glow: merge(g) };
+  }
   return { base: rukoGeometry(), glow: null };
 }
 
 export function treeVariant(kind) {
   if (kind === 'palm') return palmGeometry();
+  if (kind === 'raintree') {
+    // 레인트리: 굵은 줄기 + 넓게 퍼진 우산형 수관 (싱가포르·말레이시아 가로수)
+    const p = [];
+    const t = new THREE.CylinderGeometry(0.2, 0.32, 3.0, 7);
+    t.translate(0, 1.5, 0);
+    p.push(paint(t, 0x4a3b2e));
+    for (const s of [-1, 1]) { const br = new THREE.CylinderGeometry(0.08, 0.14, 1.6, 5); br.rotateZ(s * 0.7); br.translate(s * 0.5, 3.2, 0); p.push(paint(br, 0x4a3b2e)); }
+    for (const [x, y, z, r, c] of [[0, 4.0, 0, 1.9, 0x2f7d3a], [1.5, 3.7, 0.4, 1.3, 0x3f8f46], [-1.5, 3.8, -0.3, 1.35, 0x37853f], [0.3, 3.6, 1.4, 1.2, 0x3f8f46], [-0.2, 3.7, -1.4, 1.2, 0x2f7d3a]]) {
+      const s = new THREE.IcosahedronGeometry(r, 1);
+      s.scale(1.25, 0.55, 1.25);
+      s.translate(x, y, z);
+      p.push(paint(s, c));
+    }
+    return merge(p);
+  }
+  if (kind === 'frangipani') {
+    // 프랑지파니(플루메리아): 갈라진 회색 가지 + 잎 뭉치 + 흰·노랑 꽃
+    const p = [];
+    const t = new THREE.CylinderGeometry(0.14, 0.2, 1.6, 6);
+    t.translate(0, 0.8, 0);
+    p.push(paint(t, 0x8d8378));
+    for (const [a, ry] of [[0.55, 0], [0.5, 2.1], [0.6, 4.2]]) {
+      const br = new THREE.CylinderGeometry(0.07, 0.11, 1.5, 5);
+      br.translate(0, 0.75, 0);
+      br.rotateZ(a);
+      br.rotateY(ry);
+      br.translate(0, 1.5, 0);
+      p.push(paint(br, 0x8d8378));
+      const tip = new THREE.Vector3(-Math.sin(a) * 1.5, 1.5 + Math.cos(a) * 1.5, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry);
+      const l = new THREE.IcosahedronGeometry(0.7, 0);
+      l.scale(1, 0.6, 1);
+      l.translate(tip.x, tip.y + 0.15, tip.z);
+      p.push(paint(l, 0x3f8f46));
+      for (let k = 0; k < 4; k++) {
+        const f = new THREE.IcosahedronGeometry(0.13, 0);
+        f.translate(tip.x + Math.cos(k * 1.6) * 0.45, tip.y + 0.45, tip.z + Math.sin(k * 1.6) * 0.45);
+        p.push(paint(f, k % 2 ? 0xfff8e1 : 0xffe066));
+      }
+    }
+    return merge(p);
+  }
+
   const trunk = new THREE.CylinderGeometry(0.16, 0.24, 2.2, 6);
   trunk.translate(0, 1.1, 0);
   const parts = [paint(trunk, 0x5b4636)];
@@ -1800,6 +2155,63 @@ export function curbVariant(kind) {
     roof.translate(0, 2.35, 0);
     p.push(paint(roof, 0xff7b00));
     p.push(box(0.04, 1.2, 3.2, 1.25, 1.7, 0, 0xff9e2c));
+  } else if (kind === 'mamak') {
+    // 말레이시아 마막 식당: 초록 천막 + 플라스틱 테이블·의자 + 테 타릭 카운터
+    p.push(box(1.2, 1.0, 3.2, -0.6, 0.5, 0, 0xc0c4c8));
+    p.push(box(0.06, 0.4, 3.0, 0.02, 1.2, 0, 0x2d6a4f));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.push(box(0.06, 2.5, 0.06, sx * 1.2, 1.25, sz * 1.6, 0x888888));
+    const roof = new THREE.BoxGeometry(2.6, 0.06, 3.5);
+    roof.rotateZ(-0.12);
+    roof.translate(0, 2.55, 0);
+    p.push(paint(roof, 0x1b998b));
+    for (const z of [-0.9, 0.9]) {
+      const t = new THREE.CylinderGeometry(0.4, 0.4, 0.05, 10);
+      t.translate(0.6, 0.72, z);
+      p.push(paint(t, 0xe63946));
+      p.push(box(0.05, 0.7, 0.05, 0.6, 0.36, z, 0x777777));
+      for (const dz of [-0.45, 0.45]) p.push(box(0.32, 0.42, 0.32, 0.6, 0.21, z + dz, z < 0 ? 0x2a9df4 : 0xff8800));
+      for (let k = 0; k < 2; k++) p.push(paint(new THREE.CylinderGeometry(0.05, 0.04, 0.14, 6).translate(0.5 + k * 0.2, 0.82, z), 0xc8a165));
+    }
+  } else if (kind === 'sarisari') {
+    // 필리핀 사리사리 스토어: 작은 가게 + 철망 창 + 매달린 과자 봉지 + 함석 지붕
+    p.push(box(2.2, 2.4, 3.0, -0.3, 1.2, 0, 0xf1e3c8));
+    p.push(box(0.06, 1.0, 2.2, 0.82, 1.45, 0, 0x2b2015));
+    for (let k = 0; k < 9; k++) p.push(box(0.04, 1.0, 0.03, 0.86, 1.45, -1.0 + k * 0.25, 0x666666));
+    for (let k = 0; k < 4; k++) p.push(box(0.04, 0.03, 2.2, 0.86, 1.05 + k * 0.27, 0, 0x666666));
+    for (let k = 0; k < 7; k++) p.push(box(0.06, 0.32, 0.18, 0.95, 1.75 - (k % 2) * 0.12, -0.9 + k * 0.3, [0xe63946, 0xffc400, 0x2a9df4, 0x2ec27e][k % 4]));
+    p.push(box(0.5, 0.06, 2.4, 1.05, 0.95, 0, 0x8d6e63));
+    const roof = new THREE.BoxGeometry(2.8, 0.05, 3.4);
+    roof.rotateZ(-0.2);
+    roof.translate(0.1, 2.55, 0);
+    p.push(paint(roof, 0x9aa0a6));
+    p.push(box(0.06, 0.45, 2.6, 0.9, 2.15, 0, 0xce1126));
+  } else if (kind === 'juicecart') {
+    // 캄보디아 사탕수수 주스 수레: 바퀴 달린 수레 + 압착기 + 사탕수수 다발 + 파라솔
+    p.push(box(1.0, 0.8, 2.0, 0, 0.75, 0, 0x2a9d8f));
+    for (const sz of [-0.8, 0.8]) p.push(cylX(0.3, 0.1, -0.55, 0.3, sz, 0x222222, 12), cylX(0.3, 0.1, 0.55, 0.3, sz, 0x222222, 12));
+    p.push(box(0.6, 0.6, 0.6, 0, 1.45, -0.5, 0xc0c4c8));
+    p.push(cylX(0.18, 0.7, 0, 1.55, -0.5, 0x777777, 10));
+    for (let k = 0; k < 6; k++) { const c = new THREE.CylinderGeometry(0.035, 0.035, 1.6, 5); c.rotateX(1.3); c.translate(-0.25 + k * 0.1, 1.25, 0.4); p.push(paint(c, k % 2 ? 0x9bbf4a : 0xc9a227)); }
+    p.push(box(0.04, 2.2, 0.04, 0.4, 1.9, 0.5, 0x555555));
+    const um = new THREE.ConeGeometry(1.1, 0.4, 8, 1, true);
+    um.translate(0.4, 3.0, 0.5);
+    p.push(paint(um, 0xe63946));
+    p.push(box(0.4, 0.4, 0.3, 0.3, 1.35, 0.6, 0xfff3b0));
+  } else if (kind === 'teashop') {
+    // 미얀마 찻집: 낮은 테이블 + 아주 작은 플라스틱 의자 + 보온병 + 차양
+    for (const z of [-1.0, 0.4]) {
+      p.push(box(0.6, 0.05, 0.6, 0.3, 0.45, z, 0xd62828));
+      p.push(box(0.05, 0.42, 0.05, 0.3, 0.22, z, 0x777777));
+      for (const [dx, dz] of [[-0.45, 0], [0.45, 0], [0, 0.45]]) p.push(box(0.24, 0.25, 0.24, 0.3 + dx, 0.12, z + dz, [0x2a9df4, 0x2ec27e, 0xffc400][(dz > 0) + (dx > 0)]));
+      p.push(paint(new THREE.CylinderGeometry(0.06, 0.06, 0.25, 8).translate(0.25, 0.6, z), 0xc0c4c8));
+    }
+    p.push(box(0.8, 0.9, 1.4, -0.7, 0.45, 1.1, 0x6b4a2e));
+    p.push(paint(new THREE.CylinderGeometry(0.22, 0.22, 0.5, 10).translate(-0.7, 1.15, 1.1), 0x9aa0a6));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.push(box(0.05, 2.3, 0.05, sx * 1.1, 1.15, sz * 1.6, 0x666666));
+    const roof = new THREE.BoxGeometry(2.4, 0.05, 3.4);
+    roof.rotateZ(-0.15);
+    roof.translate(0, 2.35, 0);
+    p.push(paint(roof, 0x1d3557));
   } else {
     // 싱가포르 도심 정원 화단
     p.push(box(1.4, 0.6, 3.4, 0, 0.3, 0, 0xbfc5c9));
@@ -1821,25 +2233,45 @@ export function createLandmark(kind) {
   const cyl = (rt, rb, h, x, y, z, c, seg = 8) => { const q = new THREE.CylinderGeometry(rt, rb, h, seg); q.translate(x, y, z); return paint(q, c); };
   const cone = (r, h, x, y, z, c, seg = 8) => { const q = new THREE.ConeGeometry(r, h, seg); q.translate(x, y, z); return paint(q, c); };
   switch (kind) {
-    case 'monas': // 모나스 탑
-      p.push(box(40, 6, 40, 0, 3, 0, 0xeae2d6), box(24, 10, 24, 0, 11, 0, 0xeae2d6));
-      p.push(cyl(2.5, 5, 90, 0, 61, 0, 0xf1ece4, 4));
-      p.push(box(10, 4, 10, 0, 107, 0, 0xd8d0c4));
-      g.push(cone(3.5, 12, 0, 115, 0, 0xffc300, 6));
+    case 'monas': { // 모나스: 넓은 광장 기단(컵 모양) + 흰 오벨리스크 + 금빛 불꽃
+      p.push(box(60, 2, 60, 0, 1, 0, 0xd8d0c4), box(44, 5, 44, 0, 4.5, 0, 0xeae2d6));
+      { const cup = new THREE.CylinderGeometry(26, 14, 10, 4); cup.rotateY(Math.PI / 4); cup.translate(0, 12, 0); p.push(paint(cup, 0xf1ece4)); }
+      p.push(cyl(2.6, 5.2, 92, 0, 63, 0, 0xf6f2ea, 4));
+      p.push(cyl(6, 4, 4, 0, 111, 0, 0xd8d0c4, 4));
+      { const f = new THREE.ConeGeometry(4, 14, 8); f.translate(0, 120, 0); g.push(paint(f, 0xffc300)); }
+      for (const [x, z] of [[-1.6, 1], [1.4, -1], [0.4, 1.6]]) { const f = new THREE.ConeGeometry(1.6, 7, 6); f.translate(x, 121 + Math.abs(x), z); g.push(paint(f, 0xffe066)); }
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) p.push(paint(new THREE.IcosahedronGeometry(4, 0).translate(sx * 24, 6, sz * 24), 0x2f7d3a));
       break;
-    case 'pagoda': // 하노이 탑 + 지붕
-      for (let i = 0; i < 6; i++) {
-        p.push(box(26 - i * 3.5, 9, 26 - i * 3.5, 0, 4.5 + i * 13, 0, 0xc1440e));
-        p.push(box(32 - i * 3.5, 1.5, 32 - i * 3.5, 0, 10 + i * 13, 0, 0x5a3e2b));
+    }
+    case 'pagoda': { // 하노이 쩐꾸옥 사원 탑: 붉은 11층 탑 + 처마 + 연꽃 첨탑 + 호숫가 정자
+      for (let i = 0; i < 9; i++) {
+        const w = 22 - i * 2;
+        p.push(box(w, 8, w, 0, 4 + i * 9.5, 0, 0xb5361e));
+        p.push(box(w + 6, 1.2, w + 6, 0, 8.6 + i * 9.5, 0, 0x4a3b2e));
+        for (let k = 0; k < 3; k++) for (const s of [-1, 1]) p.push(box(0.3, 3, 2.2, s * (w / 2 + 0.2), 4 + i * 9.5, -w / 3 + k * (w / 3), 0xffd166));
       }
-      g.push(cone(2, 10, 0, 87, 0, 0xffd166));
+      g.push(cone(3, 12, 0, 92, 0, 0xffd166, 8));
+      p.push(box(20, 4, 14, 46, 2, 10, 0xc0392b));
+      { const r = new THREE.ConeGeometry(16, 8, 4); r.rotateY(Math.PI / 4); r.scale(1, 1, 0.75); r.translate(46, 8, 10); p.push(paint(r, 0x5a3e2b)); }
       break;
-    case 'temple': // 왓 아룬 풍 사원 첨탑
-      p.push(box(70, 8, 40, 0, 4, 0, 0xf4e9d8));
-      p.push(cone(16, 80, 0, 48, 0, 0xf2e6c9, 10));
-      for (const sx of [-24, 24]) p.push(cone(8, 42, sx, 29, 0, 0xf2e6c9, 10));
-      g.push(cone(3, 18, 0, 96, 0, 0xffc300), cone(1.6, 10, -24, 54, 0, 0xffc300), cone(1.6, 10, 24, 54, 0, 0xffc300));
+    }
+    case 'temple': { // 왓 아룬: 도자기 장식 프랑(중앙 첨탑) 계단식 + 작은 프랑 4개 + 금빛 첨두
+      p.push(box(90, 6, 90, 0, 3, 0, 0xf4e9d8));
+      for (let i = 0; i < 7; i++) {
+        const r = 18 - i * 2.2;
+        p.push(cyl(r, r + 1.2, 10, 0, 11 + i * 10, 0, i % 2 ? 0xe9dcc3 : 0xf2e6c9, 12));
+        for (let k = 0; k < 8; k++) {
+          const a = (k / 8) * Math.PI * 2;
+          p.push(paint(new THREE.IcosahedronGeometry(1.1, 0).translate(Math.cos(a) * (r + 0.6), 11 + i * 10, Math.sin(a) * (r + 0.6)), [0x2a9df4, 0xe63946, 0x2ec27e, 0xffc400][(k + i) % 4]));
+        }
+      }
+      g.push(cone(3, 22, 0, 92, 0, 0xffc300, 10));
+      for (const [x, z] of [[-34, -34], [34, -34], [-34, 34], [34, 34]]) {
+        for (let i = 0; i < 4; i++) p.push(cyl(6 - i * 1.2, 6.6 - i * 1.2, 7, x, 9 + i * 7, z, 0xf2e6c9, 10));
+        g.push(cone(1.4, 10, x, 41, z, 0xffc300));
+      }
       break;
+    }
     case 'namsan': // 남산 + N서울타워
       { const hill = new THREE.SphereGeometry(40, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2); hill.scale(1.4, 0.95, 1); p.push(paint(hill, 0x2f5d3a)); }
       p.push(cyl(2.5, 3.5, 60, 0, 66, 0, 0xe6e6e6));
@@ -1854,16 +2286,25 @@ export function createLandmark(kind) {
       p.push(box(14, 3, 14, 0, 60, 0, 0xffffff));
       g.push(cyl(0.6, 1.2, 24, 0, 110, 0, 0xffe066, 6));
       break;
-    case 'mbs': // 마리나 베이 샌즈: 3개 타워 + 스카이파크
+    case 'mbs': { // 마리나 베이 샌즈: 기울어진 3개 타워 + 배 모양 스카이파크 + 슈퍼트리 그로브 + 아트사이언스 연꽃
       for (const x of [-30, 0, 30]) {
-        const t = new THREE.BoxGeometry(14, 90, 18);
-        t.translate(x, 45, 0);
-        p.push(paint(t, 0xd9e2ec));
-        g.push(paint(box(14.2, 1, 18.2, x, 70, 0), 0x9bf6ff));
+        for (const s of [-1, 1]) {
+          const t = new THREE.BoxGeometry(7, 92, 18);
+          t.rotateZ(s * 0.06);
+          t.translate(x + s * 4.2, 46, 0);
+          p.push(paint(t, 0xd9e2ec));
+        }
+        for (let k = 0; k < 6; k++) g.push(box(14.6, 0.6, 18.4, x, 14 + k * 13, 0, 0x9bf6ff));
       }
-      p.push(box(100, 5, 22, 0, 93, 0, 0x8d99ae));
-      g.push(paint(box(96, 1, 20, 0, 96, 0), 0x52b788));
+      { const deck = new THREE.CylinderGeometry(11, 11, 112, 16, 1, false, 0, Math.PI); deck.rotateZ(Math.PI / 2); deck.scale(1, 0.32, 1); deck.translate(0, 95, 0); p.push(paint(deck, 0x8d99ae)); }
+      g.push(box(100, 0.8, 18, 0, 97, 0, 0x52b788));
+      for (const [x, z, h] of [[-62, 26, 30], [-50, 34, 36], [-40, 22, 26], [-30, 36, 32]]) {
+        p.push(cyl(1.4, 2.4, h, x, h / 2, z, 0x3f5d4a, 8));
+        { const c = new THREE.ConeGeometry(8, 6, 12, 1, true); c.rotateX(Math.PI); c.translate(x, h + 2, z); g.push(paint(c, 0xb15cff)); }
+      }
+      for (let k = 0; k < 9; k++) { const a = (k / 9) * Math.PI - Math.PI / 2; const f = new THREE.ConeGeometry(3, 16, 4); f.rotateZ(a * 0.9); f.translate(56 + Math.sin(a) * 6, 10 + Math.cos(a) * 4, 26); p.push(paint(f, 0xf4f4f4)); }
       break;
+    }
     case 'empire': // 엠파이어 스테이트 풍 + 주변 스카이라인
       p.push(box(30, 60, 30, 0, 30, 0, 0xb7a99a), box(20, 30, 20, 0, 75, 0, 0xc2b5a7), box(12, 16, 12, 0, 98, 0, 0xcdc2b5));
       g.push(cyl(0.8, 2, 30, 0, 121, 0, 0xfff3b0, 6));
@@ -1881,6 +2322,49 @@ export function createLandmark(kind) {
       p.push(cyl(2.2, 6.5, 50, 0, 84, 0, 0x7a5c3c, 4));
       g.push(cyl(0.5, 0.5, 12, 0, 114, 0, 0xffe066, 6));
       break;
+    case 'petronas': { // 페트로나스 트윈타워: 8각 기둥 계단식 + 스카이브리지 + 첨탑 + KL타워
+      for (const x of [-18, 18]) {
+        for (let i = 0; i < 6; i++) p.push(cyl(9 - i * 1.0, 9.5 - i * 1.0, 22, x, 11 + i * 20, 0, 0xc9d1d9, 8));
+        for (let i = 0; i < 6; i++) g.push(cyl(9.1 - i * 1.0, 9.1 - i * 1.0, 0.8, x, 21 + i * 20, 0, 0x9bf6ff, 8));
+        p.push(cyl(2, 4, 10, x, 127, 0, 0xdfe6ec, 8));
+        g.push(cyl(0.4, 1.2, 30, x, 147, 0, 0xffffff, 6));
+      }
+      p.push(box(28, 3, 4, 0, 82, 0, 0x8d99ae));
+      for (const s of [-1, 1]) { const leg = new THREE.BoxGeometry(1.2, 22, 1.2); leg.rotateZ(s * 0.45); leg.translate(s * 5, 72, 0); p.push(paint(leg, 0x8d99ae)); }
+      p.push(cyl(1.6, 2.4, 70, 70, 35, 20, 0xd9d9d9, 8), cyl(7, 6, 8, 70, 74, 20, 0xbfc5c9, 10));
+      g.push(cyl(0.3, 0.3, 18, 70, 87, 20, 0xff3b6b, 6));
+      break;
+    }
+    case 'mayon': { // 마욘 화산: 완벽한 원뿔 + 녹색 기슭 + 연기 + 마닐라 스카이라인
+      { const c = new THREE.ConeGeometry(90, 120, 24, 4); c.translate(0, 60, 0); p.push(paint(c, 0x7d8f69)); }
+      { const c = new THREE.ConeGeometry(42, 56, 24, 2); c.translate(0, 92, 0); p.push(paint(c, 0x8a8178)); }
+      { const c = new THREE.ConeGeometry(14, 18, 20, 1); c.translate(0, 111, 0); p.push(paint(c, 0x6e6660)); }
+      for (const [x, y, r] of [[3, 124, 7], [10, 131, 9], [20, 137, 11], [32, 141, 12]]) p.push(paint(new THREE.IcosahedronGeometry(r, 1).translate(x, y, 0), 0xe9e5df));
+      for (const [x, h] of [[-80, 26], [-66, 38], [-54, 22], [62, 30], [76, 44], [90, 24]]) p.push(box(10, h, 10, x, h / 2, 30, 0x9aa5b1));
+      break;
+    }
+    case 'angkor': { // 앙코르와트: 연꽃봉오리 탑 5개 + 회랑 기단 + 해자 둑길
+      p.push(box(120, 6, 70, 0, 3, 0, 0x8a8174), box(90, 8, 52, 0, 10, 0, 0x948a7b), box(60, 8, 36, 0, 18, 0, 0x9e937f));
+      const tower = (x, z, s) => {
+        for (let i = 0; i < 5; i++) p.push(cyl((5.5 - i * 0.9) * s, (6 - i * 0.9) * s, 7 * s, x, 22 + (3.5 + i * 7) * s, z, i % 2 ? 0x8f8574 : 0xa39883, 8));
+        p.push(cone(1.8 * s, 9 * s, x, 22 + 39 * s, z, 0x8f8574, 8));
+      };
+      tower(0, 0, 1.45);
+      for (const [x, z] of [[-24, -14], [24, -14], [-24, 14], [24, 14]]) tower(x, z, 1.0);
+      p.push(box(14, 2, 60, 0, 1, -60, 0x8a8174));
+      for (const sx of [-1, 1]) p.push(paint(new THREE.IcosahedronGeometry(6, 0).translate(sx * 50, 8, -40), 0x3f7f3a));
+      break;
+    }
+    case 'shwedagon': { // 쉐다곤 파고다: 계단식 기단 + 종 모양 황금 탑 + 첨탑 + 보석 우산(티)
+      p.push(box(80, 8, 80, 0, 4, 0, 0xe9dfc8));
+      for (let i = 0; i < 3; i++) g.push(box(52 - i * 10, 4, 52 - i * 10, 0, 10 + i * 4, 0, 0xe6b422));
+      { const bell = new THREE.SphereGeometry(18, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.62); bell.scale(1, 1.25, 1); bell.translate(0, 22, 0); g.push(paint(bell, 0xf2c230)); }
+      for (let i = 0; i < 6; i++) g.push(cyl(8 - i * 1.2, 9 - i * 1.2, 4, 0, 44 + i * 4, 0, i % 2 ? 0xffd34d : 0xe6b422, 16));
+      g.push(cone(4, 40, 0, 88, 0, 0xffd34d, 16));
+      g.push(cyl(2.6, 2.6, 2, 0, 104, 0, 0xfff3b0, 12), cone(0.6, 8, 0, 110, 0, 0xffffff, 8));
+      for (const [x, z] of [[-30, -30], [30, -30], [-30, 30], [30, 30]]) { g.push(cone(3, 20, x, 18, z, 0xe6b422, 10)); p.push(box(8, 4, 8, x, 6, z, 0xe9dfc8)); }
+      break;
+    }
     default:
       p.push(box(20, 60, 20, 0, 30, 0, 0x999999));
   }
@@ -1888,6 +2372,57 @@ export function createLandmark(kind) {
   grp.add(new THREE.Mesh(merge(p), landmarkMat));
   if (g.length) grp.add(new THREE.Mesh(merge(g), landmarkGlowMat));
   return grp;
+}
+
+// ---------- 도로 위 축제 장식 (나라별: 랜턴 줄 / 삼각 깃발 줄 / 불교 깃발). 도로 양쪽 기둥 사이에 처진 줄
+export function overheadGeometry(kind) {
+  const p = [];
+  const X = 9.6, Y = 8.4, SAG = 1.1, N = 15;
+  for (const sx of [-1, 1]) {
+    p.push(box(0.14, Y + 0.3, 0.14, sx * X, (Y + 0.3) / 2, 0, 0x6c757d));
+    p.push(box(0.3, 0.12, 0.3, sx * X, Y + 0.36, 0, 0x6c757d));
+  }
+  const yAt = (t) => Y - SAG * (1 - (2 * t - 1) ** 2);
+  for (let i = 0; i < N; i++) { // 줄 (짧은 원기둥 조각)
+    const t0 = i / N, t1 = (i + 1) / N;
+    const a = V(-X + 2 * X * t0, yAt(t0), 0), b = V(-X + 2 * X * t1, yAt(t1), 0);
+    const len = a.distanceTo(b);
+    const g = new THREE.CylinderGeometry(0.02, 0.02, len, 4);
+    g.rotateZ(Math.PI / 2 + Math.atan2(b.y - a.y, b.x - a.x));
+    g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, 0);
+    p.push(paint(g, 0x333333));
+  }
+  const pal = {
+    lanterns: [0xe63946, 0xffb703, 0xe63946, 0xfb8500],
+    bunting_ph: [0xe63946, 0xffd60a, 0x2a9df4, 0x2ec27e, 0xff70a6, 0xffffff],
+    bunting_my: [0xcc0001, 0xffffff, 0x010066, 0xffcc00],
+    bunting_id: [0xce1126, 0xffffff],
+    flags_th: [0xffd60a, 0xffffff, 0x2d2a4a, 0xffd60a],
+    flags_kh: [0x032ea1, 0xe00025, 0xffffff, 0xffd60a],
+    flags_mm: [0xffd60a, 0xffffff, 0xe6b422, 0x2a9d8f, 0xe63946],
+  }[kind] || [0xffffff];
+  const M = 26;
+  for (let i = 1; i < M; i++) {
+    const t = i / M, x = -X + 2 * X * t, y = yAt(t);
+    const c = pal[i % pal.length];
+    if (kind === 'lanterns') {
+      if (i % 2) continue;
+      const l = new THREE.SphereGeometry(0.32, 10, 8);
+      l.scale(1, 1.25, 1);
+      l.translate(x, y - 0.5, 0);
+      p.push(paint(l, c));
+      p.push(box(0.36, 0.06, 0.36, x, y - 0.06, 0, 0xd4a017), box(0.36, 0.06, 0.36, x, y - 0.94, 0, 0xd4a017));
+      p.push(box(0.04, 0.3, 0.04, x, y - 1.15, 0, 0xffd166));
+    } else {
+      // 삼각 깃발 (앞뒤로 보이는 납작한 삼각뿔)
+      const f = new THREE.ConeGeometry(0.28, 0.55, 3);
+      f.rotateX(Math.PI);
+      f.scale(1, 1, 0.12);
+      f.translate(x, y - 0.3, 0);
+      p.push(paint(f, c));
+    }
+  }
+  return merge(p);
 }
 
 // ---------- 국기 / 국경 관문

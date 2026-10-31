@@ -185,6 +185,26 @@ export const BILLBOARD_POSTERS = {
     { title: 'NEKO PHONE', sub: 'Purrfect signal', bg: '#ff70a6', fg: '#ffffff' },
     { title: 'CONVEYOR SUSHI', sub: 'Plates at light speed', bg: '#0077b6', fg: '#caf0f8' },
   ],
+  MY: [
+    { title: 'TEH TARIK TOWER', sub: 'Pulled high, poured proud', bg: '#7f4f24', fg: '#ffe8d6' },
+    { title: 'NASI LEMAK NATION', sub: 'Sambal sampai pagi', bg: '#2d6a4f', fg: '#ffd60a' },
+    { title: 'DURIAN DREAM', sub: 'Smell it. Love it.', bg: '#ffd60a', fg: '#1b4332' },
+  ],
+  PH: [
+    { title: 'HALO-HALO HEAVEN', sub: 'Mix it all, halo na!', bg: '#7b2cbf', fg: '#ffd60a' },
+    { title: 'JEEPNEY JOY', sub: 'Bayad po! Next stop: fun', bg: '#ffd60a', fg: '#d00000' },
+    { title: 'MANG ADOBO', sub: 'Sarap since forever', bg: '#d00000', fg: '#ffffff' },
+  ],
+  KH: [
+    { title: 'AMOK AMOK', sub: 'Steamed in banana leaf', bg: '#2d6a4f', fg: '#ffd166' },
+    { title: 'SUGARCANE SPLASH', sub: 'Fresh-pressed, ice cold', bg: '#9bbf4a', fg: '#1b4332' },
+    { title: 'TEMPLE RUN TOURS', sub: 'Sunrise at the five towers', bg: '#032ea1', fg: '#ffffff' },
+  ],
+  MM: [
+    { title: 'MOHINGA MORNING', sub: 'Fish noodle soup, the right way', bg: '#e09f3e', fg: '#3d1f00' },
+    { title: 'LAPHET LOVE', sub: 'Tea leaf salad crunch', bg: '#386641', fg: '#f2e8cf' },
+    { title: 'GOLDEN THANAKA', sub: 'Cool face, hot day', bg: '#fecb00', fg: '#34312e' },
+  ],
   SG: [
     { title: 'LION CITY AIR', sub: 'Fly the little red dot', bg: '#d90429', fg: '#ffffff' },
     { title: 'KAYA KAYA TOAST', sub: 'Breakfast of legends', bg: '#80b918', fg: '#ffffff' },

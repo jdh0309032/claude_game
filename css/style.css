@@ -1059,3 +1059,10 @@ body.one-hand .steer-zone { left: 0; right: 0; width: 100%; }
 .pw i { position: absolute; left: 0; bottom: 0; height: 2px; border-radius: 2px; background: #7dffb0; box-shadow: 0 0 4px rgba(0, 0, 0, 0.5); transition: width 0.25s linear; }
 .pw.hot i { background: #ffd34d; }
 #hud #hudDist { color: #fff; }
+/* 아이템 타이머: 아이콘 + 초만 (계기판 폭 안에서만 → 왼쪽 WRONG WAY 등 태그와 안 겹침) */
+.hud-powers { max-width: 150px; gap: 4px 8px; }
+.pw .ic { width: 17px; height: 17px; }
+.pw em { font-size: 14px; }
+/* 아이템 타이머: 오른쪽 열(코인 아래)에 세로로 → 왼쪽 상태 태그(WRONG WAY 등)와 절대 겹치지 않음 */
+#hud .hud-powers { flex-direction: column; align-items: flex-end; max-width: none; margin-top: 2px; gap: 6px; }
+#hud .pw { padding-bottom: 5px; }

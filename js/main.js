@@ -205,7 +205,7 @@ const slotDist = (it) => (G.distance || 0) - it.z;
 const slotTheme = (it) => themeAt(slotDist(it));
 
 // 건물: 스타일별 base(+glow) 인스턴스 메시 (좌/우 각각)
-const BUILDING_STYLES = ['ruko', 'tube', 'neon', 'modern', 'brick', 'haussmann'];
+const BUILDING_STYLES = ['ruko', 'tube', 'neon', 'modern', 'brick', 'haussmann', 'peranakan', 'colonial', 'teak'];
 const RUKO_COLORS = [0xfff1c9, 0xd8f1e3, 0xfde2e4, 0xdbeafe, 0xfff7ae, 0xe9e3ff, 0xffffff, 0xffd8b5];
 const rukoMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 const buildingGeoms = Object.fromEntries(BUILDING_STYLES.map((st) => [st, M.buildingStyle(st)]));
@@ -232,9 +232,12 @@ function buildingSide(side) {
   return { strip, groups };
 }
 
-const TREE_KINDS = ['palm', 'sakura', 'ginkgo', 'round'];
+const TREE_KINDS = ['palm', 'sakura', 'ginkgo', 'round', 'raintree', 'frangipani'];
 const treeMeshes = TREE_KINDS.map((k) => new THREE.InstancedMesh(M.treeVariant(k), M.vcMat, 56));
-const CURB_KINDS = ['warung', 'vending', 'cafe', 'tent', 'planter'];
+const CURB_KINDS = ['warung', 'vending', 'cafe', 'tent', 'planter', 'mamak', 'sarisari', 'juicecart', 'teashop'];
+// 도로 위 축제 장식 (나라별)
+const OVERHEAD_KINDS = ['lanterns', 'bunting_ph', 'bunting_my', 'bunting_id', 'flags_th', 'flags_kh', 'flags_mm'];
+const overheadMeshes = OVERHEAD_KINDS.map((k) => new THREE.InstancedMesh(M.overheadGeometry(k), M.vcMat, 6));
 const curbMeshes = CURB_KINDS.map((k) => new THREE.InstancedMesh(M.curbVariant(k), M.vcMat, 14));
 const lampPole = new THREE.InstancedMesh(M.lampPoleGeometry(), M.vcMat, 18);
 const lampHead = new THREE.InstancedMesh(M.lampHeadGeometry(), M.lampHeadMat, 18);
@@ -280,6 +283,15 @@ const strips = [
     it.x = side * 12.2;
     it.ry = side > 0 ? Math.PI : 0;
     it.hidden = Math.random() < 0.3;
+  }),
+  // 축제 장식 줄: 그 나라 구간에서만 (국경 근처 120m 는 비움 → 관문과 겹치지 않게)
+  new PropStrip({ variants: overheadMeshes.map((m) => [m]), block: underBoard }, 6, 55, (it) => {
+    const d = slotDist(it);
+    const kind = themeAt(d).overhead;
+    const toBorder = ZONE_LENGTH - (d % ZONE_LENGTH);
+    it.x = 0;
+    it.variant = Math.max(0, OVERHEAD_KINDS.indexOf(kind));
+    it.hidden = !kind || toBorder < 120 || d % ZONE_LENGTH < 60 || Math.random() < 0.25;
   }),
   new PropStrip({ always: [bldgMesh] }, 30, 14, (it, k) => {
     const side = it.i % 2 ? 1 : -1;
@@ -351,6 +363,12 @@ function composeLook(bikeId, code, eq) {
   return { color: look.color, opts };
 }
 const myNationalCode = () => save.nationalCode || save.country;
+// 표시용 바이크 이름: 동남아 국가대표는 나라별 전용 이름 (예: NATIONAL · GARUDA WING)
+const bikeName = (bikeId, code) => {
+  const bk = getBike(bikeId);
+  if (bk.special === 'national' && M.SEA_NATIONAL_NAMES[code]) return `NATIONAL · ${M.SEA_NATIONAL_NAMES[code]}`;
+  return bk.name.toUpperCase();
+};
 const myLook = () => composeLook(save.bike, myNationalCode(), save);
 const currentBikeKey = () => JSON.stringify(myLook());
 const riderOpts = () => myLook().opts;
@@ -1617,9 +1635,11 @@ function padFromPointer(e) {
   const ax = Math.max(0, Math.abs(dx) - STEER_DEAD);
   const t = clamp(ax / (STEER_RANGE - STEER_DEAD), 0, 1);
   pad.value = Math.sign(dx) * t * (0.6 + 0.4 * t); // 가운데는 부드럽게, 끝으로 갈수록 크게
-  // 페달은 화면 버튼으로만 (한 손 조작은 자동 가속, 위아래 슬라이드는 공중 묘기 전용)
-  pad.throttle = pad.brake = false;
-  pad.knobY = 0;
+  // 한 손 조작: 버튼 없이 같은 손가락을 위로 밀면 스로틀, 아래로 밀면 브레이크 (페달 방식은 버튼으로)
+  const oneHand = (save.settings.controls || 'onehand') === 'onehand';
+  pad.throttle = oneHand && dy > PEDAL_DEAD;
+  pad.brake = oneHand && dy < -PEDAL_DEAD;
+  pad.knobY = oneHand ? clamp(-dy, -40, 40) : 0;
   // 공중 묘기용 아날로그 방향 (데드존 밖에서만)
   pad.rawX = clamp(dx / STEER_RANGE, -1, 1);
   pad.rawUp = Math.abs(dy) > 12 ? clamp(dy / STEER_RANGE, -1, 1) : 0;
@@ -1667,12 +1687,20 @@ document.addEventListener('click', (e) => {
   if (b) b.blur();
 });
 
+// 방향 버튼·키보드: 누르는 순간 최대가 아니라 부드럽게 차오르고 최대치도 낮춤 (감도 완화)
+const BTN_STEER_MAX = 0.8;
+const BTN_STEER_RISE = 4.5; // 초당 증가량
+let btnSteer = 0;
+function updateButtonSteer(rdt) {
+  let t = 0;
+  if (keys.ArrowLeft || keys.KeyA || held.left) t -= BTN_STEER_MAX;
+  if (keys.ArrowRight || keys.KeyD || held.right) t += BTN_STEER_MAX;
+  // 반대 방향 전환·손 뗄 때는 빠르게, 누를 때는 천천히
+  const rate = t === 0 || Math.sign(t) !== Math.sign(btnSteer) ? 10 : BTN_STEER_RISE;
+  btnSteer = approach(btnSteer, t, rate * rdt);
+}
 function steerInput() {
-  let s = 0;
-  if (keys.ArrowLeft || keys.KeyA || held.left) s -= 1;
-  if (keys.ArrowRight || keys.KeyD || held.right) s += 1;
-  s += pad.value;
-  return clamp(s, -1, 1);
+  return clamp(btnSteer + pad.value, -1, 1);
 }
 
 function vibrate(p) {
@@ -1909,6 +1937,7 @@ function updatePlaying(rdt) {
   G.rpm = approach(G.rpm, rpmTarget, rdt * (rpmTarget > G.rpm ? 3.2 : 2.2));
 
   // 조향 (물웅덩이에 미끄러지면 반응이 둔해지고 옆으로 밀림)
+  updateButtonSteer(rdt);
   const steer = steerInput();
   const handling = bk.handling * (G.rain ? 0.85 : 1);
   const latMax = (7 + G.speed * 0.1) * handling;
@@ -2002,7 +2031,10 @@ const offLevelAngle = () => 2 * Math.acos(Math.min(1, Math.abs(airQ.w))); // 수
 
 // 공중 묘기 입력 벡터: 슬라이드 중이면 손가락 방향 그대로(아날로그, 페달도 더함), 아니면 키/버튼
 function trickInput(steer, throttle, brake) {
-  if (pad.id !== null) return [clamp((pad.rawUp || 0) + (throttle ? 1 : 0) - (brake ? 1 : 0), -1, 1), pad.rawX || 0];
+  if (pad.id !== null) {
+    const pedal = (held.throttle ? 1 : 0) - (held.brake ? 1 : 0);
+    return [clamp((pad.rawUp || 0) + pedal, -1, 1), pad.rawX || 0];
+  }
   return [(throttle ? 1 : 0) - (brake ? 1 : 0), steer];
 }
 
@@ -2320,7 +2352,7 @@ function mountStage(containerId, draggable) {
   const look = myLook();
   stage.setRider(look.opts, look.color);
   stage.mount($(containerId), { draggable });
-  setFlexLabel(`MY RIDE · ${getBike(save.bike).name.toUpperCase()}`, look.opts.flag);
+  setFlexLabel(`MY RIDE · ${bikeName(save.bike, myNationalCode())}`, look.opts.flag);
 }
 function setFlexLabel(text, flag) {
   $('flexLabel').innerHTML = `${flag ? flagBadge(flag, 'flag') : ''}${escapeHtml(text)}`;
@@ -2379,14 +2411,14 @@ let lastTags = '';
 const powerMax = {};
 let lastPowers = '';
 function powerChip(key, ic, label, t, cls = '') {
-  if (t === true) return `<span class="pw ${cls}">${icon(ic)}<b>${label}</b></span>`;
+  if (t === true) return `<span class="pw ${cls}" title="${label}">${icon(ic)}</span>`;
   if (!(t > 0)) {
     delete powerMax[key];
     return '';
   }
   powerMax[key] = Math.max(powerMax[key] || 0, t);
   const f = Math.round((t / powerMax[key]) * 20) * 5;
-  return `<span class="pw ${cls}">${icon(ic)}<b>${label}</b><em>${Math.ceil(t)}s</em><i style="width:${f}%"></i></span>`;
+  return `<span class="pw ${cls}" title="${label}">${icon(ic)}<em>${Math.ceil(t)}s</em><i style="width:${f}%"></i></span>`;
 }
 function updatePowerHud() {
   const html = [
@@ -2981,7 +3013,7 @@ function rankTable(rows, world) {
       <td>${i < 3 ? `<b class="medal m${i + 1}">${i + 1}</b>` : i + 1}</td>
       <td><span class="rider-cell">${flag}${cc}<span class="nick">${escapeHtml(r.nickname)}</span></span>${r.dist ? `<small class="muted">${fmt(r.dist)} m</small>` : ''}</td>
       <td class="num"><b>${fmt(r.score)}</b></td>
-      <td><small>${escapeHtml(getBike(r.bike).name)}</small></td></tr>`;
+      <td><small>${escapeHtml(bikeName(r.bike, r.country))}</small></td></tr>`;
     }).join('')
   }</tbody></table>`;
 }
@@ -2995,12 +3027,12 @@ function selectRankRow(i) {
   if (!r) {
     const look = myLook();
     stage.setRider(look.opts, look.color);
-    setFlexLabel(`MY RIDE · ${getBike(save.bike).name.toUpperCase()}`, look.opts.flag);
+    setFlexLabel(`MY RIDE · ${bikeName(save.bike, myNationalCode())}`, look.opts.flag);
     return;
   }
   const look = rowLook(r);
   stage.setRider(look.opts, look.color);
-  setFlexLabel(`#${i + 1} ${String(r.nickname).toUpperCase()} · ${getBike(r.bike).name.toUpperCase()}`, r.country);
+  setFlexLabel(`#${i + 1} ${String(r.nickname).toUpperCase()} · ${bikeName(r.bike, r.country)}`, r.country);
 }
 
 async function renderRanking() {
@@ -3327,8 +3359,8 @@ $('btnAdmin').addEventListener('click', () => {
 });
 // 조작 3종: 한 손(기본) = 화면 어디든 좌우 슬라이드 · 자동 가속 / 슬라이드 + 페달 / 방향 버튼 + 페달
 const CONTROL_HINTS = {
-  onehand: 'Slide left / right anywhere. The bike accelerates by itself. In the air, slide up / down / sideways for tricks.',
-  slide: 'Slide on the steering side, THROTTLE and BRAKE on the other side.',
+  onehand: 'One finger anywhere: slide left / right to steer, up for gas, down to brake. No buttons. In the air the same slide does tricks.',
+  slide: 'Slide on the steering side, THROTTLE and BRAKE buttons on the other side.',
   arrows: 'LEFT / RIGHT buttons on one side, THROTTLE and BRAKE on the other side.',
 };
 function applyControlSettings() {
@@ -3378,7 +3410,7 @@ function renderReceipt() {
   const s = getSession();
   $('rcOrder').textContent = `#GR-${String(Math.floor(G.distance * 7 + G.time * 13) % 100000).padStart(5, '0')}`;
   $('rcRider').textContent = (s ? s.nickname : save.lastName || 'Guest Rider').toUpperCase();
-  $('rcBike').textContent = getBike(save.bike).name.toUpperCase();
+  $('rcBike').textContent = bikeName(save.bike, myNationalCode());
   const items = [
     ['DISTANCE', `${fmt(G.distance)} m`],
     ['NEAR MISSES', `${G.nearMiss} (MAX COMBO ${G.maxCombo})`],
