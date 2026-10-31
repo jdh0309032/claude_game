@@ -30,7 +30,7 @@ export const MISSION_DEFS = {
 
 // 서버(player_data.data)에 저장하는 키
 const SERVER_KEYS = [
-  'coins', 'best', 'bestDist', 'ownedBikes', 'bike', 'prevBike', 'ownedBoxes', 'box', 'ownedOutfits', 'outfit',
+  'coins', 'best', 'bestDist', 'lastDist', 'ownedBikes', 'bike', 'prevBike', 'ownedBoxes', 'box', 'ownedOutfits', 'outfit',
   'ownedHelmets', 'helmet', 'ownedFlags', 'flag', 'ownedPaints', 'bikePaint', 'helmetPaint', 'prevBox', 'boosts', 'armedBoosts', 'streak', 'lastDaily', 'adCooldownUntil', 'lastName',
   'missions', 'missionLevels', 'settings', 'stats',
 ];
@@ -40,6 +40,7 @@ function defaults() {
     coins: 0,
     best: 0,
     bestDist: 0,
+    lastDist: 0, // 직전 판 거리 (시작 버튼에 RECENT 로 표시)
     ownedBikes: ['rookie'],
     bike: 'rookie',
     prevBike: 'rookie', // 국가대표 바이크 회수 시 돌아갈 바이크

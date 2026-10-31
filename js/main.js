@@ -2581,6 +2581,7 @@ function refreshMenu() {
   $('accountLabel').textContent = s ? s.nickname.toUpperCase() : 'SIGN IN';
   $('menuBest').textContent = fmt(save.best);
   $('menuDist').textContent = `${fmt(save.bestDist || 0)} m`;
+  $('menuRecent').textContent = `${fmt(save.lastDist || 0)} m`;
   $('menuCountry').innerHTML = `${flagBadge(save.country)}${escapeHtml(save.country)}`;
   $('menuFlag').innerHTML = `${flagBadge(save.country)}<span>${escapeHtml(countryName(save.country).toUpperCase())}</span>`;
   $('menuCoins').textContent = fmtCoins(save.coins);
@@ -3565,6 +3566,7 @@ function showGameOver() {
   setResultTitle(isRecord);
   save.best = Math.max(save.best, score);
   save.bestDist = Math.max(save.bestDist || 0, Math.floor(G.distance));
+  save.lastDist = Math.floor(G.distance);
   $('hotBanner').classList.add('hidden');
   G.hot = null;
   const stats = [

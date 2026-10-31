@@ -98,16 +98,16 @@
         <div id="challengeChip" class="challenge-chip hidden"><span data-icon="flag"></span><span id="challengeText">CHALLENGE ROAD</span><button id="btnClearChallenge" aria-label="Clear challenge">&times;</button></div>
       </header>
       <div class="scene-window"></div>
+      <nav class="side-dock" aria-label="Menu">
+        <button id="btnGarage" class="svc s-garage"><i data-icon="bike"></i><span>GARAGE</span></button>
+        <button id="btnRanking" class="svc s-rank"><i data-icon="trophy"></i><span>RANKING</span></button>
+        <button id="btnMissions" class="svc s-mission"><i data-icon="box"></i><span>MISSIONS</span></button>
+        <button id="btnSettings" class="svc s-settings"><i data-icon="gear"></i><span>SETTINGS</span></button>
+      </nav>
       <div class="app-sheet menu-sheet">
         <div class="hidden"><b id="menuName">Rider</b><span id="menuFlag"></span><b id="menuCountry">-</b></div>
-        <button id="btnPlay" class="btn play-btn" data-icon="play"><span class="play-txt">START RIDE<small class="play-sub">BEST <b id="menuBest">0</b> · <b id="menuDist">0 m</b></small></span></button>
         <div id="boostBar" class="boost-bar"></div>
-        <div class="service-grid">
-          <button id="btnGarage" class="svc s-garage"><i data-icon="bike"></i><span>GARAGE</span></button>
-          <button id="btnRanking" class="svc s-rank"><i data-icon="trophy"></i><span>RANKING</span></button>
-          <button id="btnMissions" class="svc s-mission"><i data-icon="box"></i><span>MISSIONS</span></button>
-          <button id="btnSettings" class="svc s-settings"><i data-icon="gear"></i><span>SETTINGS</span></button>
-        </div>
+        <button id="btnPlay" class="btn play-btn"><span class="play-txt">START RIDE</span><small class="play-sub"><span class="ps-best">BEST</span> <b id="menuDist">0 m</b><i class="ps-sep"></i><span class="ps-recent">RECENT</span> <b id="menuRecent">0 m</b><b id="menuBest" class="hidden">0</b></small></button>
         <div class="menu-chips"><span id="adminBadge" class="admin-badge hidden">ADMIN MODE</span><span id="guestNote" class="guest-note hidden"></span></div>
         <div class="help" id="menuHelp">
           <span class="kbd-only">ARROWS / A D steer &middot; UP throttle &middot; DOWN brake &middot; P pause</span>
