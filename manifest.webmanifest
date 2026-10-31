@@ -1,9 +1,10 @@
 {
-  "name": "그랩 라이더 - 3D 배달 러너",
-  "short_name": "그랩라이더",
+  "name": "Grub Rider - 3D Delivery Runner",
+  "short_name": "Grub Rider",
+  "description": "Ride a delivery scooter through Southeast Asia and beyond. Weave through traffic, flip off ramps and top your country's leaderboard.",
   "start_url": ".",
   "display": "fullscreen",
-  "orientation": "any",
+  "orientation": "portrait",
   "background_color": "#00b14f",
   "theme_color": "#00b14f",
   "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
