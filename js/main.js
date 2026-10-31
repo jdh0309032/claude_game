@@ -1461,18 +1461,26 @@ function updateCamera(rdt) {
   const baseY = lerp(3.0, 5.4, p), camZ = lerp(6.2, 8.4, p);
   let lookZ = lerp(-14, -24, p), lookY = lerp(1.2, 0.6, p);
   if (G.state === 'menu') {
-    // 시작 화면: 라이더 앞쪽 3/4 방향에서 천천히 도는 시네마틱 카메라 (하단 시트 위쪽에 라이더가 오게)
+    // 시작 화면: 라이더 뒤쪽 위에서 앞(-z)을 보는 3/4 구도. 앞쪽은 새로 생기는 길이라 건물이 사라지지 않고,
+    // 카메라가 차선 위 높이(인도 소품은 x 9m 밖)에 있어 눈앞을 스치는 오브젝트도 없음. 좌우로 아주 천천히 흔들림
     const t = G.time || 0;
-    const ang = 2.4 + Math.sin(t * 0.18) * 0.45;
-    const rad = lerp(8, 12.5, p);
-    camera.position.set(G.x + Math.sin(ang) * rad, lerp(1.8, 2.6, p), Math.cos(ang) * rad);
-    camera.lookAt(G.x, lerp(0.5, -1.6, p), 0);
-    camera.rotateY(lerp(0.1, 0.1, p)); // 라이더를 화면 오른쪽에 (왼쪽은 타이틀)
-    if (Math.abs(camera.fov - 50) > 0.05) {
-      camera.fov = lerp(camera.fov, 50, Math.min(1, rdt * 4));
-      camera.updateProjectionMatrix();
+    const side = 2.6 + Math.sin(t * 0.25) * 0.8;
+    camera.position.set(G.x + side, 2.8, 9.5);
+    camera.lookAt(G.x + side * 0.22, 1.9, -10); // 거리 풍경이 보이도록 거의 수평, 라이더는 가운데
+    // 화면 위쪽(헤더)·아래쪽(시트) 사이 창에 라이더가 오도록 투영을 아래로 늘려 위쪽으로 올려 그림
+    const W = window.innerWidth, H = window.innerHeight;
+    const extra = lerp(0.2, 0.45, p);
+    if (!camera.view || !camera.view.enabled || camera.view.fullHeight !== H * (1 + extra)) {
+      camera.setViewOffset(W, H * (1 + extra), 0, H * extra, W, H);
     }
+    const mfov = lerp(60, 84, p);
+    if (Math.abs(camera.fov - mfov) > 0.05) camera.fov = lerp(camera.fov, mfov, Math.min(1, rdt * 4));
+    camera.updateProjectionMatrix();
     return;
+  }
+  if (camera.view && camera.view.enabled) {
+    camera.clearViewOffset();
+    camera.updateProjectionMatrix();
   }
   const sf = clamp((G.speed * 3.6 - 60) / 220, 0, 1);
   const fov = lerp(62, 72, p) + sf * 12 + (G.air ? 6 : 0) + (G.feverT > 0 ? 10 : 0);
@@ -2078,11 +2086,8 @@ function updateAttract(rdt) {
   G.lean = -Math.cos(G.time * 0.5) * 0.1;
   G.braking = false;
   scrollWorld(G.speed * rdt);
-  if (G.distance > G.nextSpawn) {
-    spawnCar();
-    G.nextSpawn = G.distance + rand(10, 22);
-  }
-  updateCars(rdt, false);
+  // 시작 화면은 차 없이 라이더만: 카메라 앞을 스치는 오브젝트가 없게
+  while (cars.length) releaseCar(cars[0]);
   updateStalls(rdt, false);
   poseBike();
   sfx.setIntensity(0.15, false);

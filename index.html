@@ -86,21 +86,21 @@
     <div id="toast"></div>
 
     <!-- Main menu (app home) -->
-    <section id="menu" class="screen app menu-v2">
-      <header class="menu-top">
-        <span id="menuFlag" class="glass-chip flag-chip"></span>
-        <div class="app-top-right">
-          <span class="stat-pill coin glass"><i data-icon="coin"></i><b id="menuCoins">0</b></span>
-          <button id="btnAccount" class="account-chip glass" data-icon="user"><span id="accountLabel">SIGN IN</span></button>
+    <section id="menu" class="screen app menu-v3">
+      <header class="mhead">
+        <div class="mhead-top">
+          <span class="brand">Grab<b>Rider</b></span>
+          <div class="app-top-right">
+            <span class="stat-pill coin light"><i data-icon="coin"></i><b id="menuCoins">0</b></span>
+            <button id="btnAccount" class="account-chip" data-icon="user"><span id="accountLabel">SIGN IN</span></button>
+          </div>
         </div>
-      </header>
-      <div class="title-block">
-        <h1 class="game-title"><span>GRAB</span><b>RIDER</b></h1>
-        <p class="tagline">DELIVER &middot; DODGE &middot; FLIP</p>
+        <div class="loc-bar"><span class="loc-label">DELIVERING IN</span><span id="menuFlag" class="loc-country"></span></div>
         <p class="greet">Hi, <b id="menuName">Rider</b>. Ready to deliver?</p>
         <div class="menu-chips"><span id="adminBadge" class="admin-badge hidden">ADMIN MODE</span><span id="guestNote" class="guest-note hidden"></span></div>
         <div id="challengeChip" class="challenge-chip hidden"><span data-icon="flag"></span><span id="challengeText">CHALLENGE ROAD</span><button id="btnClearChallenge" aria-label="Clear challenge">&times;</button></div>
-      </div>
+      </header>
+      <div class="scene-window"></div>
       <div class="app-sheet menu-sheet">
         <div class="menu-stats">
           <div><small>BEST SCORE</small><b id="menuBest" class="hero-score">0</b></div>
@@ -108,7 +108,7 @@
           <div><small>COUNTRY</small><b id="menuCountry">-</b></div>
         </div>
         <button id="btnPlay" class="btn play-btn" data-icon="play"><span>START RIDE</span></button>
-        <button id="btnMulti" class="btn multi" data-icon="users"><span>1V1 MULTIPLAYER</span><small>Race a friend on the same road</small></button>
+        <button id="btnMulti" class="btn multi promo" data-icon="users"><span>1V1 MULTIPLAYER</span><small>Race a friend on the same road</small></button>
         <div class="service-grid">
           <button id="btnGarage" class="svc s-garage"><i data-icon="bike"></i><span>GARAGE</span></button>
           <button id="btnRanking" class="svc s-rank"><i data-icon="trophy"></i><span>RANKING</span></button>
