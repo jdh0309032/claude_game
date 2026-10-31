@@ -1385,12 +1385,26 @@ function updateDraft(dt) {
 }
 
 const FEVER_TIME = 5;
-const feverTrails = [0xff2fd6, 0x00e5ff, 0xffe600, 0x7cff4f].map((c) => {
-  const g = M.createGhost(c);
-  g.root.visible = false;
-  scene.add(g.root);
-  return g;
-});
+// 피버 잔상: 바이크 뒤 노면에 깔리는 무지개 빛줄기 (예전 반투명 유령 바이크는 카메라와 바이크 사이에 떠서 바이크·점프 각도를 가렸음)
+const TRAIL_COLORS = [0xff2fd6, 0xffe600, 0x7cff4f, 0x00e5ff].map((c) => new THREE.Color(c));
+const TRAIL_SEG = 14, TRAIL_W = 0.11;
+const feverTrail = (() => {
+  const n = TRAIL_COLORS.length * (TRAIL_SEG + 1) * 2;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  const idx = [];
+  for (let c = 0; c < TRAIL_COLORS.length; c++) for (let k = 0; k < TRAIL_SEG; k++) {
+    const o = (c * (TRAIL_SEG + 1) + k) * 2;
+    idx.push(o, o + 1, o + 2, o + 1, o + 3, o + 2);
+  }
+  geo.setIndex(idx);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  mesh.frustumCulled = false;
+  mesh.visible = false;
+  scene.add(mesh);
+  return mesh;
+})();
 const trailHistory = [];
 
 function startFever() {
@@ -1401,16 +1415,30 @@ function startFever() {
 }
 
 function updateFeverTrails() {
-  trailHistory.push({ x: G.x, y: G.airY || 0, l: G.lean });
-  if (trailHistory.length > 16) trailHistory.shift();
+  trailHistory.push(G.x);
+  if (trailHistory.length > TRAIL_SEG * 2 + 2) trailHistory.shift();
   const on = G.feverT > 0 && G.state === 'playing';
-  feverTrails.forEach((g, i) => {
-    g.root.visible = on;
-    if (!on) return;
-    const h = trailHistory[Math.max(0, trailHistory.length - 1 - (i + 1) * 3)];
-    g.root.position.set(h.x, h.y, (i + 1) * 0.85);
-    g.lean.rotation.z = h.l;
+  feverTrail.visible = on;
+  if (!on) return;
+  const P = feverTrail.geometry.attributes.position, C = feverTrail.geometry.attributes.color;
+  const fade = Math.min(1, G.feverT / 0.8); // 끝날 때 서서히 사라짐
+  const lean = Math.sin(G.lean || 0) * 0.5;
+  TRAIL_COLORS.forEach((col, c) => {
+    const off = (c - (TRAIL_COLORS.length - 1) / 2) * TRAIL_W;
+    for (let k = 0; k <= TRAIL_SEG; k++) {
+      const h = trailHistory[Math.max(0, trailHistory.length - 1 - k * 2)] ?? G.x;
+      const z = 0.95 + k * 0.55; // 뒷바퀴 바로 뒤부터 뒤로 뻗음 (노면, 바이크보다 앞으로 오지 않음)
+      const x = h + off * (1 + k * 0.06) - (k === 0 ? lean : 0);
+      const a = (1 - k / TRAIL_SEG) ** 1.4 * 0.85 * fade;
+      const o = (c * (TRAIL_SEG + 1) + k) * 2;
+      P.setXYZ(o, x - TRAIL_W / 2, 0.04, z);
+      P.setXYZ(o + 1, x + TRAIL_W / 2, 0.04, z);
+      C.setXYZ(o, col.r * a, col.g * a, col.b * a);
+      C.setXYZ(o + 1, col.r * a, col.g * a, col.b * a);
+    }
   });
+  P.needsUpdate = true;
+  C.needsUpdate = true;
 }
 
 // ---------- 이펙트 (3D 빗줄기, 스피드 라인)
@@ -2401,18 +2429,37 @@ function setFlexLabel(text, flag) {
 function hideScreens() { show(null); }
 
 const popupsEl = $('popups');
+// 화면 중앙 알림: 최대 2개만 (새 것 위·큰 글씨, 이전 것은 작고 흐리게), 같은 알림이 연달아 오면 쌓지 않고 xN 으로 합침
+const POPUP_MAX = 2;
 function popup(text, cls = '', sub = '') {
+  const last = popupsEl.firstElementChild;
+  if (last && last.dataset.key === text && !last.classList.contains('old')) {
+    const n = (Number(last.dataset.n) || 1) + 1;
+    last.dataset.n = n;
+    last.firstChild.textContent = `${text} x${n}`;
+    const sm = last.querySelector('small');
+    if (sub) { if (sm) sm.textContent = sub; } else if (sm) sm.remove();
+    last.classList.remove('bump');
+    void last.offsetWidth; // 애니메이션 재시작
+    last.classList.add('bump');
+    clearTimeout(last._t);
+    last._t = setTimeout(() => last.remove(), 1100);
+    return;
+  }
   const el = document.createElement('div');
   el.className = 'popup ' + cls;
-  el.textContent = text;
+  el.dataset.key = text;
+  el.appendChild(document.createTextNode(text));
   if (sub) {
     const s = document.createElement('small');
     s.textContent = sub;
     el.appendChild(s);
   }
-  popupsEl.appendChild(el);
-  while (popupsEl.children.length > 4) popupsEl.firstChild.remove();
-  setTimeout(() => el.remove(), 1250);
+  if (cls === 'big') popupsEl.replaceChildren(); // 큰 알림은 앞의 작은 알림들을 정리하고 단독으로
+  for (const old of popupsEl.children) old.classList.add('old');
+  popupsEl.prepend(el);
+  while (popupsEl.children.length > POPUP_MAX) popupsEl.lastElementChild.remove();
+  el._t = setTimeout(() => el.remove(), 1250);
 }
 
 const toastEl = $('toast');
