@@ -96,6 +96,26 @@ export const BOXES = [
   { id: 'vintage',   name: 'Vintage Crate',  price: 1500, swatch: '#9c6b3c', desc: 'Old wooden crate with iron corners' },
   { id: 'anime',     name: 'Kawaii Box',     price: 2200, swatch: '#ffc2e2', desc: 'Anime box with big sparkly eyes' },
   { id: 'cyber',     name: 'Cyber Grid Box', price: 2800, swatch: '#0b0f1e', desc: 'Neon grid cyber cargo' },
+  // 나라 특색 배달통 (누구나 구매 가능)
+  { id: 'bajaj',      name: 'Mini Bajaj',      price: 1600, swatch: '#2a6fd4', desc: 'Indonesia: blue three-wheel Bajaj', tag: 'ID' },
+  { id: 'tuktukbox',  name: 'Mini Tuk-Tuk',    price: 1600, swatch: '#1d3557', desc: 'Thailand: tasselled tuk-tuk', tag: 'TH' },
+  { id: 'jeepneybox', name: 'Mini Jeepney',    price: 1800, swatch: '#d9dde1', desc: 'Philippines: chrome jeepney with stripes', tag: 'PH' },
+  { id: 'petronas',   name: 'Twin Towers',     price: 2600, swatch: '#c0c6cc', desc: 'Malaysia: Petronas twin towers + skybridge', tag: 'MY' },
+  { id: 'angkorbox',  name: 'Angkor Temple',   price: 2400, swatch: '#bfae8c', desc: 'Cambodia: sandstone lotus towers', tag: 'KH' },
+  { id: 'shwedagon',  name: 'Golden Pagoda',   price: 2600, swatch: '#e6b422', desc: 'Myanmar: Shwedagon golden stupa', tag: 'MM' },
+  // 공용 배달통
+  { id: 'pizzatower', name: 'Pizza Tower',     price: 1000, swatch: '#d9b483', desc: 'Five boxes and an open hot pizza' },
+  { id: 'minifridge', name: 'Mini Fridge',     price: 1300, swatch: '#a8e6cf', desc: 'Mint retro fridge, chrome handles' },
+  { id: 'fishbox',    name: 'Fish Box',        price: 700,  swatch: '#f4f4ee', desc: 'Styrofoam fish box with ice and a tail' },
+  { id: 'boombox',    name: 'Boombox',         price: 1700, swatch: '#1d1f22', desc: 'Twin woofers and a glowing equalizer' },
+  { id: 'giftbox',    name: 'Gift Box',        price: 1200, swatch: '#d62828', desc: 'Red present with a gold ribbon bow' },
+  { id: 'gascapsule', name: 'Booster Capsule', price: 2200, swatch: '#b8c0c8', desc: 'Pressurized tank with a glowing ring' },
+  { id: 'steamer',    name: 'Dim Sum Steamer', price: 1400, swatch: '#d4b06a', desc: 'Three-stack bamboo steamer, hot steam' },
+  { id: 'parcel',     name: 'Taped Parcel',    price: 600,  swatch: '#c89b64', desc: 'Way too much tape. Handle with care' },
+  { id: 'catbox',     name: 'Cat Box',         price: 2000, swatch: '#f3a65a', desc: 'A cat moved in. It is their box now' },
+  { id: 'goldbar',    name: 'Gold Bars',       price: 4000, swatch: '#ffd34d', desc: 'A stack of solid gold ingots' },
+  { id: 'aquarium',   name: 'Aquarium',        price: 2400, swatch: '#9fd8ff', desc: 'See-through tank with fish and plants' },
+  { id: 'icecream',   name: 'Ice Cream Box',   price: 1100, swatch: '#ff8fab', desc: 'Triple-scoop cone on a cooler box' },
   // 국가대표 전용 배달통: 국가 1위일 때 국가대표 바이크와 함께 지급, 1위를 뺏기면 함께 회수
   { id: 'national',  name: 'National Box',   price: -1,   swatch: '#ffd700', desc: 'Only for the current #1 rider of your country', special: 'national' },
 ];
@@ -123,6 +143,16 @@ export const HELMETS = [
   { id: 'dino',      name: 'Dino Head',      price: 2500, swatch: '#52b788', desc: 'Rawr. Spiky dinosaur head' },
   { id: 'chibi',     name: 'Chibi Big Head', price: 2800, swatch: '#ffe0bd', desc: 'Oversized cute character mask' },
   { id: 'cyberneon', name: 'Cyber Neon',     price: 3500, swatch: '#14141c', desc: 'Glowing visor and neon lines' },
+  // 나라 특색 헤드기어 (누구나 구매 가능)
+  { id: 'nonla',     name: 'Nón Lá',         price: 1000, swatch: '#e8cf8a', desc: 'Vietnam: palm-leaf conical hat', tag: 'VN' },
+  { id: 'batik',     name: 'Batik Helmet',   price: 1600, swatch: '#7a4a22', desc: 'Indonesia: hand-drawn batik shell', tag: 'ID' },
+  { id: 'mongkol',   name: 'Mongkol',        price: 1400, swatch: '#d62828', desc: 'Thailand: Muay Thai sacred headband', tag: 'TH' },
+  { id: 'merlion',   name: 'Merlion Mask',   price: 2600, swatch: '#f4f4f0', desc: 'Singapore: lion head with a gold mane', tag: 'SG' },
+  { id: 'angkorhat', name: 'Angkor Tower',   price: 2200, swatch: '#bfae8c', desc: 'Cambodia: carved stone tower helmet', tag: 'KH' },
+  // 공용 헤드기어
+  { id: 'durian',    name: 'Durian',         price: 1500, swatch: '#b5c94a', desc: 'King of fruits. Do not touch' },
+  { id: 'duckprop',  name: 'Duck Propeller', price: 1300, swatch: '#ffd60a', desc: 'Quack with a spinning propeller' },
+  { id: 'crttv',     name: 'CRT TV',         price: 2000, swatch: '#d9cfb4', desc: 'Chunky retro TV with a happy screen' },
 ];
 
 // 컬러 팔레트: 한 번 사면 바이크·헤드기어 둘 다에 칠할 수 있음
@@ -249,10 +279,11 @@ export const APP_INFO = { name: 'Grub Rider', version: '1.0.0', contactEmail: ''
 // 메뉴 BOOSTS 줄에서 코인으로 1개씩 구매, 코인 상점에서 5개 묶음(1개 무료) 구매
 export const BOOSTS = [
   { id: 'shield', name: 'SHIELD', desc: 'Start with a shield that blocks one crash', price: 300, icon: 'shield' },
-  { id: 'magnet', name: 'MAGNET 30s', desc: 'Pull in every coin for the first 30 s', price: 250, icon: 'magnet' },
+  { id: 'headstart', name: 'HEAD START', desc: 'Blast off at 1.5x top speed for 5 s, invincible, grabbing every coin', price: 300, icon: 'bolt' },
   { id: 'x2', name: 'x2 SCORE 30s', desc: 'Double score for the first 30 s', price: 400, icon: 'x2' },
   { id: 'giant', name: 'GIANT START', desc: 'Start huge and unstoppable', price: 500, icon: 'giant' },
   { id: 'revive', name: 'SECOND CHANCE', desc: 'Get back on the road once after a crash, free', price: 800, icon: 'retry' },
 ];
 export const BOOST_BUNDLE = { count: 5, payFor: 4 };
-export const BOOST_START_TIME = 30; // MAGNET / x2 SCORE 부스트 지속 시간(초)
+export const BOOST_START_TIME = 30; // x2 SCORE 부스트 지속 시간(초)
+export const HEAD_START_TIME = 5;   // HEAD START: 최고속 1.5배 무적 질주 시간(초)

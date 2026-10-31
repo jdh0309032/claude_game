@@ -917,6 +917,8 @@ body:not(.one-hand) #steerDot b { display: none; }
 .tv .ic { width: 24px; height: 24px; }
 .tv .flag { margin: 0; width: 32px; height: 21px; }
 .tv.flagtv { background: #f1f3f4; }
+.tv.tagged { position: relative; overflow: visible; }
+.tv.tagged .flag { position: absolute; right: -6px; bottom: -4px; width: 22px; height: 15px; border-radius: 3px; box-shadow: 0 0 0 2px #fff; }
 .tv.none { background: #f1f3f4; color: var(--muted); font-weight: 800; }
 .tile-grid.compact .tv { width: 34px; height: 34px; }
 .tile-grid.compact .tv .flag { width: 30px; height: 20px; }
@@ -1079,3 +1081,11 @@ body:not(.one-hand) #steerDot b { display: none; }
 body:not(.one-hand) #steerDot em { display: none; }
 /* 손을 떼고 있을 땐 화면 아래 가운데에 반투명 조이스틱 (어디를 눌러도 그 자리로 옮겨와 조작) */
 body.one-hand #steerDot:not(.on) { display: block; left: auto !important; right: max(18px, env(safe-area-inset-right)); top: auto !important; bottom: max(36px, env(safe-area-inset-bottom)); margin: 0; opacity: 0.45; }
+
+/* 차고: 목록을 스크롤해도 위쪽 3D 미리보기 + 장착/구매 바는 그대로 고정 */
+#garage .garage-top {
+  position: sticky; top: -20px; z-index: 3; margin: 0 -20px; padding: 6px 20px 2px;
+  background: var(--card); box-shadow: 0 8px 12px -10px rgba(0, 0, 0, 0.25);
+}
+#garage .garage-top .stage { height: clamp(150px, 26vh, 210px); }
+#garage .garage-top .garage-action { margin: 8px 0 4px; }

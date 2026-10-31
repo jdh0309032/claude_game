@@ -9,7 +9,7 @@ import {
 import { PreviewStage, renderRiderSnapshot } from './preview.js';
 import { showRewarded, adsEnabled } from './ads.js';
 import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, GACHA_PRICE, GACHA_REFUND, STREAK_REWARDS, STREAK_SPECIAL_HELMET, FLAG_CHECK_INTERVAL_SEC,
-  FLAG_SHOP_CODES, FLAG_PRICE_THEME, FLAG_PRICE_OTHER, ADMIN_DEBUG_TOGGLE, APP_INFO, BOOSTS, BOOST_BUNDLE, BOOST_START_TIME,
+  FLAG_SHOP_CODES, FLAG_PRICE_THEME, FLAG_PRICE_OTHER, ADMIN_DEBUG_TOGGLE, APP_INFO, BOOSTS, BOOST_BUNDLE, BOOST_START_TIME, HEAD_START_TIME,
 } from './config.js';
 import { paymentsMode, initPayments, getPacks, buyPack } from './payments.js';
 import {
@@ -1759,7 +1759,7 @@ function resetRun(seed) {
   Object.assign(G, {
     speed: 21, x: 3.5 * driveSign(0), vx: 0, lean: 0, distance: 0, score: 0, mult: 1, time: 0,
     coinsRun: 0, nearMiss: 0, combo: 0, comboTimer: 0, maxCombo: 0,
-    shield: false, secondChance: false, boostsUsed: [], magnetTime: 0, x2Time: 0, slowTime: 0, giantT: 0, invuln: 0, oncomingDist: 0,
+    shield: false, secondChance: false, boostsUsed: [], headT: 0, magnetTime: 0, x2Time: 0, slowTime: 0, giantT: 0, invuln: 0, oncomingDist: 0,
     rotAngle: 0, rotPitchAmt: 0, rotSpinAmt: 0, rotationCount: 0, rotShown: 0, tricks: 0, landInv: 0,
     maxKmh: 0, smashed: 0, jumps: 0, continued: false, finalized: false,
     nextSpawn: 25, nextCoins: 60, nextPower: wrand('power', 120, 180), nextCones: wrand('cone', 350, 600),
@@ -1920,6 +1920,11 @@ function updatePlaying(rdt) {
   G.time += rdt;
   G.slowTime = Math.max(0, G.slowTime - rdt);
   G.magnetTime = Math.max(0, G.magnetTime - rdt);
+  if (G.headT > 0) {
+    G.headT = Math.max(0, G.headT - rdt);
+    G.invuln = Math.max(G.invuln, 0.8); // 질주 중 + 끝나고 잠깐 무적
+    G.magnetTime = Math.max(G.magnetTime, 0.5);
+  }
   G.x2Time = Math.max(0, G.x2Time - rdt);
   G.giantT = Math.max(0, G.giantT - rdt);
   G.landInv = Math.max(0, G.landInv - rdt);
@@ -1954,8 +1959,10 @@ function updatePlaying(rdt) {
   let target = manual ? 40 / 3.6 : cruise;
   if (throttle) target = maxSpd;
   if (brake) target = 50 / 3.6;
+  // 소모성 부스트 HEAD START: 몇 초 동안 최고속의 1.5배로 무적 질주 (코인 자석 포함)
+  if (G.headT > 0) target = maxSpd * 1.5;
   if (G.draftT > 0 && !brake) target *= 1 + 0.1 * clamp(G.draftT / 0.6, 0, 1); // 슬립스트림 가속
-  const accel = target > G.speed ? 7 * bk.accel : brake ? 22 : manual ? 5 : 6;
+  const accel = G.headT > 0 ? 30 : target > G.speed ? 7 * bk.accel : brake ? 22 : manual ? 5 : 6;
   if (!G.air) G.speed = approach(G.speed, target, accel * rdt); // 공중에선 속도 유지
   G.braking = Boolean(brake);
   // RPM: 스로틀을 감으면 빠르게 치솟고, 놓으면 떨어짐
@@ -2166,8 +2173,8 @@ function poseBike() {
   bike.root.scale.setScalar(gs);
   bike.lean.rotation.z = G.lean;
   bike.lean.rotation.x = G.air ? clamp(-G.airVy * 0.03, -0.3, 0.25) : 0;
-  bike.flame.visible = false;
-  if (bike.flame.visible) bike.flame.scale.set(1, 1, rand(0.7, 1.3));
+  bike.flame.visible = G.headT > 0; // HEAD START 질주 중 배기 불꽃
+  if (bike.flame.visible) bike.flame.scale.set(1.4, 1.4, rand(1.2, 2.0));
   shieldBubble.visible = G.shield || G.landInv > 0;
   shieldBubble.material.opacity = 0.18 + Math.sin(G.time * 6) * 0.06;
   // 무적 점멸: 착지 무적은 은은하게(느리게), 그 외 부딪힌 뒤 무적은 빠르게
@@ -2459,7 +2466,8 @@ function updatePowerHud() {
     powerChip('fever', 'bolt', 'FEVER x3', G.feverT, 'hot'),
     powerChip('giant', 'giant', 'GIANT', G.giantT, 'hot'),
     powerChip('x2', 'x2', 'SCORE', G.x2Time),
-    powerChip('magnet', 'magnet', 'MAGNET', G.magnetTime),
+    powerChip('head', 'bolt', 'HEAD START', G.headT, 'hot'),
+    powerChip('magnet', 'magnet', 'MAGNET', G.headT > 0 ? 0 : G.magnetTime),
     powerChip('slow', 'clock', 'SLOW-MO', G.slowTime),
     G.shield ? powerChip('shield', 'shield', 'SHIELD', true) : '',
     G.secondChance ? powerChip('revive', 'retry', '2ND CHANCE', true) : '',
@@ -2622,6 +2630,8 @@ function tileVisual(kind, it) {
     return `<span class="tv dot ${it.finish}" style="--c:${hex}"></span>`;
   }
   if (kind === 'box' && it.special === 'national') return `<span class="tv">${flagBadge(myNationalCode(), 'flag')}</span>`;
+  // 나라 특색 아이템: 색 견본 위에 그 나라 국기 배지
+  if (it.tag) return `<span class="tv tagged" style="background:${it.swatch}">${flagBadge(it.tag, 'flag')}</span>`;
   return `<span class="tv" style="background:${it.swatch}"></span>`;
 }
 
@@ -2854,7 +2864,7 @@ function applyArmedBoosts() {
     }
     used.push(id);
     if (id === 'shield') G.shield = true;
-    if (id === 'magnet') G.magnetTime = BOOST_START_TIME;
+    if (id === 'headstart') G.headT = HEAD_START_TIME;
     if (id === 'x2') G.x2Time = BOOST_START_TIME;
     if (id === 'giant') G.giantT = GIANT_TIME;
     if (id === 'revive') G.secondChance = true;

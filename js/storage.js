@@ -94,6 +94,12 @@ function applyData(d) {
   }
   if (!save.boosts || typeof save.boosts !== 'object' || Array.isArray(save.boosts)) save.boosts = {};
   if (!Array.isArray(save.armedBoosts)) save.armedBoosts = [];
+  // 자석 부스트는 HEAD START 로 바뀜: 이미 산 자석은 같은 개수의 HEAD START 로 옮김
+  if (save.boosts.magnet) {
+    save.boosts = { ...save.boosts, headstart: (save.boosts.headstart || 0) + save.boosts.magnet };
+    delete save.boosts.magnet;
+  }
+  save.armedBoosts = [...new Set(save.armedBoosts.map((id) => (id === 'magnet' ? 'headstart' : id)))];
   save.ownedBikes = [...new Set(save.ownedBikes.map((id) => LEGACY_BIKES[id] || id))].filter((id) => id !== 'national');
   save.ownedBoxes = save.ownedBoxes.filter((id) => id !== 'national');
   save.bike = LEGACY_BIKES[save.bike] || save.bike;
