@@ -24,22 +24,6 @@ export const GEO_IP_ENDPOINTS = [
 // 내 국가 랭킹 1위 여부를 서버(my_rank_v4)에서 이 주기(초)로 다시 확인합니다.
 export const FLAG_CHECK_INTERVAL_SEC = 30;
 
-// ---------- 1v1 멀티플레이 (PeerJS)
-// null 이면 PeerJS 공개 브로커(0.peerjs.com)를 사용합니다.
-// 자체 서버를 쓰려면: { host: 'my-peer.example.com', port: 443, path: '/', secure: true }
-export const PEER_SERVER = null;
-
-// NAT/LTE 환경에서도 P2P 가 잘 맺어지도록 Google STUN 명시
-// + 직접 연결이 막힌 망을 위한 PeerJS 기본 TURN 릴레이 유지
-export const PEER_ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
-];
-// PeerJS 로그 레벨: 0 없음 · 1 에러 · 2 경고+에러 · 3 전체
-export const PEER_DEBUG = 2;
-
 // ---------- 외부 3D 모델 (.glb / .gltf)
 // 파일을 assets/models/ 에 넣고 url 을 지정하면 절차적 모델 대신 사용합니다.
 // 파일이 없거나 로딩 중이면 기존 로우폴리 모델이 그대로 보입니다(fallback).
@@ -260,3 +244,15 @@ export const COIN_PACKS = [
 
 // 앱 정보 (설정 화면 하단)
 export const APP_INFO = { name: 'Grub Rider', version: '1.0.0', contactEmail: '' };
+
+// ---------- 소모성 부스트 (출발 전 장착 → 다음 판 시작 시 1개씩 소모)
+// 메뉴 BOOSTS 줄에서 코인으로 1개씩 구매, 코인 상점에서 5개 묶음(1개 무료) 구매
+export const BOOSTS = [
+  { id: 'shield', name: 'SHIELD', desc: 'Start with a shield that blocks one crash', price: 300, icon: 'shield' },
+  { id: 'magnet', name: 'MAGNET 30s', desc: 'Pull in every coin for the first 30 s', price: 250, icon: 'magnet' },
+  { id: 'x2', name: 'x2 SCORE 30s', desc: 'Double score for the first 30 s', price: 400, icon: 'x2' },
+  { id: 'giant', name: 'GIANT START', desc: 'Start huge and unstoppable', price: 500, icon: 'giant' },
+  { id: 'revive', name: 'SECOND CHANCE', desc: 'Get back on the road once after a crash, free', price: 800, icon: 'retry' },
+];
+export const BOOST_BUNDLE = { count: 5, payFor: 4 };
+export const BOOST_START_TIME = 30; // MAGNET / x2 SCORE 부스트 지속 시간(초)

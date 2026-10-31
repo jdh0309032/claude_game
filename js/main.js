@@ -1,16 +1,15 @@
 import * as THREE from 'three';
 import * as M from './models.js';
 import { Sound } from './audio.js';
-import { net, describeError } from './net.js';
 import { icon, hydrateIcons } from './icons.js';
 import { ScreenRain } from './rainfx.js';
 import {
-  THEMES, ZONE_LENGTH, themeAt, themeIndexAt, driveSign, pickWeighted, COUNTRY_CODES, countryName, isCountryCode, flagBadge, nationalLivery, preloadFlags,
+  THEMES, ZONE_LENGTH, themeAt, themeIndexAt, driveSign, pickWeighted, COUNTRY_CODES, countryName, isCountryCode, flagBadge, nationalLivery, preloadFlags, setThemeOrder,
 } from './themes.js';
 import { PreviewStage, renderRiderSnapshot } from './preview.js';
 import { showRewarded, adsEnabled } from './ads.js';
 import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, GACHA_PRICE, GACHA_REFUND, STREAK_REWARDS, STREAK_SPECIAL_HELMET, FLAG_CHECK_INTERVAL_SEC,
-  FLAG_SHOP_CODES, FLAG_PRICE_THEME, FLAG_PRICE_OTHER, ADMIN_DEBUG_TOGGLE, APP_INFO,
+  FLAG_SHOP_CODES, FLAG_PRICE_THEME, FLAG_PRICE_OTHER, ADMIN_DEBUG_TOGGLE, APP_INFO, BOOSTS, BOOST_BUNDLE, BOOST_START_TIME,
 } from './config.js';
 import { paymentsMode, initPayments, getPacks, buyPack } from './payments.js';
 import {
@@ -82,6 +81,12 @@ sfx.setMusic(save.settings.music);
 
 // ---------- 렌더러/씬
 const canvas = $('game');
+// 안개에 완전히 묻힌 픽셀은 그리지 않음: 하늘(배경)과 같은 색이라 평소엔 차이가 없지만,
+// 안개 밖 원경 랜드마크(fog: false)를 먼 빌딩의 '하늘색 실루엣'이 투명 구멍처럼 가리던 문제를 없앰
+THREE.ShaderChunk.fog_fragment = THREE.ShaderChunk.fog_fragment.replace(
+  'gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );',
+  'if ( fogFactor > 0.965 ) discard;\n\tgl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );',
+);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87c6ff);
@@ -394,12 +399,8 @@ function buildBike() {
 buildBike();
 
 // 멀티플레이 상대 고스트
-const ghost = M.createGhost();
-ghost.root.visible = false;
-scene.add(ghost.root);
 
 // ---------- 게임 상태
-const MP = { active: false, opp: null, snaps: [], oppName: 'Rival', oppDone: false, oppScore: 0, ready: false, oppReady: false, roomSeed: null };
 
 // ---------- 차량(트래픽)
 const cars = [];
@@ -802,7 +803,7 @@ function spawnCones() {
   const nearest = DIVIDERS.reduce((a, d) => (Math.abs(d - G.x) < Math.abs(a - G.x) ? d : a));
   let x;
   if (r1 < 0.5) x = 0;
-  else if (r1 < 0.72 && !MP.active) x = nearest;
+  else if (r1 < 0.72) x = nearest;
   else x = DIVIDERS[(r2 * 3) | 0];
   const n = 4 + ((r3 * 5) | 0);
   for (let i = 0; i < n; i++) spawnInPool(conePool, { x, z: SPAWN_Z - i * 3.2 });
@@ -1616,10 +1617,9 @@ function padFromPointer(e) {
   const ax = Math.max(0, Math.abs(dx) - STEER_DEAD);
   const t = clamp(ax / (STEER_RANGE - STEER_DEAD), 0, 1);
   pad.value = Math.sign(dx) * t * (0.6 + 0.4 * t); // 가운데는 부드럽게, 끝으로 갈수록 크게
-  const oneHand = save.settings.oneHand !== false;
-  pad.throttle = oneHand && dy > PEDAL_DEAD;
-  pad.brake = oneHand && dy < -PEDAL_DEAD;
-  pad.knobY = oneHand ? clamp(-dy, -40, 40) : 0;
+  // 페달은 화면 버튼으로만 (한 손 조작은 자동 가속, 위아래 슬라이드는 공중 묘기 전용)
+  pad.throttle = pad.brake = false;
+  pad.knobY = 0;
   // 공중 묘기용 아날로그 방향 (데드존 밖에서만)
   pad.rawX = clamp(dx / STEER_RANGE, -1, 1);
   pad.rawUp = Math.abs(dy) > 12 ? clamp(dy / STEER_RANGE, -1, 1) : 0;
@@ -1698,12 +1698,13 @@ function clearWorld() {
 function resetRun(seed) {
   const runSeed = seed ?? newSeed();
   seedWorld(runSeed);
+  setThemeOrder(runSeed);
   clearWorld();
   screenRain.reset();
   Object.assign(G, {
     speed: 21, x: 3.5 * driveSign(0), vx: 0, lean: 0, distance: 0, score: 0, mult: 1, time: 0,
     coinsRun: 0, nearMiss: 0, combo: 0, comboTimer: 0, maxCombo: 0,
-    shield: false, magnetTime: 0, x2Time: 0, slowTime: 0, giantT: 0, invuln: 0, oncomingDist: 0,
+    shield: false, secondChance: false, boostsUsed: [], magnetTime: 0, x2Time: 0, slowTime: 0, giantT: 0, invuln: 0, oncomingDist: 0,
     rotAngle: 0, rotPitchAmt: 0, rotSpinAmt: 0, rotationCount: 0, rotShown: 0, tricks: 0, landInv: 0,
     maxKmh: 0, smashed: 0, jumps: 0, continued: false, finalized: false,
     nextSpawn: 25, nextCoins: 60, nextPower: wrand('power', 120, 180), nextCones: wrand('cone', 350, 600),
@@ -1718,6 +1719,9 @@ function resetRun(seed) {
   for (let z = -60; z > SPAWN_Z; z -= wrand('car', 16, 26)) spawnCar(z);
   clearBoards();
   resetThemes();
+  // 도로변 소품을 이번 판 국가 순서로 다시 배치
+  for (const st of strips) st.items.forEach((it, k) => st.respawn(it, k));
+  for (const st of strips) st.update(0);
   setupRivalMarker();
   fetchRegionTop(THEMES[G.themeIdx].code);
   fetchRegionTop(save.country);
@@ -1741,19 +1745,12 @@ function startRun(opts = {}) {
   sfx.init();
   sfx.click();
   if (bikeKey !== currentBikeKey()) buildBike();
-  MP.active = Boolean(opts.mp);
-  MP.oppDone = false;
-  MP.oppScore = 0;
-  MP.opp = null;
-  MP.snaps = [];
-  MP.ready = false;
-  MP.oppReady = false;
-  ghost.root.visible = false;
-  resetRun(opts.seed ?? (!opts.mp ? challengeSeed : null) ?? undefined);
+  // 메뉴에서 보던 나라 그대로 출발 (재도전은 새 시드 → 새 국가 순서)
+  resetRun(opts.seed ?? challengeSeed ?? (G.state === 'menu' ? G.seed : undefined));
+  applyArmedBoosts();
   $('hotBanner').classList.add('hidden');
   hideScreens();
   $('hud').classList.remove('hidden');
-  $('hudVs').classList.toggle('hidden', !MP.active);
   $('hudAdmin').classList.toggle('hidden', !isAdminMode());
   G.state = 'countdown';
   G.cd = 3.2;
@@ -1897,7 +1894,7 @@ function updatePlaying(rdt) {
   // 한 손 조작: 터치 영역에서 위로 밀면 스로틀, 아래로 밀면 브레이크
   const throttle = keys.ArrowUp || keys.KeyW || held.throttle || pad.throttle;
   const brake = keys.ArrowDown || keys.KeyS || held.brake || pad.brake;
-  const manual = save.settings.throttle === 'manual';
+  const manual = false;
   const cruise = Math.min(maxSpd * 0.85, (75 + G.distance / 45) / 3.6);
   let target = manual ? 40 / 3.6 : cruise;
   if (throttle) target = maxSpd;
@@ -2003,9 +2000,9 @@ const airAxis = new THREE.Vector3();
 const levelQ = new THREE.Quaternion();
 const offLevelAngle = () => 2 * Math.acos(Math.min(1, Math.abs(airQ.w))); // 수평 자세와의 각도 차
 
-// 공중 묘기 입력 벡터: 터치 한 손 조작 중이면 손가락 방향 그대로(아날로그), 아니면 키/버튼
+// 공중 묘기 입력 벡터: 슬라이드 중이면 손가락 방향 그대로(아날로그, 페달도 더함), 아니면 키/버튼
 function trickInput(steer, throttle, brake) {
-  if (pad.id !== null && save.settings.oneHand !== false) return [pad.rawUp || 0, pad.rawX || 0];
+  if (pad.id !== null) return [clamp((pad.rawUp || 0) + (throttle ? 1 : 0) - (brake ? 1 : 0), -1, 1), pad.rawX || 0];
   return [(throttle ? 1 : 0) - (brake ? 1 : 0), steer];
 }
 
@@ -2259,7 +2256,18 @@ function updateCrashing(rdt) {
   bike.root.visible = true;
   bike.flame.visible = false;
   shieldBubble.visible = false;
-  if (G.crashT > 1.7) showGameOver();
+  if (G.crashT > 1.7) {
+    if (G.secondChance) {
+      // 소모성 부스트: SECOND CHANCE — 한 번 무료 부활 (이어달리기 기회는 그대로)
+      G.secondChance = false;
+      const was = G.continued;
+      reviveRun();
+      G.continued = was;
+      popup('SECOND CHANCE!', 'big');
+    } else {
+      showGameOver();
+    }
+  }
 }
 
 // ---------- 미션
@@ -2292,7 +2300,7 @@ function checkMissions() {
 }
 
 // ---------- UI 헬퍼
-const SCREENS = ['menu', 'garage', 'ranking', 'missions', 'settings', 'pause', 'gameover', 'auth', 'multi', 'daily', 'gacha', 'coinshop'];
+const SCREENS = ['menu', 'garage', 'ranking', 'missions', 'settings', 'pause', 'gameover', 'auth', 'daily', 'gacha', 'coinshop'];
 let currentScreen = null;
 function show(id) {
   currentScreen = id;
@@ -2362,11 +2370,39 @@ const fmt = (n) => Math.floor(n).toLocaleString('en-US');
 const fmtCoins = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e8 ? 0 : n >= 1e7 ? 1 : 2).replace(/\.?0+$/, '')}M` : fmt(n));
 
 const hud = {
-  score: $('hudScore'), mult: $('hudMult'), combo: $('hudCombo'), best: $('hudBest'), tags: $('hudTags'),
-  speed: $('hudSpeed'), dist: $('hudDist'), coins: $('hudCoins'), boostFx: $('boostFx'), vs: $('hudVs'),
+  score: $('hudScore'), mult: $('hudMult'), combo: $('hudCombo'), best: $('hudBest'), tags: $('hudTags'), powers: $('hudPowers'),
+  speed: $('hudSpeed'), dist: $('hudDist'), coins: $('hudCoins'), boostFx: $('boostFx'),
   speedArc: $('speedArc'), rpmArc: $('rpmArc'), brakeFx: $('brakeFx'),
 };
 let lastTags = '';
+// 상단 중앙: 지금 켜진 아이템·부스터 + 남은 시간 (아이콘 · 초 · 줄어드는 막대)
+const powerMax = {};
+let lastPowers = '';
+function powerChip(key, ic, label, t, cls = '') {
+  if (t === true) return `<span class="pw ${cls}">${icon(ic)}<b>${label}</b></span>`;
+  if (!(t > 0)) {
+    delete powerMax[key];
+    return '';
+  }
+  powerMax[key] = Math.max(powerMax[key] || 0, t);
+  const f = Math.round((t / powerMax[key]) * 20) * 5;
+  return `<span class="pw ${cls}">${icon(ic)}<b>${label}</b><em>${Math.ceil(t)}s</em><i style="width:${f}%"></i></span>`;
+}
+function updatePowerHud() {
+  const html = [
+    powerChip('fever', 'bolt', 'FEVER x3', G.feverT, 'hot'),
+    powerChip('giant', 'giant', 'GIANT', G.giantT, 'hot'),
+    powerChip('x2', 'x2', 'SCORE', G.x2Time),
+    powerChip('magnet', 'magnet', 'MAGNET', G.magnetTime),
+    powerChip('slow', 'clock', 'SLOW-MO', G.slowTime),
+    G.shield ? powerChip('shield', 'shield', 'SHIELD', true) : '',
+    G.secondChance ? powerChip('revive', 'retry', '2ND CHANCE', true) : '',
+  ].join('');
+  if (html !== lastPowers) {
+    hud.powers.innerHTML = html;
+    lastPowers = html;
+  }
+}
 const tagHtml = (ic, text, cls = '') => `<span class="tag ${cls}">${ic ? icon(ic) : ''}${text}</span>`;
 
 function updateHud() {
@@ -2388,27 +2424,12 @@ function updateHud() {
   hud.brakeFx.classList.toggle('on', G.braking && G.state === 'playing');
   $('feverFx').classList.toggle('on', G.feverT > 0 && G.state === 'playing');
 
-  if (MP.active) {
-    if (MP.opp) {
-      const diff = Math.round(MP.opp.d - G.distance);
-      const st = MP.oppDone ? 'FINISHED' : diff >= 0 ? `+${diff} m` : `${diff} m`;
-      hud.vs.textContent = `GHOST ${MP.oppName}  ${fmt(MP.oppDone ? MP.oppScore : MP.opp.sc)}  ·  ${st}`;
-    } else {
-      hud.vs.textContent = net.connected ? 'WAITING FOR RIVAL' : 'RIVAL DISCONNECTED';
-    }
-  }
-
+  updatePowerHud();
   const tags = [];
-  if (G.feverT > 0) tags.push(tagHtml('bolt', `FEVER x3 ${Math.ceil(G.feverT)}s`, 'fever'));
-  if (G.giantT > 0) tags.push(tagHtml('giant', `GIANT ${Math.ceil(G.giantT)}s`, 'fever'));
   if (G.air && G.rotationCount > 0) tags.push(tagHtml('flip', `TRICK x${G.rotationCount}`));
   else if (G.draftT > 0) tags.push(tagHtml('gauge', 'SLIPSTREAM'));
   if (G.onc) tags.push(tagHtml('warn', 'WRONG WAY x2', 'onc'));
   if (G.air) tags.push(tagHtml('jump', 'AIRBORNE'));
-  if (G.shield) tags.push(tagHtml('shield', 'SHIELD'));
-  if (G.magnetTime > 0) tags.push(tagHtml('magnet', `MAGNET ${Math.ceil(G.magnetTime)}s`));
-  if (G.x2Time > 0) tags.push(tagHtml('x2', `x2 SCORE ${Math.ceil(G.x2Time)}s`));
-  if (G.slowTime > 0) tags.push(tagHtml('clock', `SLOW-MO ${Math.ceil(G.slowTime)}s`));
   if (G.rain) tags.push(tagHtml('rain', `SQUALL ${Math.ceil(Math.max(0, G.squallT))}s · x1.3`));
   if (G.slipT > 0) tags.push(tagHtml('drop', 'SLIPPING', 'onc'));
   const html = tags.join('');
@@ -2421,9 +2442,6 @@ function updateHud() {
 // ---------- 화면: 메뉴
 function goMenu() {
   sfx.engineStop();
-  if (MP.active) leaveRoom();
-  MP.active = false;
-  ghost.root.visible = false;
   resetRun();
   G.x = 0;
   G.state = 'menu';
@@ -2445,6 +2463,7 @@ function refreshMenu() {
   $('menuCountry').innerHTML = `${flagBadge(save.country)}${escapeHtml(save.country)}`;
   $('menuFlag').innerHTML = `${flagBadge(save.country)}<span>${escapeHtml(countryName(save.country).toUpperCase())}</span>`;
   $('menuCoins').textContent = fmtCoins(save.coins);
+  renderBoostBar();
   $('adminBadge').classList.toggle('hidden', !isAdminMode());
   $('guestNote').classList.toggle('hidden', Boolean(s) && isServerReady());
   $('guestNote').textContent = s ? 'OFFLINE · progress is not being saved' : 'GUEST · sign in to save coins and items';
@@ -2468,7 +2487,6 @@ $('btnRanking').addEventListener('click', () => { openScreen('ranking'); renderR
 $('btnMissions').addEventListener('click', () => { renderMissions(); openScreen('missions'); });
 $('btnSettings').addEventListener('click', () => { renderSettings(); openScreen('settings'); });
 $('btnAccount').addEventListener('click', () => { renderAuth(); openScreen('auth'); });
-$('btnMulti').addEventListener('click', () => { renderMulti(); openScreen('multi'); });
 for (const b of document.querySelectorAll('[data-back]')) {
   b.addEventListener('click', () => {
     sfx.click();
@@ -2699,6 +2717,89 @@ $('btnGachaClose').addEventListener('click', () => {
 });
 
 // ======================================================================
+// 소모성 부스트: 메뉴에서 장착(보유 시) / 두 번 눌러 구매 → 다음 판 시작 시 1개 소모
+// ======================================================================
+let boostBuyArm = null; // 구매 확인 대기 중인 부스트 id (2.5초)
+let boostBuyTimer = 0;
+const boostCount = (id) => Math.max(0, Math.floor(save.boosts?.[id] || 0));
+function renderBoostBar() {
+  const bar = $('boostBar');
+  if (!bar) return;
+  const armed = new Set(save.armedBoosts);
+  bar.innerHTML = `<div class="boost-head"><b>BOOSTS</b><small>${armed.size ? `${armed.size} ready for the next ride` : 'Tap to equip for the next ride'}</small></div>
+    <div class="boost-row">${BOOSTS.map((b) => {
+    const n = boostCount(b.id);
+    const on = armed.has(b.id);
+    const confirm = boostBuyArm === b.id;
+    const foot = confirm ? `<em class="buy">BUY ${fmt(b.price)}?</em>`
+      : n > 0 ? `<em class="cnt">x${n}</em>` : `<em class="price">${icon('coin')}${fmt(b.price)}</em>`;
+    return `<button class="boost${on ? ' on' : ''}${confirm ? ' confirm' : ''}" data-boost="${b.id}" title="${escapeHtml(b.desc)}">
+      ${on ? `<span class="chk">${icon('check')}</span>` : ''}<i>${icon(b.icon)}</i><span class="nm">${escapeHtml(b.name)}</span>${foot}</button>`;
+  }).join('')}</div>`;
+}
+function buyBoost(id, count = 1, price) {
+  const b = BOOSTS.find((x) => x.id === id);
+  const cost = price ?? b.price * count;
+  if (save.coins < cost) {
+    toast(`NOT ENOUGH COINS  ·  ${fmt(cost)} NEEDED`);
+    return false;
+  }
+  save.coins -= cost;
+  save.boosts = { ...save.boosts, [id]: boostCount(id) + count };
+  persist();
+  sfx.coin();
+  return true;
+}
+$('boostBar').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-boost]');
+  if (!btn) return;
+  const id = btn.dataset.boost;
+  const b = BOOSTS.find((x) => x.id === id);
+  sfx.init();
+  sfx.click();
+  const armed = save.armedBoosts.includes(id);
+  if (armed) {
+    save.armedBoosts = save.armedBoosts.filter((x) => x !== id);
+  } else if (boostCount(id) > 0 || isAdminMode()) {
+    save.armedBoosts = [...save.armedBoosts, id];
+  } else if (boostBuyArm === id) {
+    // 두 번째 탭: 구매 후 바로 장착
+    boostBuyArm = null;
+    if (buyBoost(id)) {
+      save.armedBoosts = [...save.armedBoosts, id];
+      toast(`${b.name}  ·  READY FOR THE NEXT RIDE`);
+    }
+  } else {
+    boostBuyArm = id;
+    clearTimeout(boostBuyTimer);
+    boostBuyTimer = setTimeout(() => { boostBuyArm = null; renderBoostBar(); }, 2500);
+  }
+  persist();
+  refreshCoinLabels();
+  renderBoostBar();
+});
+// 판 시작: 장착한 부스트를 1개씩 소모하고 적용 (관리자는 소모 없음)
+function applyArmedBoosts() {
+  const used = [];
+  for (const id of save.armedBoosts) {
+    if (!isAdminMode()) {
+      if (boostCount(id) <= 0) continue;
+      save.boosts = { ...save.boosts, [id]: boostCount(id) - 1 };
+    }
+    used.push(id);
+    if (id === 'shield') G.shield = true;
+    if (id === 'magnet') G.magnetTime = BOOST_START_TIME;
+    if (id === 'x2') G.x2Time = BOOST_START_TIME;
+    if (id === 'giant') G.giantT = GIANT_TIME;
+    if (id === 'revive') G.secondChance = true;
+  }
+  // 다 쓴 부스트는 장착 해제, 남아 있으면 다음 판에도 장착 유지
+  save.armedBoosts = save.armedBoosts.filter((id) => isAdminMode() || boostCount(id) > 0);
+  G.boostsUsed = used;
+  if (used.length) persist();
+}
+
+// ======================================================================
 // 코인 상점 (인앱 결제). native: 스토어 결제 → 서버 웹훅이 pending_coins 지급 → claim 으로 받음
 // ======================================================================
 let shopFrom = 'menu';
@@ -2739,6 +2840,7 @@ function openCoinShop(from) {
 }
 async function renderCoinShop() {
   refreshCoinLabels();
+  renderBoostBundles();
   const mode = paymentsMode();
   const grid = $('packGrid');
   const note = $('shopNote');
@@ -2765,6 +2867,23 @@ async function renderCoinShop() {
     grid.appendChild(b);
   }
 }
+// 코인 상점: 부스트 묶음 (코인으로 구매)
+function renderBoostBundles() {
+  const { count, payFor } = BOOST_BUNDLE;
+  $('bundleGrid').innerHTML = BOOSTS.map((b) => `<button class="bundle" data-bundle="${b.id}">
+    <i>${icon(b.icon)}</i><span class="nm">${escapeHtml(b.name)} x${count}</span><small>own ${boostCount(b.id)}</small>
+    <em>${icon('coin')}${fmt(b.price * payFor)}</em></button>`).join('');
+}
+$('bundleGrid').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-bundle]');
+  if (!btn) return;
+  const b = BOOSTS.find((x) => x.id === btn.dataset.bundle);
+  const { count, payFor } = BOOST_BUNDLE;
+  if (!confirm(`Buy ${b.name} x${count} for ${fmt(b.price * payFor)} coins?`)) return;
+  if (buyBoost(b.id, count, b.price * payFor)) toast(`${b.name} x${count}  ·  ADDED`);
+  refreshCoinLabels();
+  renderBoostBundles();
+});
 async function purchasePack(pk) {
   if (shopBusy) return;
   const mode = paymentsMode();
@@ -3136,15 +3255,15 @@ const SETTING_LABELS = {
   vibrate: onOff,
   wetFx: onOff,
   quality: (v) => (v === 'high' ? 'HIGH' : 'LOW (FAST)'),
-  throttle: (v) => (v === 'auto' ? 'AUTO' : 'MANUAL'),
-  touchMode: (v) => (v === 'buttons' ? 'BUTTONS' : 'TOUCH & SLIDE'),
-  oneHand: (v) => (v === false ? 'OFF' : 'ON'),
+  controls: (v) => ({ onehand: 'ONE-HAND', slide: 'SLIDE + PEDALS', arrows: 'ARROWS + PEDALS' }[v] || 'ONE-HAND'),
   flipControls: onOff,
 };
 function renderSettings() {
   for (const b of document.querySelectorAll('[data-setting]')) {
     b.textContent = SETTING_LABELS[b.dataset.setting](save.settings[b.dataset.setting]);
   }
+  $('controlsHint').textContent = CONTROL_HINTS[save.settings.controls] || CONTROL_HINTS.onehand;
+  $('flipRow').classList.toggle('hidden', save.settings.controls === 'onehand');
   const src = { server: 'LOCKED', ip: 'IP', tz: 'ESTIMATED' }[save.countrySource] || '';
   $('countryLabel').innerHTML = `${flagBadge(save.country)}${escapeHtml(countryName(save.country))} <small class="muted">${isAdminMode() ? 'ADMIN' : src}</small>`;
   // 관리자만 국가를 바꿀 수 있음
@@ -3206,12 +3325,17 @@ $('btnAdmin').addEventListener('click', () => {
   onDataReplaced();
   renderSettings();
 });
+// 조작 3종: 한 손(기본) = 화면 어디든 좌우 슬라이드 · 자동 가속 / 슬라이드 + 페달 / 방향 버튼 + 페달
+const CONTROL_HINTS = {
+  onehand: 'Slide left / right anywhere. The bike accelerates by itself. In the air, slide up / down / sideways for tricks.',
+  slide: 'Slide on the steering side, THROTTLE and BRAKE on the other side.',
+  arrows: 'LEFT / RIGHT buttons on one side, THROTTLE and BRAKE on the other side.',
+};
 function applyControlSettings() {
-  document.body.classList.toggle('drag-mode', save.settings.touchMode === 'drag');
-  document.body.classList.toggle('flip-controls', Boolean(save.settings.flipControls));
-  document.body.classList.toggle('one-hand', save.settings.oneHand !== false);
-
-  document.body.classList.toggle('auto-throttle', save.settings.throttle === 'auto');
+  const c = save.settings.controls || 'onehand';
+  document.body.classList.toggle('drag-mode', c !== 'arrows');
+  document.body.classList.toggle('one-hand', c === 'onehand');
+  document.body.classList.toggle('flip-controls', c !== 'onehand' && Boolean(save.settings.flipControls));
 }
 applyControlSettings();
 
@@ -3224,10 +3348,11 @@ for (const b of document.querySelectorAll('[data-setting]')) {
     if (k === 'vibrate') { s.vibrate = !s.vibrate; vibrate(30); }
     if (k === 'wetFx') { s.wetFx = !s.wetFx; screenRain.setEnabled(s.wetFx); }
     if (k === 'quality') { s.quality = s.quality === 'high' ? 'low' : 'high'; applyQuality(); }
-    if (k === 'throttle') s.throttle = s.throttle === 'auto' ? 'manual' : 'auto';
-    if (k === 'touchMode') s.touchMode = s.touchMode === 'buttons' ? 'drag' : 'buttons';
+    if (k === 'controls') {
+      const order = ['onehand', 'slide', 'arrows'];
+      s.controls = order[(order.indexOf(s.controls) + 1) % order.length];
+    }
     if (k === 'flipControls') s.flipControls = !s.flipControls;
-    if (k === 'oneHand') s.oneHand = s.oneHand === false;
     applyControlSettings();
     sfx.click();
     persist();
@@ -3292,13 +3417,11 @@ $('btnPause').addEventListener('click', togglePause);
 $('btnResume').addEventListener('click', resumeGame);
 $('btnQuit').addEventListener('click', () => {
   sfx.resume();
-  if (MP.active) net.send({ t: 'over', sc: Math.floor(G.score) });
   finalizeRun();
   goMenu();
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && G.state === 'playing') togglePause();
-  if (!document.hidden) net.resume();
 });
 
 // ---------- 결과 / 랭킹 등록 / 이어달리기
@@ -3335,20 +3458,14 @@ function showGameOver() {
   // 이어달리기 (멀티에선 불가)
   const cont = $('btnContinue');
   $('contCost').textContent = CONTINUE_COST;
-  cont.classList.toggle('hidden', G.continued || MP.active);
+  cont.classList.toggle('hidden', G.continued);
   cont.disabled = save.coins < CONTINUE_COST;
-  $('retryLabel').textContent = MP.active ? 'REMATCH' : 'RETRY';
+  $('retryLabel').textContent = 'RETRY';
   // 보상형 광고: 부활 1회 / 코인 2배 1회 (배너 없음)
-  $('btnAdRevive').classList.toggle('hidden', !adsEnabled() || G.continued || MP.active || isAdminMode());
-  $('btnAdminRevive').classList.toggle('hidden', !isAdminMode() || MP.active);
+  $('btnAdRevive').classList.toggle('hidden', !adsEnabled() || G.continued || isAdminMode());
+  $('btnAdminRevive').classList.toggle('hidden', !isAdminMode());
   $('btnAdDouble').classList.toggle('hidden', !adsEnabled() || G.doubled || G.coinsRun + G.bonusCoins <= 0);
 
-  if (MP.active) {
-    net.send({ t: 'over', sc: score });
-    renderVsResult();
-  } else {
-    $('goVs').classList.add('hidden');
-  }
   show('gameover');
   submitGlobal();
   persist();
@@ -3407,10 +3524,6 @@ function finalizeRun() {
 }
 
 function retry() {
-  if (MP.active) {
-    requestRematch();
-    return;
-  }
   finalizeRun();
   startRun();
 }
@@ -3424,18 +3537,18 @@ $('btnHome').addEventListener('click', () => {
 const scoreEntry = (score, dist) => ({ score, dist, bike: save.bike, box: save.box, outfit: save.outfit, helmet: save.helmet, flag: myLook().opts.flag || '' });
 
 $('btnContinue').addEventListener('click', () => {
-  if (G.continued || MP.active || save.coins < CONTINUE_COST) return;
+  if (G.continued || save.coins < CONTINUE_COST) return;
   save.coins -= CONTINUE_COST;
   persist();
   reviveRun();
 });
 // 관리자: 비용·광고 없이 몇 번이든 즉시 부활
 $('btnAdminRevive').addEventListener('click', () => {
-  if (!isAdminMode() || MP.active || G.state !== 'over') return;
+  if (!isAdminMode() || G.state !== 'over') return;
   reviveRun();
 });
 $('btnAdRevive').addEventListener('click', async () => {
-  if (G.continued || MP.active) return;
+  if (G.continued) return;
   if (await showRewarded('revive', adHooks)) reviveRun();
 });
 $('btnAdDouble').addEventListener('click', async () => {
@@ -3476,226 +3589,6 @@ function reviveRun() {
   sfx.init();
   sfx.engineStart();
   popup('BACK ON THE ROAD', 'big');
-}
-
-// ======================================================================
-// 1v1 멀티플레이 (Room Code + 시드 동기화 + 고스트)
-// ======================================================================
-function renderMulti() {
-  const inRoom = Boolean(net.peer);
-  $('multiIdle').classList.toggle('hidden', inRoom);
-  $('multiRoom').classList.toggle('hidden', !inRoom);
-  $('roomCode').textContent = net.code || '-----';
-  $('btnMultiStart').classList.toggle('hidden', !(net.role === 'host' && net.connected));
-  if (inRoom) {
-    $('multiStatus').textContent = net.connected
-      ? (net.role === 'host' ? `${MP.oppName} joined. Start the race!` : 'Connected. Waiting for the host to start...')
-      : (net.role === 'host' ? 'Waiting for a rival... Share the code, then come back and keep this screen open.' : 'Connecting...');
-  }
-}
-
-const myName = () => getSession()?.nickname || save.lastName || 'Rider';
-const multiMsg = (t, ok = false) => {
-  $('multiMsg').textContent = t;
-  $('multiMsg').className = ok ? 'form-msg ok' : 'form-msg';
-};
-
-$('btnHost').addEventListener('click', async () => {
-  multiMsg('Creating room...', true);
-  try {
-    await net.host();
-    MP.roomSeed = net.seed;
-    multiMsg('');
-  } catch (e) {
-    console.warn('[net] host failed', e);
-    multiMsg(`Could not create room: ${describeError(e)}`);
-    net.close();
-  }
-  renderMulti();
-});
-$('btnJoin').addEventListener('click', async () => {
-  const code = $('roomInput').value.trim();
-  if (code.length < 5) {
-    multiMsg('Enter the 5-character room code');
-    return;
-  }
-  multiMsg('Joining...', true);
-  try {
-    await net.join(code);
-    multiMsg('');
-  } catch (e) {
-    console.warn('[net] join failed', e);
-    multiMsg(describeError(e));
-    net.close();
-  }
-  renderMulti();
-});
-$('btnLeaveRoom').addEventListener('click', () => {
-  leaveRoom();
-  renderMulti();
-});
-$('btnMultiStart').addEventListener('click', hostStartMatch);
-
-function leaveRoom() {
-  net.send({ t: 'bye' });
-  net.close();
-  MP.active = false;
-  MP.roomSeed = null;
-  ghost.root.visible = false;
-}
-
-// 방장: 첫 판은 방 시드, 재대결부터는 새 시드를 만들어 참가자에게 전달
-function hostStartMatch() {
-  if (net.role !== 'host' || !net.connected) return;
-  const seed = MP.roomSeed ?? newSeed();
-  MP.roomSeed = null;
-  net.seed = seed;
-  net.send({ t: 'start', seed });
-  if (G.state === 'over') finalizeRun();
-  startRun({ mp: true, seed });
-}
-
-function requestRematch() {
-  if (!net.connected) {
-    toast('RIVAL DISCONNECTED  ·  CANNOT REMATCH');
-    return;
-  }
-  MP.ready = true;
-  if (net.role === 'host') {
-    if (MP.oppReady) hostStartMatch();
-    else toast('WAITING FOR RIVAL TO ACCEPT...');
-  } else {
-    net.send({ t: 'ready' });
-    toast('REMATCH REQUESTED');
-  }
-}
-
-net.on('connected', () => {
-  // 방장은 접속 즉시 도로 시드를 넘겨줌
-  net.send({ t: 'hello', name: myName(), bike: save.bike, seed: net.role === 'host' ? net.seed : undefined });
-  sfx.mission();
-  renderMulti();
-});
-net.on('disconnected', () => {
-  toast('RIVAL DISCONNECTED');
-  MP.opp = null;
-  ghost.root.visible = false;
-  renderMulti();
-  if (G.state === 'over' && MP.active) renderVsResult();
-});
-net.on('status', (t) => {
-  if (currentScreen === 'multi') multiMsg(t, true);
-});
-net.on('error', (e) => {
-  if (currentScreen === 'multi') multiMsg(`Connection error: ${describeError(e)}`);
-});
-net.on('data', (m) => {
-  if (!m || typeof m !== 'object') return;
-  switch (m.t) {
-    case 'hello':
-      MP.oppName = String(m.name || 'Rival').slice(0, 12);
-      if (net.role === 'guest' && m.seed != null) net.seed = m.seed >>> 0;
-      renderMulti();
-      break;
-    case 'full':
-      multiMsg('This room is full');
-      net.close();
-      renderMulti();
-      break;
-    case 'start':
-      if (net.role !== 'guest') break;
-      net.seed = m.seed >>> 0;
-      if (G.state === 'over') finalizeRun();
-      startRun({ mp: true, seed: net.seed });
-      break;
-    case 's': {
-      if (!MP.active) break;
-      const snap = { d: +m.d || 0, x: +m.x || 0, y: +m.y || 0, l: +m.l || 0, v: +m.v || 0, sc: +m.sc || 0, at: performance.now() };
-      MP.opp = snap;
-      MP.snaps.push(snap);
-      if (MP.snaps.length > 12) MP.snaps.shift();
-      break;
-    }
-    case 'over':
-      MP.oppDone = true;
-      MP.oppScore = Math.floor(+m.sc || 0);
-      if (G.state === 'over' && MP.active) renderVsResult();
-      break;
-    case 'ready':
-      MP.oppReady = true;
-      if (net.role === 'host') {
-        if (MP.ready) hostStartMatch();
-        else toast(`${MP.oppName.toUpperCase()} WANTS A REMATCH`);
-      }
-      break;
-    case 'bye':
-      toast(`${MP.oppName.toUpperCase()} LEFT THE ROOM`);
-      break;
-    default:
-      break;
-  }
-});
-
-function updateMultiplayer(rdt) {
-  if (!MP.active) {
-    ghost.root.visible = false;
-    return;
-  }
-  // 내 상태 전송 (net.sendState 가 15 FPS 로 제한 + 버퍼 체크)
-  if (G.state === 'playing' || G.state === 'crashing' || G.state === 'paused') {
-    net.sendState({ t: 's', d: Math.round(G.distance * 10) / 10, x: +G.x.toFixed(2), y: +(G.airY || 0).toFixed(2), l: +G.lean.toFixed(2), v: +G.speed.toFixed(1), sc: Math.floor(G.score) });
-  }
-  // 상대 고스트: 15 FPS 패킷을 100ms 지연 버퍼로 보간 → 60 FPS 로 부드럽게
-  if (!MP.opp || MP.oppDone) {
-    ghost.root.visible = false;
-    return;
-  }
-  const target = sampleOpponent(performance.now() - INTERP_DELAY);
-  ghostTarget.set(target.x, target.y, -(target.d - G.distance));
-  const k = 1 - Math.exp(-rdt * 18);
-  if (!ghost.root.visible) ghost.root.position.copy(ghostTarget);
-  else ghost.root.position.lerp(ghostTarget, k);
-  ghost.lean.rotation.z = THREE.MathUtils.lerp(ghost.lean.rotation.z, target.l, k);
-  ghost.root.visible = ghost.root.position.z > -220 && ghost.root.position.z < 12;
-}
-
-const INTERP_DELAY = 100; // ms
-const ghostTarget = new THREE.Vector3();
-// 시각 t 의 상대 상태: 앞뒤 스냅샷 사이를 선형 보간, 버퍼보다 늦으면 속도로 외삽(최대 0.5초)
-function sampleOpponent(t) {
-  const snaps = MP.snaps;
-  const lastSnap = snaps[snaps.length - 1];
-  if (snaps.length < 2 || t >= lastSnap.at) {
-    const ext = clamp((t - lastSnap.at) / 1000, 0, 0.5);
-    return { ...lastSnap, d: lastSnap.d + lastSnap.v * ext };
-  }
-  for (let i = snaps.length - 1; i > 0; i--) {
-    const a = snaps[i - 1], b = snaps[i];
-    if (t >= a.at) {
-      const f = clamp((t - a.at) / Math.max(1, b.at - a.at), 0, 1);
-      return {
-        d: THREE.MathUtils.lerp(a.d, b.d, f), x: THREE.MathUtils.lerp(a.x, b.x, f),
-        y: THREE.MathUtils.lerp(a.y, b.y, f), l: THREE.MathUtils.lerp(a.l, b.l, f),
-      };
-    }
-  }
-  return snaps[0];
-}
-
-function renderVsResult() {
-  const el = $('goVs');
-  el.classList.remove('hidden', 'win', 'lose');
-  const me = Math.floor(G.score);
-  if (!MP.oppDone) {
-    el.innerHTML = net.connected
-      ? `<b>${escapeHtml(MP.oppName)} IS STILL RIDING...</b>Rival score ${fmt(MP.opp?.sc || 0)}`
-      : '<b>RIVAL DISCONNECTED</b>This race does not count';
-    return;
-  }
-  const win = me > MP.oppScore, draw = me === MP.oppScore;
-  if (!draw) el.classList.add(win ? 'win' : 'lose');
-  el.innerHTML = `<b>${win ? 'YOU WIN' : draw ? 'DRAW' : 'YOU LOSE'}</b>YOU ${fmt(me)}  ·  ${escapeHtml(MP.oppName)} ${fmt(MP.oppScore)}`;
-  if (win) setResultTitle(true);
 }
 
 // ---------- 외부 3D 모델 교체 (로딩 완료 시 즉시 반영)
@@ -3745,7 +3638,6 @@ function frame(now) {
     default: break;
   }
   if (G.state === 'playing' || G.state === 'countdown' || G.state === 'crashing') updateHud();
-  updateMultiplayer(rdt);
   updateEnvironment(rdt);
   updateCamera(rdt);
   updateFx(rdt);
@@ -3762,14 +3654,12 @@ function frame(now) {
 hydrateIcons();
 if (DEBUG) {
   window.__G = G;
-  window.__MP = MP;
   window.__models = M.models;
   window.__cars = cars;
   window.__scene = scene;
   window.__renderer = renderer;
   window.__camera = camera;
   window.__save = save;
-  window.__net = net;
   window.__dbg = {
     car: (type, lane, z) => spawnCar(z, { type, lane }),
     puddle: (x, z) => spawnInPool(puddlePool, { x, z }),

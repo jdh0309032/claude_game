@@ -468,20 +468,8 @@ body.drag-mode .steer-btns { display: none; }
   font: inherit; font-weight: 800; font-size: 13px; border: none; border-radius: 999px; padding: 6px 12px;
   background: #fff; color: var(--green-dark); cursor: pointer; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.btn.multi { display: flex; align-items: center; justify-content: center; gap: 8px; background: #fff; border: 2px solid var(--green); color: var(--green-dark); }
-.btn.multi small { color: var(--muted); font-weight: 700; font-size: 12px; }
 
 /* 멀티 */
-.room-code { text-align: center; background: var(--green-soft); border-radius: 16px; padding: 12px; }
-.room-code small { display: block; color: var(--green-dark); font-weight: 800; font-size: 12px; }
-.room-code b { font-family: var(--brand); font-size: 40px; letter-spacing: 8px; color: var(--text); user-select: text; -webkit-user-select: text; }
-#multiRoom { display: flex; flex-direction: column; gap: 10px; }
-#multiRoom.hidden { display: none; }
-.vs-pill { background: rgba(122, 215, 255, 0.95); color: #003049; font-weight: 900; font-size: 12px; padding: 4px 10px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); white-space: nowrap; }
-.vs-result { width: 100%; border-radius: 14px; padding: 10px; font-weight: 800; background: #eaf7ff; color: #003049; }
-.vs-result.win { background: var(--green-soft); color: var(--green-dark); }
-.vs-result.lose { background: #fdeaea; color: var(--red); }
-.vs-result b { font-size: 20px; display: block; }
 
 /* 차고 상점 리스트 */
 .shop-list { display: flex; flex-direction: column; gap: 10px; }
@@ -546,10 +534,6 @@ body.drag-mode .steer-btns { display: none; }
 .svc i .ic { width: 28px; height: 28px; }
 .svc span { font-size: 12px; letter-spacing: 1px; }
 .account-chip { display: inline-flex; align-items: center; gap: 6px; }
-.btn.multi { flex-wrap: wrap; }
-.btn.multi .ic { width: 22px; height: 22px; }
-.btn.multi small { width: 100%; font-weight: 600; letter-spacing: 0; }
-@media (min-width: 420px) { .btn.multi small { width: auto; } }
 .setting span { display: inline-flex; align-items: center; gap: 8px; }
 .setting .ic { color: var(--green-dark); }
 .hero-info small { letter-spacing: 1px; }
@@ -879,11 +863,6 @@ body:not(.one-hand) #steerDot b { display: none; }
 }
 .btn.play-btn:active { transform: scale(0.98); }
 @keyframes shine { 0% { left: -60%; } 55%, 100% { left: 130%; } }
-.btn.multi.promo {
-  background: linear-gradient(110deg, #e6f7ee, #d7f5ff); border: 0; color: var(--green-dark); border-radius: 16px; padding: 12px;
-  box-shadow: inset 0 0 0 1px rgba(0, 163, 71, 0.15);
-}
-.btn.multi.promo small { color: var(--muted); }
 .menu-v3 .svc i { width: 54px; height: 54px; border-radius: 50%; }
 .menu-v3 .svc i .ic { width: 26px; height: 26px; }
 .menu-v3 .s-garage i { background: #e3f7ec; color: #00a347; }
@@ -987,3 +966,96 @@ body:not(.one-hand) #steerDot b { display: none; }
 .legal-links { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; margin-bottom: 12px; }
 #btnDeleteAccount { margin-top: 8px; }
 .gacha-odds { font-size: 11px; margin: 4px 0 0; text-align: center; }
+
+/* 메뉴 헤더: 코인이 커지거나 닉네임이 길어도 한 줄 유지 (계정 칩이 줄어듦) */
+.mhead-top { min-width: 0; }
+.mhead-top .brand { flex: none; }
+.mhead-top .app-top-right { flex: 0 1 auto; min-width: 0; justify-content: flex-end; }
+.mhead-top .coin-btn { flex: none; max-width: none; }
+.mhead-top .account-chip { flex: 0 1 auto; max-width: 30vw; min-width: 36px; }
+
+/* ---------- 소모성 부스트 (메뉴) */
+.boost-bar { display: flex; flex-direction: column; gap: 6px; }
+.boost-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.boost-head b { font-size: 13px; letter-spacing: 1px; }
+.boost-head small { color: var(--muted); font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.boost-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.boost {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0;
+  padding: 8px 2px 6px; border-radius: 14px; border: 2px solid var(--line); background: #fff; color: var(--text);
+  font: inherit; cursor: pointer; transition: transform 0.1s, border-color 0.15s, background 0.15s;
+}
+.boost:active { transform: scale(0.95); }
+.boost i { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--green-soft); color: var(--green-dark); }
+.boost i .ic { width: 20px; height: 20px; }
+.boost .nm { font-size: 9px; font-weight: 800; letter-spacing: 0.2px; line-height: 1.1; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.boost em { font-style: normal; font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.boost em .ic { width: 12px; height: 12px; color: #d99a00; }
+.boost em.cnt { color: var(--green-dark); }
+.boost em.price { color: #a06d00; }
+.boost em.buy { color: #fff; background: var(--red); border-radius: 999px; padding: 1px 6px; font-size: 10px; }
+.boost.on { border-color: var(--green); background: var(--green-soft); }
+.boost.on i { background: var(--green); color: #fff; }
+.boost.confirm { border-color: var(--red); }
+.boost .chk { position: absolute; top: -6px; right: -4px; width: 18px; height: 18px; border-radius: 50%; background: var(--green); color: #fff; display: grid; place-items: center; }
+.boost .chk .ic { width: 12px; height: 12px; }
+
+/* ---------- 코인 상점: 부스트 묶음 */
+.shop-sub { margin: 4px 0 0; font-size: 14px; letter-spacing: 1px; }
+.shop-sub small { color: var(--green-dark); font-size: 11px; margin-left: 6px; }
+.bundle-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.bundle {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 4px; min-width: 0;
+  border-radius: 14px; border: 2px solid var(--line); background: #fff; color: var(--text); font: inherit; cursor: pointer;
+}
+.bundle i { color: var(--green-dark); } .bundle i .ic { width: 24px; height: 24px; }
+.bundle .nm { font-size: 10px; font-weight: 800; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bundle small { color: var(--muted); font-size: 10px; }
+.bundle em { font-style: normal; font-weight: 800; font-size: 12px; color: #a06d00; display: inline-flex; align-items: center; gap: 3px; }
+.bundle em .ic { width: 13px; height: 13px; color: #d99a00; }
+
+/* 한 손 조작(기본): 페달 없음, 화면 전체가 조향 영역, GAS/BRAKE 표시 없음 */
+body.one-hand .thumb.right, body.one-hand .thumb.left { display: none; }
+body.one-hand .steer-zone { left: 0; right: 0; width: 100%; }
+#steerDot b { display: none !important; }
+.setting-hint { font-size: 12px; margin: -4px 0 6px; line-height: 1.4; }
+
+/* ======================================================================
+   미니멀 HUD: 배경 상자 없이 글자·아이콘만 (그림자로 가독성)
+   ====================================================================== */
+:root { --hud-shadow: 0 1px 2px rgba(0, 0, 0, 0.75), 0 0 10px rgba(0, 0, 0, 0.35); }
+#hud #hudScore, #hud .hud-center { background: none; box-shadow: none; border-radius: 0; }
+#hud #hudScore { color: #fff; text-shadow: var(--hud-shadow); padding: 2px 0; }
+#hud .mult { background: none; padding: 0; color: #7dffb0; text-shadow: var(--hud-shadow); font-size: 15px; }
+#hud .mult.hot { background: none; color: #ffd34d; }
+#hud .combo { background: none; padding: 0; color: #ff7a7a; text-shadow: var(--hud-shadow); font-size: 14px; }
+#hud .hud-center.speedo { padding: 0; min-width: 140px; color: #fff; }
+#hud .speedo-read { color: #fff; text-shadow: var(--hud-shadow); }
+#hud .speedo-read small { color: rgba(255, 255, 255, 0.85); }
+#hud .arc-bg { stroke: rgba(255, 255, 255, 0.28); }
+#hud .speedo-arc { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5)); }
+#hud .tag { background: none; padding: 0; color: #fff; text-shadow: var(--hud-shadow); font-size: 13px; }
+#hud .tag .ic { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6)); }
+#hud .tag.onc { background: none; color: #ff6b6b; }
+#hud .pause-btn { background: none; box-shadow: none; color: #fff; text-shadow: var(--hud-shadow); padding: 0 2px; height: 32px; }
+#hud .pause-btn .ic { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6)); }
+#hud .hud-right .stat-pill { background: none; box-shadow: none; padding: 0; color: #fff; text-shadow: var(--hud-shadow); }
+#hud .hud-right .stat-pill .ic { color: #fff; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6)); }
+#hud .hud-right .stat-pill.coin .ic { color: #ffd34d; }
+#hud .hud-right { gap: 6px; }
+
+/* 아이템·부스터 남은 시간 */
+.hud-powers { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 10px; margin-top: 6px; max-width: 46vw; }
+.hud-powers:empty { display: none; }
+.pw {
+  position: relative; display: inline-flex; align-items: center; gap: 4px; padding-bottom: 4px;
+  color: #fff; text-shadow: var(--hud-shadow); font-family: var(--hud); font-weight: 700; font-size: 13px; white-space: nowrap;
+}
+.pw .ic { width: 15px; height: 15px; color: #7dffb0; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6)); }
+.pw.hot .ic { color: #ffd34d; }
+.pw b { font-weight: 700; letter-spacing: 0.5px; }
+.pw em { font-style: normal; color: #7dffb0; font-variant-numeric: tabular-nums; }
+.pw.hot em { color: #ffd34d; }
+.pw i { position: absolute; left: 0; bottom: 0; height: 2px; border-radius: 2px; background: #7dffb0; box-shadow: 0 0 4px rgba(0, 0, 0, 0.5); transition: width 0.25s linear; }
+.pw.hot i { background: #ffd34d; }
+#hud #hudDist { color: #fff; }

@@ -69,12 +69,12 @@
             <path id="rpmArc" class="arc-rpm" d="M4 60 A56 56 0 0 1 116 60" pathLength="100" stroke-dasharray="0 100"/>
           </svg>
           <div class="speedo-read"><span id="hudSpeed">0</span><small>KM/H</small></div>
+          <div id="hudPowers" class="hud-powers"></div>
         </div>
         <div class="hud-right">
           <button id="btnPause" class="icon-btn pause-btn" aria-label="Pause" data-icon="pause"><span>PAUSE</span></button>
           <div class="stat-pill"><i data-icon="flag"></i><span id="hudDist">0 m</span></div>
           <div class="stat-pill coin"><i data-icon="coin"></i><span id="hudCoins">0</span></div>
-          <div id="hudVs" class="vs-pill hidden"></div>
         </div>
       </div>
     </div>
@@ -108,7 +108,7 @@
           <div><small>COUNTRY</small><b id="menuCountry">-</b></div>
         </div>
         <button id="btnPlay" class="btn play-btn" data-icon="play"><span>START RIDE</span></button>
-        <button id="btnMulti" class="btn multi promo" data-icon="users"><span>1V1 MULTIPLAYER</span><small>Race a friend on the same road</small></button>
+        <div id="boostBar" class="boost-bar"></div>
         <div class="service-grid">
           <button id="btnGarage" class="svc s-garage"><i data-icon="bike"></i><span>GARAGE</span></button>
           <button id="btnRanking" class="svc s-rank"><i data-icon="trophy"></i><span>RANKING</span></button>
@@ -117,7 +117,7 @@
         </div>
         <div class="help" id="menuHelp">
           <span class="kbd-only">ARROWS / A D steer &middot; UP throttle &middot; DOWN brake &middot; P pause</span>
-          <span class="touch-only">SLIDE to steer &middot; slide up / down for gas and brake</span>
+          <span class="touch-only">SLIDE left / right to steer &middot; the bike speeds up by itself</span>
         </div>
       </div>
     </section>
@@ -144,30 +144,6 @@
           <button id="btnLogout" class="btn danger">SIGN OUT</button>
         </div>
         <p id="authNote" class="muted small-note"></p>
-        <button class="btn back" data-back data-icon="back"><span>BACK</span></button>
-      </div>
-    </section>
-
-    <!-- 1v1 multiplayer -->
-    <section id="multi" class="screen hidden">
-      <div class="panel">
-        <div class="panel-head"><h2>1V1 MULTIPLAYER</h2></div>
-        <p class="muted">Both players get the same traffic, obstacles and weather. Your rival shows up as a ghost rider. Highest score wins.</p>
-        <div id="multiIdle" class="form">
-          <button id="btnHost" class="btn primary">CREATE ROOM</button>
-          <div class="or">OR JOIN WITH A CODE</div>
-          <div class="row">
-            <input id="roomInput" class="code-input" maxlength="5" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false">
-            <button id="btnJoin" class="btn">JOIN</button>
-          </div>
-        </div>
-        <div id="multiRoom" class="hidden">
-          <div class="room-code"><small>ROOM CODE</small><b id="roomCode">-----</b></div>
-          <p id="multiStatus" class="muted center-text">Waiting for a rival...</p>
-          <button id="btnMultiStart" class="btn primary hidden">START RACE</button>
-          <button id="btnLeaveRoom" class="btn">LEAVE ROOM</button>
-        </div>
-        <p id="multiMsg" class="form-msg"></p>
         <button class="btn back" data-back data-icon="back"><span>BACK</span></button>
       </div>
     </section>
@@ -228,10 +204,9 @@
         <div class="setting"><span><i data-icon="vibrate"></i>VIBRATION</span><button class="btn toggle" data-setting="vibrate"></button></div>
         <div class="setting"><span><i data-icon="eye"></i>GRAPHICS</span><button class="btn toggle" data-setting="quality"></button></div>
         <div class="setting"><span><i data-icon="drop"></i>SCREEN WET EFFECT</span><button class="btn toggle" data-setting="wetFx"></button></div>
-        <div class="setting"><span><i data-icon="gauge"></i>THROTTLE</span><button class="btn toggle" data-setting="throttle"></button></div>
-        <div class="setting"><span><i data-icon="hand"></i>TOUCH STEERING</span><button class="btn toggle" data-setting="touchMode"></button></div>
-        <div class="setting"><span><i data-icon="retry"></i>FLIP CONTROL LAYOUT</span><button class="btn toggle" data-setting="flipControls"></button></div>
-        <div class="setting"><span><i data-icon="hand"></i>ONE-HAND SLIDE</span><button class="btn toggle" data-setting="oneHand"></button></div>
+        <div class="setting"><span><i data-icon="hand"></i>CONTROLS</span><button class="btn toggle" data-setting="controls"></button></div>
+        <p id="controlsHint" class="muted setting-hint"></p>
+        <div id="flipRow" class="setting"><span><i data-icon="retry"></i>FLIP CONTROL LAYOUT</span><button class="btn toggle" data-setting="flipControls"></button></div>
         <div class="setting"><span><i data-icon="globe"></i>MY COUNTRY</span><span id="countryLabel" class="country-label"></span><select id="adminCountry" class="select small hidden" aria-label="Country (admin)"></select></div>
         <div id="adminRow" class="setting hidden"><span><i data-icon="gear"></i>ADMIN MODE</span><button id="btnAdmin" class="btn toggle">OFF</button></div>
         <h3>HOW TO PLAY</h3>
@@ -285,7 +260,6 @@
         <h2 id="goTitle" class="result-title crash">CRASHED!</h2>
         <div id="goScore" class="final-score">0</div>
         <div id="goNew" class="new-record hidden">NEW RECORD</div>
-        <div id="goVs" class="vs-result hidden"></div>
         <div id="goStats" class="go-stats"></div>
         <div id="goMissions"></div>
         <div id="goGlobal" class="rank-entry hidden"></div>
@@ -319,6 +293,8 @@
         <div class="panel-head"><h2>COIN SHOP</h2><span class="stat-pill coin"><i data-icon="coin"></i><span id="shopCoins">0</span></span></div>
         <p id="shopNote" class="muted shop-note"></p>
         <div id="packGrid" class="pack-grid"></div>
+        <h3 class="shop-sub">BOOST BUNDLES <small>buy 4, get 1 free</small></h3>
+        <div id="bundleGrid" class="bundle-grid"></div>
         <p class="muted shop-legal">Coins are a virtual in-game currency with no cash value and cannot be refunded or transferred, except as required by law or store policy. See <a href="terms.html" target="_blank" rel="noopener">Terms</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
         <button id="btnShopBack" class="btn back" data-icon="back"><span>BACK</span></button>
       </div>

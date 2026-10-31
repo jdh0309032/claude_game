@@ -31,7 +31,7 @@ export const MISSION_DEFS = {
 // 서버(player_data.data)에 저장하는 키
 const SERVER_KEYS = [
   'coins', 'best', 'bestDist', 'ownedBikes', 'bike', 'prevBike', 'ownedBoxes', 'box', 'ownedOutfits', 'outfit',
-  'ownedHelmets', 'helmet', 'ownedFlags', 'flag', 'ownedPaints', 'bikePaint', 'helmetPaint', 'prevBox', 'streak', 'lastDaily', 'adCooldownUntil', 'lastName',
+  'ownedHelmets', 'helmet', 'ownedFlags', 'flag', 'ownedPaints', 'bikePaint', 'helmetPaint', 'prevBox', 'boosts', 'armedBoosts', 'streak', 'lastDaily', 'adCooldownUntil', 'lastName',
   'missions', 'missionLevels', 'settings', 'stats',
 ];
 
@@ -55,14 +55,17 @@ function defaults() {
     bikePaint: '', // '' = 바이크 기본 색
     helmetPaint: '', // '' = 헤드기어 기본 색
     prevBox: 'basic', // 국가대표 배달통 회수 시 돌아갈 상자
+    boosts: {},        // 소모성 부스트 보유 개수 { shield: 2, ... }
+    armedBoosts: [],   // 다음 판에 사용할 부스트
     streak: 0,
     lastDaily: '',
     adCooldownUntil: 0,
     lastName: '',
     missions: [],
     missionLevels: {},
-    // touchMode 기본값: 드래그 패드 / flipControls: 조향·스로틀 좌우 반전 / ctrlVer: 조작 기본값 이전용 버전
-    settings: { sound: true, music: true, vibrate: true, quality: 'high', touchMode: 'drag', flipControls: false, oneHand: true, throttle: 'auto', wetFx: true, ctrlVer: 2 },
+    // controls: 'onehand'(기본, 좌우 슬라이드만 · 자동 가속) | 'slide'(슬라이드 + 스로틀/브레이크) | 'arrows'(방향 버튼 + 스로틀/브레이크)
+    // flipControls: 조향·페달 좌우 반전 / ctrlVer: 조작 기본값 이전용 버전
+    settings: { sound: true, music: true, vibrate: true, quality: 'high', controls: 'onehand', flipControls: false, wetFx: true, ctrlVer: 3 },
     stats: { runs: 0, totalDist: 0, totalNear: 0 },
     // ---- 아래는 서버 data 에 저장하지 않는 런타임 상태
     country: guessRegion(), // 랭킹 국가 (IP 판별 → 로그인 시 서버에 고정된 값)
@@ -89,15 +92,18 @@ function applyData(d) {
   for (const k of ['ownedBikes', 'ownedBoxes', 'ownedOutfits', 'ownedHelmets', 'ownedFlags', 'ownedPaints']) {
     if (!Array.isArray(save[k])) save[k] = def[k];
   }
+  if (!save.boosts || typeof save.boosts !== 'object' || Array.isArray(save.boosts)) save.boosts = {};
+  if (!Array.isArray(save.armedBoosts)) save.armedBoosts = [];
   save.ownedBikes = [...new Set(save.ownedBikes.map((id) => LEGACY_BIKES[id] || id))].filter((id) => id !== 'national');
   save.ownedBoxes = save.ownedBoxes.filter((id) => id !== 'national');
   save.bike = LEGACY_BIKES[save.bike] || save.bike;
-  if (save.settings.touchMode === 'zones') save.settings.touchMode = 'buttons';
-  // 이전 버전 계정: 조향 기본값을 드래그 패드로 한 번 전환
-  if (d?.settings?.ctrlVer !== 2) {
-    save.settings.touchMode = 'drag';
-    save.settings.ctrlVer = 2;
+  // 이전 버전 계정: 조작 기본값을 한 손 조작으로 한 번 전환 (예전 touchMode/oneHand/throttle 키 정리)
+  if (d?.settings?.ctrlVer !== 3) {
+    save.settings.controls = 'onehand';
+    save.settings.ctrlVer = 3;
   }
+  if (!['onehand', 'slide', 'arrows'].includes(save.settings.controls)) save.settings.controls = 'onehand';
+  for (const k of ['touchMode', 'oneHand', 'throttle']) delete save.settings[k];
   save.coins = Math.max(0, Math.floor(Number(save.coins) || 0));
   ensureMissions();
 }

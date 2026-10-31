@@ -48,7 +48,24 @@ export const THEMES = [
   },
 ];
 
-export const themeIndexAt = (distance) => Math.floor(Math.max(0, distance) / ZONE_LENGTH) % THEMES.length;
+// 판마다 시작 국가·국가 순서를 시드로 섞음 (챌린지 링크는 같은 시드 → 같은 순서)
+let ORDER = THEMES.map((_, i) => i);
+export function setThemeOrder(seed) {
+  let t = (seed ^ 0x51ed270b) >>> 0;
+  const rnd = () => {
+    t = (t + 0x6d2b79f5) >>> 0;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+  ORDER = THEMES.map((_, i) => i);
+  for (let i = ORDER.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [ORDER[i], ORDER[j]] = [ORDER[j], ORDER[i]];
+  }
+}
+export const themeOrder = () => ORDER.slice();
+export const themeIndexAt = (distance) => ORDER[Math.floor(Math.max(0, distance) / ZONE_LENGTH) % ORDER.length];
 export const themeAt = (distance) => THEMES[themeIndexAt(distance)];
 // 통행 방향: +1 = 우측통행(한국·베트남·미국·프랑스), -1 = 좌측통행(인도네시아·태국·일본·싱가포르)
 export const driveSign = (distance) => (themeAt(distance).drive === 'L' ? -1 : 1);
