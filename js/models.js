@@ -1326,7 +1326,11 @@ function facetKit(F, G, opt = {}) {
     for (const d of pending.splice(0)) {
       const h = surfaceHit(d.x, d.y);
       if (!h) continue;
-      if (d.kind === 'mark') {
+      if (d.kind === 'wedge') {
+        // 끝이 가늘어지는 납작한 줄무늬 (호랑이 무늬)
+        const g = new THREE.ConeGeometry(0.5, 1, 3).scale(d.w * HEAD_K, d.len * HEAD_K, 0.014);
+        raw(placeOn(g, h, d.rz, 0.006), d.c, F);
+      } else if (d.kind === 'mark') {
         raw(placeOn(new THREE.BoxGeometry(d.w * HEAD_K, d.h * HEAD_K, 0.012), h, d.rz, 0.004), d.c, F);
       } else if (d.kind === 'knob') {
         const g = new THREE.OctahedronGeometry(d.r * HEAD_K, 0).scale(d.s[0], d.s[1], d.s[2]);
@@ -1337,6 +1341,8 @@ function facetKit(F, G, opt = {}) {
   return {
     flush,
     mark: (w, h, p, c, rz = 0) => pending.push({ kind: 'mark', w, h, x: p[0], y: p[1], c, rz }),
+    wedge: (w, len, p, c, rz = 0) => pending.push({ kind: 'wedge', w, len, x: p[0], y: p[1], c, rz }),
+    sph: (r, p, c, s, rot) => put(xf(new THREE.SphereGeometry(r, 12, 9), p, s, rot), c),
     knob: (r, p, c, s = [1, 1, 1]) => pending.push({ kind: 'knob', r, x: p[0], y: p[1], c, s }),
     ico: (r, p, c, s, rot) => put(xf(new THREE.IcosahedronGeometry(r, 0), p, s, rot), c),
     oct: (r, p, c, s, rot) => put(xf(new THREE.OctahedronGeometry(r, 0), p, s, rot), c),
@@ -1375,9 +1381,13 @@ const ACCENTS = {
       A.cone(0.045, 0.09, [s * 0.08, 1.07, -1.07], 0xf3901e, [0, 0, s * 0.35], 3);
       A.cone(0.022, 0.05, [s * 0.08, 1.065, -1.09], 0x1b1b1b, [0, 0, s * 0.35], 3);
       A.cone(0.012, 0.05, [s * 0.03, 0.86, -1.25], 0xffffff, [Math.PI, 0, 0], 4);
-      for (let k = 0; k < 3; k++) A.mark(0.012, 0.055, [s * (0.085 + k * 0.014), 0.99 - k * 0.03], 0x1b1b1b, s * 0.5);
+      // 볼: 바깥에서 안쪽으로 가늘어지는 줄무늬 3줄 + 눈 위 짧은 무늬
+      for (let k = 0; k < 3; k++) A.wedge(0.016, 0.07 - k * 0.01, [s * (0.1 + k * 0.006), 0.995 - k * 0.028], 0x1b1b1b, s * (1.25 + k * 0.12));
+      A.wedge(0.012, 0.04, [s * 0.05, 1.035], 0x1b1b1b, s * 0.6);
     }
-    for (let k = 0; k < 3; k++) A.mark(0.045, 0.01, [0, 1.05 - k * 0.018], 0x1b1b1b);
+    // 이마: 가운데 세로 무늬 + 양옆으로 뻗는 가로 무늬 (王 모양)
+    A.wedge(0.014, 0.05, [0, 1.03], 0x1b1b1b, 0);
+    for (let k = 0; k < 2; k++) for (const s of [-1, 1]) A.wedge(0.012, 0.045, [s * 0.022, 1.045 - k * 0.022], 0x1b1b1b, s * Math.PI / 2);
     const tail = [];
     for (let i = 0; i <= 6; i++) { const t = i / 6; tail.push([0, 0.92 + Math.sin(t * 2.4) * 0.32, 1.0 + t * 0.22 - t * t * 0.1]); }
     A.seg(tail, 0.035, 0.018, 0xf3901e, 0x1b1b1b);
@@ -1392,9 +1402,12 @@ const ACCENTS = {
   TH(A, led) { // 왕실 흰 코끼리: 각진 머리 + 큰 귀 + 코 + 상아 + 금빛 관(차다) + 금빛 초파 꼬리
     A.ico(0.12, [0, 0.98, -1.08], 0xd9d4cc, [1.1, 1, 1.1]);
     for (const s of [-1, 1]) {
-      A.blk(0.02, 0.17, 0.15, [s * 0.14, 0.98, -1.03], 0xc9c2b8, [0, s * 0.5, 0]);
-      A.blk(0.022, 0.03, 0.15, [s * 0.145, 1.07, -1.03], 0xe8b923, [0, s * 0.5, 0]);
-      A.cone(0.015, 0.15, [s * 0.05, 0.88, -1.21], 0xfff8e7, [-Math.PI / 2 + 0.35, 0, 0], 5);
+      // 둥근 귀 (얇은 타원판 + 안쪽 분홍빛 + 위 금테)
+      A.sph(0.085, [s * 0.135, 0.965, -1.02], 0xcfc8bd, [0.2, 1.05, 0.85], [0, s * 0.5, s * 0.15]);
+      A.sph(0.062, [s * 0.15, 0.96, -1.035], 0xd9b3a6, [0.12, 0.9, 0.7], [0, s * 0.5, s * 0.15]);
+      A.sph(0.05, [s * 0.125, 1.05, -1.02], 0xe8b923, [0.22, 0.25, 0.8], [0, s * 0.5, 0]);
+      // 휘어진 상아: 입가에서 앞으로 나와 위로 휨
+      A.seg([[s * 0.045, 0.92, -1.15], [s * 0.06, 0.87, -1.22], [s * 0.065, 0.86, -1.28], [s * 0.06, 0.885, -1.33], [s * 0.05, 0.92, -1.35]], 0.017, 0.006, 0xfff3dc);
     }
     A.seg([[0, 0.94, -1.17], [0, 0.88, -1.25], [0, 0.81, -1.28], [0, 0.75, -1.27], [0, 0.71, -1.22]], 0.04, 0.02, 0xd9d4cc);
     A.cone(0.055, 0.13, [0, 1.12, -1.07], 0xe8b923, [0, 0, 0], 6);
@@ -1405,7 +1418,8 @@ const ACCENTS = {
   VN(A, led) { // 용: 각진 긴 머리 + 벌린 턱·이빨 + 금빛 뿔·수염 + 여의주 + 가시 꼬리
     A.oct(0.1, [0, 0.98, -1.1], 0xc1121f, [1, 0.8, 1.5]);
     A.blk(0.1, 0.05, 0.12, [0, 0.965, -1.25], 0xc1121f, [0.1, 0, 0]);
-    A.blk(0.08, 0.03, 0.1, [0, 0.9, -1.23], 0x8b0a18, [0.35, 0, 0]);
+    A.blk(0.08, 0.03, 0.15, [0, 0.915, -1.19], 0x8b0a18, [0.22, 0, 0]); // 아래턱: 뒤쪽 끝이 머리 안으로 이어짐
+    for (let i = 0; i < 3; i++) A.cone(0.009, 0.03, [-0.02 + i * 0.02, 0.93, -1.24], 0xffffff, [0, 0, 0], 4);
     for (let i = 0; i < 4; i++) A.cone(0.01, 0.035, [-0.03 + i * 0.02, 0.935, -1.29], 0xffffff, [Math.PI, 0, 0], 4);
     for (const s of [-1, 1]) {
       A.seg([[s * 0.05, 1.05, -1.06], [s * 0.08, 1.12, -0.98], [s * 0.1, 1.15, -0.88]], 0.016, 0.006, 0xffcd00);
@@ -1430,7 +1444,7 @@ const ACCENTS = {
     A.oct(0.16, [0, 1.0, -1.0], 0xcdb68a, [1.4, 1.1, 0.35]);
     for (let i = 0; i < 3; i++) A.blk(0.02, 0.08, 0.01, [-0.06 + i * 0.06, 1.0, -1.06], 0xe8b923, [0, 0, (i - 1) * 0.4]);
     A.oct(0.07, [0, 0.98, -1.14], 0xb59f74, [1, 0.8, 1.5]);
-    for (const s of [-1, 1]) { A.cone(0.008, 0.04, [s * 0.025, 0.93, -1.22], 0xffffff, [Math.PI, 0, 0], 4); }
+    for (const s of [-1, 1]) A.cone(0.008, 0.04, [s * 0.022, 0.957, -1.19], 0xffffff, [Math.PI, 0, 0], 4); // 머리 아랫면에 박힌 독니
     const tail = [];
     for (let i = 0; i <= 6; i++) { const t = i / 6; tail.push([Math.sin(t * Math.PI * 1.5) * 0.06, 0.93 + t * 0.35, 1.0 + t * 0.12]); }
     A.seg(tail, 0.035, 0.01, 0xcdb68a, 0xb59f74);
