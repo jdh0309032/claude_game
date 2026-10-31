@@ -902,3 +902,5 @@ body:not(.one-hand) #steerDot b { display: none; }
 .rider-cell .nick { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rider-cell .cc { font-size: 10px; font-weight: 800; color: var(--muted); background: #f1f3f4; border-radius: 5px; padding: 1px 4px; flex-shrink: 0; }
 .rank-table td small.muted { display: block; }
+
+.steer-hint { white-space: nowrap; }

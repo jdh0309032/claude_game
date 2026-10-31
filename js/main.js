@@ -1457,7 +1457,7 @@ function updateEnvironment(rdt) {
 let camX = 0, camY = 0;
 let giantCam = 0;
 function updateCamera(rdt) {
-  const p = clamp((1.35 - camera.aspect) / 0.8, 0, 1); // 0 = 가로화면, 1 = 세로화면
+  const p = clamp((1.35 - window.innerWidth / window.innerHeight) / 0.8, 0, 1); // 0 = 가로화면, 1 = 세로화면
   const baseY = lerp(3.0, 5.4, p), camZ = lerp(6.2, 8.4, p);
   let lookZ = lerp(-14, -24, p), lookY = lerp(1.2, 0.6, p);
   if (G.state === 'menu') {
@@ -1470,7 +1470,7 @@ function updateCamera(rdt) {
     // 화면 위쪽(헤더)·아래쪽(시트) 사이 창에 라이더가 오도록 투영을 아래로 늘려 위쪽으로 올려 그림
     const W = window.innerWidth, H = window.innerHeight;
     const extra = lerp(0.2, 0.45, p);
-    if (!camera.view || !camera.view.enabled || camera.view.fullHeight !== H * (1 + extra)) {
+    if (!camera.view || !camera.view.enabled || camera.view.fullHeight !== H * (1 + extra) || camera.view.fullWidth !== W) {
       camera.setViewOffset(W, H * (1 + extra), 0, H * extra, W, H);
     }
     const mfov = lerp(60, 84, p);
@@ -1479,8 +1479,9 @@ function updateCamera(rdt) {
     return;
   }
   if (camera.view && camera.view.enabled) {
+    // setViewOffset 이 camera.aspect 를 가상 프레임 비율로 바꿔 두므로, 해제할 때 실제 화면 비율로 되돌림
     camera.clearViewOffset();
-    camera.updateProjectionMatrix();
+    resize();
   }
   const sf = clamp((G.speed * 3.6 - 60) / 220, 0, 1);
   const fov = lerp(62, 72, p) + sf * 12 + (G.air ? 6 : 0) + (G.feverT > 0 ? 10 : 0);
@@ -3042,7 +3043,7 @@ function applyControlSettings() {
   document.body.classList.toggle('flip-controls', Boolean(save.settings.flipControls));
   document.body.classList.toggle('one-hand', save.settings.oneHand !== false);
   const hint = document.querySelector('.steer-hint');
-  if (hint) hint.textContent = save.settings.oneHand !== false ? 'SLIDE ← → STEER  ·  ↑ GAS  ·  ↓ BRAKE' : 'TOUCH & SLIDE TO STEER';
+  if (hint) hint.textContent = save.settings.oneHand !== false ? '↔ STEER · ↑ GAS · ↓ BRAKE' : 'SLIDE TO STEER';
   document.body.classList.toggle('auto-throttle', save.settings.throttle === 'auto');
 }
 applyControlSettings();
@@ -3599,6 +3600,7 @@ if (DEBUG) {
   window.__cars = cars;
   window.__scene = scene;
   window.__renderer = renderer;
+  window.__camera = camera;
   window.__save = save;
   window.__net = net;
   window.__dbg = {
