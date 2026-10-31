@@ -486,6 +486,8 @@ function blocksAll(lane, z) {
   return occ.size >= 4;
 }
 
+// 나라 고유 교통수단: 그 나라 구간에서만 보이게 함
+const LOCAL_TYPES = new Set(['jeepney', 'doubledecker', 'angkot', 'songthaew', 'tricycle', 'remork', 'trishaw', 'tuktuk']);
 function pickType(r, r2, z) {
   // 국가 테마 특수 교통 (태국 툭툭 / 베트남 오토바이 물결 / 뉴욕 옐로캡)
   const tr = themeAt(G.distance - z).traffic;
@@ -514,7 +516,9 @@ function inBorderGap(d) {
 function spawnCar(z = SPAWN_Z, forced = null) {
   // 난수는 결과와 무관하게 항상 같은 개수만 소비 → 멀티 동기화 유지
   const r = Array.from({ length: 10 }, () => wr('car'));
-  const type = forced?.type || pickType(r[0], r[9], z);
+  let type = forced?.type || pickType(r[0], r[9], z);
+  // 국경 120m 앞에서는 나라 고유 교통수단 대신 일반 차 (다음 나라로 넘어가 섞이지 않게)
+  if (!forced && LOCAL_TYPES.has(type) && ZONE_LENGTH - ((G.distance - z) % ZONE_LENGTH) < 120) type = 'sedan';
   const def = M.CAR_DEFS[type];
   // 스폰 위치 나라의 통행 방향 (좌측통행이면 왼쪽 두 차선이 같은 방향)
   const sd = G.distance - z;
@@ -598,6 +602,11 @@ function updateCars(dt, collide) {
 
     // 차는 절대 중앙선을 넘지 않음. 통행 방향이 다른 나라로 넘어가는 차는 멀리 있을 때 정리
     // (국경 앞뒤 교통 공백 구간 덕분에 대부분 라이더 시야 밖에서 처리됨)
+    // 나라 고유 교통수단(지프니·툭툭·레모크 등)이 다른 나라 구간으로 넘어가면, 아직 멀리 있을 때 정리
+    if (LOCAL_TYPES.has(c.type) && c.z < -140 && !(themeAt(G.distance - c.z).traffic || {})[c.type]) {
+      releaseCar(c);
+      continue;
+    }
     if (driveSign(G.distance - c.z) !== c.ds) {
       if (c.z < -40) {
         releaseCar(c);

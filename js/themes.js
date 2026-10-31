@@ -43,7 +43,7 @@ export const THEMES = [
   {
     code: 'PH', drive: 'R', country: 'Philippines', city: 'Manila', welcome: 'MABUHAY! WELCOME TO MANILA',
     building: { ruko: 0.45, colonial: 0.3, neon: 0.25 }, tree: 'palm', curb: 'sarisari', landmark: 'mayon', overhead: 'bunting_ph',
-    tint: 0xbfe3ff, tintAmt: 0.1, traffic: { jeepney: 0.3, tricycle: 0.15, tuktuk: 0.0 },
+    tint: 0xbfe3ff, tintAmt: 0.1, traffic: { jeepney: 0.3, tricycle: 0.15 },
     colors: { taxi: [0xf4f4f4], jeepney: [0x2a9df4, 0xe63946, 0x2ec27e, 0xd9dde1, 0xffd60a], tricycle: [0xe63946, 0x2a9df4, 0xffd60a, 0x2ec27e], bus: [0x2a9df4, 0xe63946], car: [0xf4f4f4, 0x151515, 0xbfc5ca, 0x8d99ae] },
   },
   {
