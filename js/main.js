@@ -46,6 +46,8 @@ const GIANT_TIME = 6;
 const LANE_BLINK = 1.0, LANE_MOVE = 1.5;
 // 공중 묘기: 회전 속도(rad/s), 착지 허용 각도(rad), 착지 무적 시간(s), 회전 종류별 점수(1바퀴당)
 const AIR_FLIP = 9.5, AIR_SPIN = 9.5, LAND_TOL = 0.68, LAND_IFRAMES = 1.8;
+// 착지 보조: 땅에 닿기 0.7초 전부터, 수평과의 각도가 100° 안이면 바퀴가 바닥을 향하도록 자동으로 돌려 줌 (여러 축으로 돌려도 착지가 쉬움)
+const LAND_ASSIST_TIME = 0.7, LAND_ASSIST_ANGLE = 1.75, LAND_ASSIST_RATE = 9;
 const TRICK_POINTS = { jump: 200, flip: 500, spin: 1200, diagonal: 3000 };
 
 // ---------- 시드 기반 월드 난수 (PRNG: mulberry32)
@@ -2053,7 +2055,14 @@ function trickInput(steer, throttle, brake) {
 function updateAirTricks(rdt, steer, throttle, brake) {
   const [ix, iy] = trickInput(steer, throttle, brake); // ix: 플립(위 +), iy: 스핀(오른쪽 +)
   const mag = Math.min(1, Math.hypot(ix, iy));
-  if (mag > 0.15) {
+  // 착지까지 남은 시간 (내려오는 중일 때만): airY + vy·t - g·t²/2 = 0
+  const tLand = G.airVy < 0 || G.airY < 3 ? (G.airVy + Math.sqrt(G.airVy * G.airVy + 2 * GRAVITY * Math.max(0, G.airY))) / GRAVITY : Infinity;
+  const off = offLevelAngle();
+  if (tLand < LAND_ASSIST_TIME && G.airVy < 0 && off < LAND_ASSIST_ANGLE) {
+    // 착지 직전 + 일정 각도 안: 입력과 상관없이 바퀴가 바닥을 향하도록 빠르게 맞춤 (남은 시간 안에 수평이 되게)
+    const k = Math.min(1, Math.max(LAND_ASSIST_RATE * rdt, rdt / Math.max(0.05, tLand - 0.04)));
+    airQ.slerp(levelQ, k);
+  } else if (mag > 0.15) {
     airAxis.set(ix, iy, 0).normalize();
     const ang = AIR_SPIN * mag * rdt;
     airDq.setFromAxisAngle(airAxis, ang);
