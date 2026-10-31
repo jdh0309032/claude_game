@@ -89,21 +89,21 @@
     <section id="menu" class="screen app menu-v3">
       <header class="mhead">
         <div class="mhead-top">
-          <span class="brand brand-pill"><i data-icon="bike"></i>Grub<b>Rider</b></span>
+          <span class="brand">Grub<b>Rider</b></span>
           <div class="app-top-right">
             <button id="menuCoinBtn" class="stat-pill coin light coin-btn" aria-label="Coin shop"><i data-icon="coin"></i><b id="menuCoins">0</b><em class="plus">+</em></button>
             <button id="btnAccount" class="account-chip" data-icon="user"><span id="accountLabel">SIGN IN</span></button>
           </div>
         </div>
-        <div class="loc-bar"><span class="loc-pin"><i data-icon="pin"></i></span><span class="loc-label">DELIVERING IN</span><span id="menuFlag" class="loc-country"></span></div>
-        <div class="menu-chips"><span id="adminBadge" class="admin-badge hidden">ADMIN MODE</span><span id="guestNote" class="guest-note hidden"></span></div>
         <div id="challengeChip" class="challenge-chip hidden"><span data-icon="flag"></span><span id="challengeText">CHALLENGE ROAD</span><button id="btnClearChallenge" aria-label="Clear challenge">&times;</button></div>
       </header>
       <div class="scene-window"></div>
       <div class="app-sheet menu-sheet">
-        <div class="sheet-handle"></div>
         <div class="menu-hello">
-          <div class="hello-text"><p class="greet">Hi, <b id="menuName">Rider</b> 👋</p><h3>Ready to deliver?</h3></div>
+          <div class="hello-text">
+            <p class="greet">Hi, <b id="menuName">Rider</b> · <span class="loc-label">DELIVERING IN</span> <span id="menuFlag" class="loc-country"></span></p>
+            <h3>Ready to deliver?</h3>
+          </div>
           <div class="menu-stats">
             <div><small>BEST</small><b id="menuBest" class="hero-score">0</b></div>
             <div><small>FARTHEST</small><b id="menuDist">0 m</b></div>
@@ -118,6 +118,7 @@
           <button id="btnMissions" class="svc s-mission"><i data-icon="box"></i><span>MISSIONS</span></button>
           <button id="btnSettings" class="svc s-settings"><i data-icon="gear"></i><span>SETTINGS</span></button>
         </div>
+        <div class="menu-chips"><span id="adminBadge" class="admin-badge hidden">ADMIN MODE</span><span id="guestNote" class="guest-note hidden"></span></div>
         <div class="help" id="menuHelp">
           <span class="kbd-only">ARROWS / A D steer &middot; UP throttle &middot; DOWN brake &middot; P pause</span>
         </div>
