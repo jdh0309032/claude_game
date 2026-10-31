@@ -108,7 +108,12 @@ export const BOXES = [
   { id: 'neon',      name: 'Neon Box',       price: 1200, swatch: '#00f0ff', desc: 'Glowing neon trim at night' },
   { id: 'camo',      name: 'Camo Crate',     price: 1800, swatch: '#5b6b3a', desc: 'Military-grade cargo' },
   { id: 'treasure',  name: 'Treasure Chest', price: 2500, swatch: '#7a4a22', desc: 'Wooden chest with gold trim' },
-  { id: 'goldbox',   name: 'Gold Vault',     price: 3000, swatch: '#e6b422', desc: 'Solid gold delivery vault' },
+  { id: 'goldbox',   name: 'Gold VIP Box',   price: 3000, swatch: '#e6b422', desc: 'Solid gold VIP delivery vault' },
+  { id: 'vintage',   name: 'Vintage Crate',  price: 1500, swatch: '#9c6b3c', desc: 'Old wooden crate with iron corners' },
+  { id: 'anime',     name: 'Kawaii Box',     price: 2200, swatch: '#ffc2e2', desc: 'Anime box with big sparkly eyes' },
+  { id: 'cyber',     name: 'Cyber Grid Box', price: 2800, swatch: '#0b0f1e', desc: 'Neon grid cyber cargo' },
+  // 국가대표 전용 배달통: 국가 1위일 때 국가대표 바이크와 함께 지급, 1위를 뺏기면 함께 회수
+  { id: 'national',  name: 'National Box',   price: -1,   swatch: '#ffd700', desc: 'Only for the current #1 rider of your country', special: 'national' },
 ];
 export const OUTFITS = [
   { id: 'jacket',     name: 'Rider Jacket',  price: 0,    swatch: '#00b14f', desc: 'Signature green jacket' },
@@ -128,6 +133,34 @@ export const HELMETS = [
   { id: 'chrome', name: 'Chrome Dome', price: 2500, swatch: '#c0c6cc', desc: 'Mirror-polished chrome' },
   { id: 'gold',   name: 'Gold Helmet', price: 3000, swatch: '#e6b422', desc: 'Mark of a top ranker' },
   { id: 'crown',  name: 'Streak Crown', price: -1,  swatch: '#ffd700', desc: '7-day login streak reward', special: true },
+  // 헬멧이 아닌 헤드기어
+  { id: 'snapback',  name: 'Snapback Cap',   price: 900,  swatch: '#16181d', desc: 'Street snapback with green brim' },
+  { id: 'straw',     name: 'Straw Hat',      price: 1200, swatch: '#e9c46a', desc: 'Wide-brim summer straw hat' },
+  { id: 'dino',      name: 'Dino Head',      price: 2500, swatch: '#52b788', desc: 'Rawr. Spiky dinosaur head' },
+  { id: 'chibi',     name: 'Chibi Big Head', price: 2800, swatch: '#ffe0bd', desc: 'Oversized cute character mask' },
+  { id: 'cyberneon', name: 'Cyber Neon',     price: 3500, swatch: '#14141c', desc: 'Glowing visor and neon lines' },
+];
+
+// 컬러 팔레트: 한 번 사면 바이크·헤드기어 둘 다에 칠할 수 있음
+// finish: solid(단색) / metallic(메탈릭 광택) / neon(발광)
+export const PAINTS = [
+  { id: 'red',       name: 'Racing Red',     hex: 0xe63946, finish: 'solid',    price: 300 },
+  { id: 'blue',      name: 'Royal Blue',     hex: 0x1d4ed8, finish: 'solid',    price: 300 },
+  { id: 'yellow',    name: 'Taxi Yellow',    hex: 0xffc300, finish: 'solid',    price: 300 },
+  { id: 'white',     name: 'Pure White',     hex: 0xf8f9fa, finish: 'solid',    price: 300 },
+  { id: 'black',     name: 'Matte Black',    hex: 0x1a1a1d, finish: 'solid',    price: 300 },
+  { id: 'orange',    name: 'Sunset Orange',  hex: 0xff6b00, finish: 'solid',    price: 300 },
+  { id: 'purple',    name: 'Grape Purple',   hex: 0x7b2cbf, finish: 'solid',    price: 300 },
+  { id: 'mint',      name: 'Mint',           hex: 0x80ed99, finish: 'solid',    price: 300 },
+  { id: 'silver',    name: 'Metallic Silver', hex: 0xc0c6cc, finish: 'metallic', price: 900 },
+  { id: 'gold',      name: 'Metallic Gold',  hex: 0xd4af37, finish: 'metallic', price: 900 },
+  { id: 'gunmetal',  name: 'Gunmetal',       hex: 0x4a4f57, finish: 'metallic', price: 900 },
+  { id: 'rosegold',  name: 'Rose Gold',      hex: 0xe8a598, finish: 'metallic', price: 900 },
+  { id: 'mblue',     name: 'Metallic Blue',  hex: 0x2a6fdb, finish: 'metallic', price: 900 },
+  { id: 'ngreen',    name: 'Neon Green',     hex: 0x39ff14, finish: 'neon',     price: 1500 },
+  { id: 'npink',     name: 'Neon Pink',      hex: 0xff2fd6, finish: 'neon',     price: 1500 },
+  { id: 'ncyan',     name: 'Neon Cyan',      hex: 0x00e5ff, finish: 'neon',     price: 1500 },
+  { id: 'norange',   name: 'Neon Orange',    hex: 0xff7a00, finish: 'neon',     price: 1500 },
 ];
 
 // 랜덤 가차 상자 (상자·의상·헬멧 중 미보유 아이템 1개, 전부 보유 시 일부 환급)

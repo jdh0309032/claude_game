@@ -276,10 +276,6 @@ body:not(.touch) .touch-only { display: none; }
 #hudSpeed { font-size: clamp(26px, 7vw, 38px); font-variant-numeric: tabular-nums; }
 #hudSpeedWrap small { font-size: 12px; margin-left: 3px; color: var(--muted); }
 #hudDist { color: var(--muted); }
-#nitroWrap { width: clamp(100px, 28vw, 170px); height: 8px; border-radius: 4px; background: #e6e9ec; overflow: hidden; }
-#nitroBar { height: 100%; width: 0; background: var(--green); transition: width 0.1s; }
-#nitroWrap.ready { box-shadow: 0 0 10px var(--green); animation: blink 0.5s steps(2) infinite; }
-#nitroWrap.boost #nitroBar { background: linear-gradient(90deg, var(--boost), var(--green)); }
 .icon-btn {
   pointer-events: auto;
   width: 42px;
@@ -301,7 +297,7 @@ body:not(.touch) .touch-only { display: none; }
 .thumb.left { left: max(14px, env(safe-area-inset-left)); align-items: flex-end; }
 .thumb.right { right: max(12px, env(safe-area-inset-right)); flex-direction: column; align-items: flex-end; gap: 10px; }
 .cluster-row { display: flex; gap: 10px; align-items: flex-end; }
-.tbtn, .nos-btn, .brake-lever, .throttle-grip {
+.tbtn, .brake-lever, .throttle-grip {
   pointer-events: auto; touch-action: none; -webkit-user-select: none; border: none; font: inherit;
   position: relative; overflow: hidden; cursor: pointer;
 }
@@ -344,20 +340,6 @@ body.drag-mode .steer-pad { display: block; }
 @keyframes gripRoll { from { background-position: 0 0; } to { background-position: 0 11px; } }
 
 /* B. 니트로: NOS 부스터 스위치 (100% 충전 시 시안 네온 펄스) */
-.nos-btn {
-  width: 78px; height: 78px; border-radius: 50%;
-  background: radial-gradient(circle at 50% 40%, #1f2a38, #0b1118 75%);
-  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.45), inset 0 0 0 3px #2c3746;
-  color: #8fa3b8; margin-right: 0;
-}
-.nos-btn i { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: linear-gradient(0deg, rgba(0, 229, 255, 0.55), rgba(0, 120, 255, 0.25)); }
-.nos-ring { position: absolute; inset: 6px; border-radius: 50%; border: 2px solid rgba(0, 229, 255, 0.25); }
-.nos-btn b { position: relative; font-family: var(--display); font-size: 16px; letter-spacing: 1px; }
-.nos-btn.ready { color: #e9fdff; box-shadow: 0 0 0 3px var(--cyan), 0 0 22px var(--cyan), inset 0 0 18px rgba(0, 229, 255, 0.5); animation: nosPulse 0.9s ease-in-out infinite; }
-.nos-btn.ready .nos-ring { border-color: var(--cyan); }
-.nos-btn.ready b { text-shadow: 0 0 10px var(--cyan); }
-.nos-btn.firing { color: #fff; background: radial-gradient(circle, #00e5ff, #0066ff); box-shadow: 0 0 30px var(--cyan); }
-@keyframes nosPulse { 50% { box-shadow: 0 0 0 5px var(--cyan), 0 0 34px var(--cyan), inset 0 0 22px rgba(0, 229, 255, 0.7); } }
 
 /* C. 브레이크: 디스크 브레이크 + 메탈 레버 패드 */
 .brake-lever {
@@ -602,9 +584,6 @@ body.drag-mode .steer-pad { display: block; }
 .speedo-read { font-family: var(--display); line-height: 1; display: flex; align-items: baseline; gap: 4px; position: relative; }
 .speedo-read #hudSpeed { font-size: clamp(26px, 7vw, 36px); font-variant-numeric: tabular-nums; }
 .speedo-read small { font-family: var(--hud); font-weight: 700; font-size: 12px; color: var(--muted); letter-spacing: 1px; }
-.speedo #nitroWrap { margin-top: 6px; }
-#nitroBar { background: linear-gradient(90deg, #0077ff, var(--cyan)); }
-#nitroWrap.ready { box-shadow: 0 0 10px var(--cyan); }
 
 /* 네온 팝업 텍스트 */
 .popup { color: #fff; -webkit-text-stroke: 0; text-shadow: 0 0 6px var(--neon), 0 0 16px rgba(57, 255, 136, 0.8), 0 2px 0 rgba(0, 0, 0, 0.45); }
@@ -684,16 +663,6 @@ body.modal-open #touchControls { display: none !important; }
 .brake-lever .disc { display: none; }
 .brake-lever b { position: static; display: grid; place-items: center; height: 100%; font-family: var(--hud); font-weight: 700; font-size: 12px; }
 .brake-lever.active { transform: scale(0.95); background: rgba(230, 30, 30, 0.85); border-color: #fff; box-shadow: 0 0 18px rgba(255, 40, 40, 0.6); }
-.nos-btn {
-  width: 70px; height: 70px; background: rgba(15, 18, 24, 0.45); border: 2px solid rgba(255, 255, 255, 0.35);
-  box-shadow: none; color: rgba(255, 255, 255, 0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-}
-.nos-btn .nos-ring { display: none; }
-.nos-btn i { background: rgba(0, 229, 255, 0.35); }
-.nos-btn b { font-family: var(--hud); font-weight: 700; font-size: 14px; }
-.nos-btn.ready { color: #fff; border-color: var(--cyan); background: rgba(0, 150, 200, 0.55); box-shadow: 0 0 16px rgba(0, 229, 255, 0.6); animation: nosPulse 1s ease-in-out infinite; }
-.nos-btn.firing { background: var(--cyan); color: #00313d; border-color: #fff; }
-@keyframes nosPulse { 50% { box-shadow: 0 0 26px rgba(0, 229, 255, 0.9); } }
 
 /* ======================================================================
    신규 요소
@@ -835,3 +804,16 @@ body.modal-open .touch-layer { display: none !important; pointer-events: none !i
 
 .admin-btn { background: #ff006e; color: #fff; border: 0; }
 #adminCountry { max-width: 55%; }
+
+/* FLIP CONTROL LAYOUT: 조향(왼쪽) ↔ 스로틀·브레이크(오른쪽) 위치 반전 */
+body.flip-controls .thumb.left { left: auto; right: max(14px, env(safe-area-inset-right)); }
+body.flip-controls .thumb.right { right: auto; left: max(12px, env(safe-area-inset-left)); align-items: flex-start; }
+body.flip-controls .cluster-row { flex-direction: row-reverse; }
+
+/* 컬러 팔레트 스와치: 단색 / 메탈릭 / 네온 */
+.paint-swatch { background: var(--c, #ccc); }
+.paint-swatch.metallic { background: linear-gradient(135deg, #ffffff 0%, var(--c) 35%, #222 70%, var(--c) 100%); }
+.paint-swatch.neon { background: var(--c); box-shadow: 0 0 14px var(--c), inset 0 0 8px rgba(255, 255, 255, 0.6); }
+.paint-swatch.factory { background: repeating-linear-gradient(45deg, #e9ecef 0 6px, #ffffff 6px 12px); }
+#garageTabs { gap: 3px; flex-shrink: 0; }
+#garageTabs button { flex: 1 1 0; min-width: 0; padding-left: 2px; padding-right: 2px; white-space: nowrap; font-size: clamp(11px, 3.1vw, 14px); }

@@ -340,6 +340,10 @@ export const BOX_STYLES = {
   pizza:     { base: 0xf1e3c8, band: 0xe63946, lid: 0xe63946, stack: true },
   camo:      { base: 0x5b6b3a, band: 0x3b4422, lid: 0x2f3a1c, camo: true },
   goldbox:   { base: 0xe6b422, band: 0xfff3b0, lid: 0xc99a10, glow: true, lock: true },
+  vintage:   { base: 0x9c6b3c, band: 0x5a3e2b, lid: 0x7a5230, planks: true },
+  anime:     { base: 0xffc2e2, band: 0x8e7cff, lid: 0xff6fae, anime: true },
+  cyber:     { base: 0x0b0f1e, band: 0x39ff88, lid: 0x00e5ff, glow: true, grid: true },
+  national:  { base: 0xffffff, band: 0xffd700, lid: 0x1b1d26, glow: true }, // 국기는 createBike 에서 텍스처로
 };
 export const OUTFIT_STYLES = {
   jacket:     { top: 0x00b14f, trim: 0xffffff, pants: 0x23272b },
@@ -359,7 +363,146 @@ export const HELMET_STYLES = {
   carbon: { shell: 0x2e3135, visor: 0x8a2be2, full: true, stripe: 0x55595e },
   chrome: { shell: 0xd5dade, visor: 0x101418, full: true, shine: true },
   crown:  { shell: 0xffd700, visor: 0x2a1f00, crown: true, shine: true },
+  // 헬멧이 아닌 헤드기어 (kind 로 모양 구분)
+  snapback:  { kind: 'cap', shell: 0x16181d, brim: 0x00b14f },
+  straw:     { kind: 'straw', shell: 0xe9c46a, band: 0xc1121f },
+  dino:      { kind: 'dino', shell: 0x52b788 },
+  chibi:     { kind: 'chibi', shell: 0xffe0bd },
+  cyberneon: { kind: 'cyber', shell: 0x14141c, visor: 0x00e5ff, neon: 0xff2fd6 },
 };
+
+// 페인트 마감: solid(기본 램버트) / metallic(광택) / neon(발광)
+export function paintMaterial(hex, finish) {
+  if (finish === 'metallic') return new THREE.MeshPhongMaterial({ color: hex, shininess: 120, specular: 0xbbbbbb });
+  if (finish === 'neon') return new THREE.MeshLambertMaterial({ color: hex, emissive: hex, emissiveIntensity: 0.65 });
+  return new THREE.MeshLambertMaterial({ color: hex });
+}
+
+// 헤드기어 (머리 중심 0, 1.58, -0.2 / 앞쪽 -z). paintOpt: { hex, finish } 로 껍데기 색 변경
+function headgear(det, glow, hel, paintOpt) {
+  const shell = paintOpt ? paintOpt.hex : hel.shell;
+  const shellList = paintOpt && paintOpt.finish === 'neon' ? glow : det; // 네온 컬러는 발광
+  const sph = (r, x, y, z, c, list = det, sx = 1, sy = 1, sz = 1) => {
+    const g = new THREE.SphereGeometry(r, 12, 10);
+    g.scale(sx, sy, sz);
+    g.translate(x, y, z);
+    list.push(paint(g, c));
+  };
+  const face = 0xf1c8a0;
+  switch (hel.kind) {
+    case 'cap': // 스냅백: 얼굴 + 둥근 크라운 + 앞챙
+      sph(0.16, 0, 1.56, -0.2, face);
+      { const crown = new THREE.SphereGeometry(0.17, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2); crown.translate(0, 1.62, -0.2); shellList.push(paint(crown, shell)); }
+      det.push(box(0.3, 0.025, 0.2, 0, 1.63, -0.4, hel.brim));
+      det.push(box(0.05, 0.05, 0.02, 0, 1.75, -0.2, hel.brim));
+      return;
+    case 'straw': { // 밀짚모자: 넓은 챙 + 크라운 + 붉은 띠
+      sph(0.16, 0, 1.56, -0.2, face);
+      const brim = new THREE.CylinderGeometry(0.36, 0.36, 0.02, 20);
+      brim.translate(0, 1.66, -0.2);
+      shellList.push(paint(brim, shell));
+      const top = new THREE.CylinderGeometry(0.13, 0.16, 0.14, 16);
+      top.translate(0, 1.74, -0.2);
+      shellList.push(paint(top, shell));
+      const band = new THREE.CylinderGeometry(0.162, 0.162, 0.035, 16);
+      band.translate(0, 1.69, -0.2);
+      det.push(paint(band, hel.band));
+      return;
+    }
+    case 'dino': { // 공룡 머리: 큰 머리 + 주둥이 + 눈 + 등 가시
+      sph(0.21, 0, 1.6, -0.18, shell, shellList, 1, 1, 1.15);
+      sph(0.13, 0, 1.55, -0.42, shell, shellList, 1.1, 0.8, 1.1);
+      for (const sx of [-1, 1]) {
+        sph(0.045, sx * 0.1, 1.72, -0.33, 0xffffff);
+        sph(0.022, sx * 0.1, 1.72, -0.37, 0x111111);
+        det.push(box(0.03, 0.02, 0.05, sx * 0.06, 1.5, -0.53, 0xffffff));
+      }
+      for (let i = 0; i < 4; i++) {
+        const sp = new THREE.ConeGeometry(0.045, 0.1, 4);
+        sp.translate(0, 1.82 - i * 0.03, -0.15 + i * 0.09);
+        det.push(paint(sp, 0xffd166));
+      }
+      return;
+    }
+    case 'chibi': // 대두 가면: 커다란 얼굴 + 큰 눈 + 볼터치 + 앞머리
+      sph(0.3, 0, 1.68, -0.18, shell, shellList);
+      for (const sx of [-1, 1]) {
+        sph(0.06, sx * 0.11, 1.7, -0.45, 0x2b2d42, det, 1, 1.25, 0.6);
+        sph(0.02, sx * 0.09, 1.74, -0.49, 0xffffff);
+        sph(0.04, sx * 0.19, 1.6, -0.43, 0xff8fab, det, 1, 0.6, 0.5);
+      }
+      { const hair = new THREE.SphereGeometry(0.31, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2.4); hair.translate(0, 1.71, -0.17); det.push(paint(hair, 0x3d2b1f)); }
+      det.push(box(0.08, 0.02, 0.02, 0, 1.58, -0.47, 0xd62828));
+      return;
+    case 'cyber': // 사이버 네온 헬멧: 검은 쉘 + 발광 바이저 + 네온 라인
+      sph(0.19, 0, 1.58, -0.2, shell, shellList);
+      glow.push(box(0.26, 0.07, 0.06, 0, 1.6, -0.38, hel.visor));
+      glow.push(box(0.03, 0.03, 0.38, 0, 1.78, -0.2, hel.neon));
+      for (const sx of [-1, 1]) glow.push(box(0.02, 0.18, 0.02, sx * 0.19, 1.58, -0.2, hel.neon));
+      return;
+    default:
+      break;
+  }
+  const helmet = new THREE.SphereGeometry(0.18, 12, 10);
+  helmet.translate(0, 1.58, -0.2);
+  shellList.push(paint(helmet, shell));
+  if (hel.full) shellList.push(box(0.26, 0.12, 0.1, 0, 1.52, -0.36, shell));
+  det.push(box(0.22, hel.full ? 0.1 : 0.08, 0.06, 0, 1.58, -0.37, hel.visor));
+  if (hel.stripe) det.push(box(0.05, 0.05, 0.36, 0, 1.75, -0.2, hel.stripe));
+  if (hel.shine || (paintOpt && paintOpt.finish === 'metallic')) glow.push(box(0.04, 0.04, 0.3, 0.09, 1.71, -0.2, 0xfff3b0));
+  if (hel.ears) {
+    for (const sx of [-1, 1]) {
+      const ear = new THREE.ConeGeometry(0.06, 0.13, 4);
+      ear.translate(sx * 0.1, 1.77, -0.18);
+      shellList.push(paint(ear, shell));
+    }
+  }
+  if (hel.crown) {
+    const band = new THREE.CylinderGeometry(0.13, 0.13, 0.05, 12);
+    band.translate(0, 1.76, -0.2);
+    det.push(paint(band, 0xffd700));
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const sp = new THREE.ConeGeometry(0.03, 0.1, 4);
+      sp.translate(Math.cos(a) * 0.11, 1.84, -0.2 + Math.sin(a) * 0.11);
+      glow.push(paint(sp, 0xffe066));
+    }
+  }
+}
+
+// 국가대표 풀 바디 래핑: 국기 + 레이싱 스트라이프 + #1
+function nationalWrapTexture(code, accent) {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 256;
+  const x = c.getContext('2d');
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const acc = '#' + new THREE.Color(accent).getHexString();
+  const draw = () => {
+    drawFlag(x, code, 256, 256, 0, 0, () => { draw(); tex.needsUpdate = true; });
+    x.save();
+    x.translate(128, 128);
+    x.rotate(-0.5);
+    x.fillStyle = 'rgba(255,255,255,0.92)';
+    x.fillRect(-200, -38, 400, 10);
+    x.fillRect(-200, 28, 400, 10);
+    x.fillStyle = acc;
+    x.fillRect(-200, -26, 400, 52);
+    x.restore();
+    x.fillStyle = '#ffffff';
+    x.beginPath();
+    x.arc(128, 128, 30, 0, Math.PI * 2);
+    x.fill();
+    x.fillStyle = '#111111';
+    x.font = 'bold 40px "Russo One", "Arial Black", sans-serif';
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    x.fillText('1', 128, 131);
+  };
+  draw();
+  return tex;
+}
 
 function deliveryBox(det, glow, style) {
   const st = BOX_STYLES[style] || BOX_STYLES.basic;
@@ -376,6 +519,25 @@ function deliveryBox(det, glow, style) {
   }
   if (style === 'styrofoam') det.push(box(0.1, 0.51, 0.52, 0, 1.31, 0.68, 0x2f7fe0));
   if (st.stack) for (let i = 0; i < 3; i++) det.push(box(0.6, 0.04, 0.54, 0, 1.12 + i * 0.16, 0.68, 0xe63946));
+  if (st.planks) {
+    // 빈티지 나무 상자: 가로 판자 줄 + 모서리 철판
+    for (let i = 0; i < 4; i++) det.push(box(0.565, 0.02, 0.505, 0, 1.13 + i * 0.12, 0.68, 0x5a3e2b));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) det.push(box(0.05, 0.5, 0.05, sx * 0.27, 1.31, 0.68 + sz * 0.24, 0x3d3d3d));
+  }
+  if (st.anime) {
+    // 서브컬처 박스: 뒷면에 커다란 눈 + 볼터치 + 별
+    for (const sx of [-1, 1]) {
+      det.push(box(0.13, 0.15, 0.02, sx * 0.12, 1.36, 0.935, 0xffffff));
+      det.push(box(0.08, 0.11, 0.02, sx * 0.12, 1.35, 0.945, 0x2b2d42));
+      det.push(box(0.03, 0.03, 0.02, sx * 0.1, 1.38, 0.955, 0xffffff));
+      det.push(box(0.08, 0.03, 0.02, sx * 0.17, 1.24, 0.935, 0xff6fae));
+    }
+    for (const sx of [-1, 1]) glow.push(box(0.02, 0.12, 0.12, sx * 0.29, 1.42, 0.62, 0xfff275));
+  }
+  if (st.grid) {
+    for (let i = 0; i < 3; i++) glow.push(box(0.58, 0.012, 0.52, 0, 1.16 + i * 0.12, 0.68, st.band));
+    for (const sz of [-0.12, 0.12]) glow.push(box(0.58, 0.5, 0.012, 0, 1.31, 0.68 + sz, st.band));
+  }
   if (st.camo) {
     for (const [sx, sy, sz, c] of [[0.29, 1.2, 0.6, 0x3b4422], [0.29, 1.42, 0.8, 0x8a7f4f], [-0.29, 1.3, 0.55, 0x8a7f4f], [-0.29, 1.45, 0.82, 0x3b4422]]) {
       det.push(box(0.02, 0.14, 0.18, sx, sy, sz, c));
@@ -425,7 +587,15 @@ export function createBike(color, opts = {}) {
     root.add(shadow(0.9, 2.2));
     return { root, lean, bodyMat: new THREE.MeshLambertMaterial({ color }), flame };
   }
-  const bodyMat = new THREE.MeshLambertMaterial({ color });
+  let bodyMat;
+  if (opts.national && opts.nationalCode) {
+    // 국가대표: 국기 + 레이싱 패턴 풀 바디 래핑
+    bodyMat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: nationalWrapTexture(opts.nationalCode, opts.accent ?? 0xffd700) });
+  } else if (opts.paint) {
+    bodyMat = paintMaterial(opts.paint.hex, opts.paint.finish);
+  } else {
+    bodyMat = new THREE.MeshLambertMaterial({ color });
+  }
   const bikeTail = tailMat.clone(); // 내 바이크 전용 (브레이크 시 밝아짐)
   const body = [], det = [], head = [], tail = [], glow = [];
   const out = OUTFIT_STYLES[opts.outfit] || OUTFIT_STYLES.jacket;
@@ -477,31 +647,7 @@ export function createBike(color, opts = {}) {
     pon.translate(0, 1.27, 0.05);
     det.push(paint(pon, JACKET));
   }
-  const helmet = new THREE.SphereGeometry(0.18, 12, 10);
-  helmet.translate(0, 1.58, -0.2);
-  det.push(paint(helmet, hel.shell));
-  if (hel.full) det.push(box(0.26, 0.12, 0.1, 0, 1.52, -0.36, hel.shell));
-  det.push(box(0.22, hel.full ? 0.1 : 0.08, 0.06, 0, 1.58, -0.37, hel.visor));
-  if (hel.stripe) det.push(box(0.05, 0.05, 0.36, 0, 1.75, -0.2, hel.stripe));
-  if (hel.shine) glow.push(box(0.04, 0.04, 0.3, 0.09, 1.71, -0.2, 0xfff3b0));
-  if (hel.ears) {
-    for (const sx of [-1, 1]) {
-      const ear = new THREE.ConeGeometry(0.06, 0.13, 4);
-      ear.translate(sx * 0.1, 1.77, -0.18);
-      det.push(paint(ear, hel.shell));
-    }
-  }
-  if (hel.crown) {
-    const band = new THREE.CylinderGeometry(0.13, 0.13, 0.05, 12);
-    band.translate(0, 1.76, -0.2);
-    det.push(paint(band, 0xffd700));
-    for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * Math.PI * 2;
-      const sp = new THREE.ConeGeometry(0.03, 0.1, 4);
-      sp.translate(Math.cos(a) * 0.11, 1.84, -0.2 + Math.sin(a) * 0.11);
-      glow.push(paint(sp, 0xffe066));
-    }
-  }
+  headgear(det, glow, hel, opts.helmetPaint);
   if (out.reflect) for (const y of [1.18, 1.36]) glow.push(box(0.395, 0.04, 0.275, 0, y, 0.05, 0xe6ff5c, -0.75));
   if (out.hump) det.push(box(0.22, 0.16, 0.12, 0, 1.47, 0.12, 0xffffff, -0.75));
   if (out.bow) det.push(box(0.12, 0.05, 0.04, 0, 1.47, -0.14, 0xd62828));
@@ -514,6 +660,7 @@ export function createBike(color, opts = {}) {
   // 배달 박스 (뒷좌석 랙 위) — 외부 'box' 모델이 있으면 그것으로 교체
   const extBox = models.instantiate('box');
   if (!extBox) deliveryBox(det, glow, opts.box);
+  const nationalBox = !extBox && opts.box === 'national' && opts.nationalCode;
 
   head.push(box(0.18, 0.12, 0.05, 0, 0.92, -0.7));
   tail.push(box(0.16, 0.06, 0.04, 0, 1.0, 0.78));
@@ -533,6 +680,16 @@ export function createBike(color, opts = {}) {
   lean.add(flame);
   // 브레이크 시 후미등(스톱램프) 글로우
   if (opts.flag) lean.add(flagDecals(opts.flag, Boolean(extBox)));
+  if (nationalBox) {
+    // 국가대표 전용 배달통: 양옆·뒷면에 국기
+    const fm = new THREE.MeshBasicMaterial({ map: flagTexture(opts.nationalCode), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    for (const [x, z, ry] of [[0.282, 0.68, Math.PI / 2], [-0.282, 0.68, -Math.PI / 2], [0, 0.932, 0]]) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 0.3), fm);
+      m.position.set(x, 1.29, z);
+      m.rotation.y = ry;
+      lean.add(m);
+    }
+  }
   const brakeGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xff2a2a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
   brakeGlow.position.set(0, 1.0, 0.82);
   brakeGlow.scale.set(1.6, 1.0, 1);
@@ -683,6 +840,51 @@ export function cargoGeometry() {
     box(0.92, 0.08, 0.12, -0.15, 0.61, 0, 0xe9d8a6),
     box(0.57, 0.07, 0.12, -0.05, 1.06, -0.05, 0xe9d8a6, 0.3),
   ]);
+}
+
+// 독립 점프대: 노란/검정 경사로 + 황금색 네온 안내선 (낮은 쪽이 라이더 방향 +z, 높은 쪽 -z)
+export const JUMP_RAMP = { width: 2.8, length: 5, height: 1.1 };
+export function createJumpRamp() {
+  const { width: W, length: L, height: H } = JUMP_RAMP;
+  const grp = new THREE.Group();
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 0);
+  shape.lineTo(L, 0);
+  shape.lineTo(L, H);
+  shape.closePath();
+  const wedge = new THREE.ExtrudeGeometry(shape, { depth: W, bevelEnabled: false });
+  wedge.rotateY(Math.PI / 2); // 모양의 x(길이) → -z
+  wedge.translate(-W / 2, 0, 0);
+  const body = new THREE.Mesh(wedge, new THREE.MeshLambertMaterial({ color: 0xffc300 }));
+  // 경사면 위 안내선 (경사 각도에 맞춰 눕힘)
+  const slope = Math.atan2(H, L);
+  const lineMat = new THREE.MeshBasicMaterial({ color: 0xffd700 });
+  const len = Math.hypot(L, H);
+  const lines = [];
+  for (const x of [-W / 2 + 0.18, W / 2 - 0.18, 0]) {
+    const g = new THREE.BoxGeometry(x === 0 ? 0.08 : 0.14, 0.04, len);
+    g.rotateX(slope);
+    g.translate(x, H / 2 + 0.03, -L / 2);
+    lines.push(g);
+  }
+  // 셰브론(진행 방향 화살표)
+  for (let i = 0; i < 3; i++) {
+    for (const sx of [-1, 1]) {
+      const g = new THREE.BoxGeometry(0.9, 0.04, 0.12);
+      g.rotateY(sx * 0.6);
+      g.rotateX(slope);
+      const t = 0.25 + i * 0.25;
+      g.translate(sx * 0.35, H * t + 0.04, -L * t - sx * 0.0);
+      lines.push(g);
+    }
+  }
+  const neon = new THREE.Mesh(merge(lines), lineMat);
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.6, L + 0.8).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.18, depthWrite: false }));
+  glow.position.set(0, 0.03, -L / 2);
+  grp.add(glow, body, neon);
+  grp.neon = lineMat;
+  return grp;
 }
 
 // 배달 드롭존: 도로 가장자리 반투명 구역 + "DROP ZONE" 라벨
@@ -1002,8 +1204,8 @@ export function createLandmark(kind) {
       g.push(cone(3, 18, 0, 96, 0, 0xffc300), cone(1.6, 10, -24, 54, 0, 0xffc300), cone(1.6, 10, 24, 54, 0, 0xffc300));
       break;
     case 'namsan': // 남산 + N서울타워
-      { const hill = new THREE.SphereGeometry(70, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2); hill.scale(1.4, 0.55, 1); p.push(paint(hill, 0x2f5d3a)); }
-      p.push(cyl(2.5, 3.5, 60, 0, 68, 0, 0xe6e6e6));
+      { const hill = new THREE.SphereGeometry(40, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2); hill.scale(1.4, 0.95, 1); p.push(paint(hill, 0x2f5d3a)); }
+      p.push(cyl(2.5, 3.5, 60, 0, 66, 0, 0xe6e6e6));
       p.push(cyl(9, 9, 9, 0, 98, 0, 0xcfd8dc, 12));
       g.push(cyl(0.6, 0.6, 26, 0, 116, 0, 0xff3b6b, 6));
       break;

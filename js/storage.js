@@ -9,7 +9,7 @@ const SESSION_KEY = 'grabrider.session.v1';
 const LEGACY_KEYS = ['motorush.save.v1', 'grabrider.localdb.v1'];
 
 // 상점 가격표는 config.js 에서 관리
-export { BIKES, BOXES, OUTFITS, HELMETS } from './config.js';
+export { BIKES, BOXES, OUTFITS, HELMETS, PAINTS } from './config.js';
 import { BIKES } from './config.js';
 import { guessRegion, isCountryCode } from './themes.js';
 
@@ -22,17 +22,16 @@ export const MISSION_DEFS = {
   score:    { label: (n) => `Score ${n.toLocaleString()} in one run`, targets: [3000, 10000, 25000, 50000, 100000, 200000] },
   coins:    { label: (n) => `Collect ${n} coins in one run`,          targets: [10, 25, 50, 80, 120, 200] },
   oncoming: { label: (n) => `Ride ${n.toLocaleString()} m in the wrong way lane`, targets: [200, 500, 1000, 2000, 3500, 5000] },
-  boost:    { label: (n) => `Fire nitro ${n} times`,               targets: [1, 2, 3, 5, 7, 10] },
   combo:    { label: (n) => `Reach a x${n} near-miss combo`,          targets: [3, 5, 8, 12, 16, 20] },
   speed:    { label: (n) => `Hit ${n} KM/H`,            targets: [120, 150, 180, 210, 240, 280] },
-  smash:    { label: (n) => `Smash ${n} cars with nitro`,     targets: [1, 3, 5, 10, 15, 25] },
+  smash:    { label: (n) => `Smash ${n} cars in Giant Mode`,     targets: [1, 3, 5, 10, 15, 25] },
   jump:     { label: (n) => `Air jump off ${n} ramp trucks`,         targets: [1, 2, 3, 5, 8, 12] },
 };
 
 // 서버(player_data.data)에 저장하는 키
 const SERVER_KEYS = [
   'coins', 'best', 'bestDist', 'ownedBikes', 'bike', 'prevBike', 'ownedBoxes', 'box', 'ownedOutfits', 'outfit',
-  'ownedHelmets', 'helmet', 'ownedFlags', 'flag', 'streak', 'lastDaily', 'adCooldownUntil', 'lastName',
+  'ownedHelmets', 'helmet', 'ownedFlags', 'flag', 'ownedPaints', 'bikePaint', 'helmetPaint', 'prevBox', 'streak', 'lastDaily', 'adCooldownUntil', 'lastName',
   'missions', 'missionLevels', 'settings', 'stats',
 ];
 
@@ -52,13 +51,18 @@ function defaults() {
     helmet: 'basic',
     ownedFlags: [],
     flag: '', // 장착한 상점 국기 ('' = 없음)
+    ownedPaints: [],
+    bikePaint: '', // '' = 바이크 기본 색
+    helmetPaint: '', // '' = 헤드기어 기본 색
+    prevBox: 'basic', // 국가대표 배달통 회수 시 돌아갈 상자
     streak: 0,
     lastDaily: '',
     adCooldownUntil: 0,
     lastName: '',
     missions: [],
     missionLevels: {},
-    settings: { sound: true, music: true, vibrate: true, quality: 'high', touchMode: 'buttons', throttle: 'auto', wetFx: true },
+    // touchMode 기본값: 드래그 패드 / flipControls: 조향·스로틀 좌우 반전 / ctrlVer: 조작 기본값 이전용 버전
+    settings: { sound: true, music: true, vibrate: true, quality: 'high', touchMode: 'drag', flipControls: false, throttle: 'auto', wetFx: true, ctrlVer: 2 },
     stats: { runs: 0, totalDist: 0, totalNear: 0 },
     // ---- 아래는 서버 data 에 저장하지 않는 런타임 상태
     country: guessRegion(), // 랭킹 국가 (IP 판별 → 로그인 시 서버에 고정된 값)
@@ -82,12 +86,18 @@ function applyData(d) {
   save.settings = { ...def.settings, ...(d?.settings || {}) };
   save.stats = { ...def.stats, ...(d?.stats || {}) };
   save.missionLevels = { ...(d?.missionLevels || {}) };
-  for (const k of ['ownedBikes', 'ownedBoxes', 'ownedOutfits', 'ownedHelmets', 'ownedFlags']) {
+  for (const k of ['ownedBikes', 'ownedBoxes', 'ownedOutfits', 'ownedHelmets', 'ownedFlags', 'ownedPaints']) {
     if (!Array.isArray(save[k])) save[k] = def[k];
   }
   save.ownedBikes = [...new Set(save.ownedBikes.map((id) => LEGACY_BIKES[id] || id))].filter((id) => id !== 'national');
+  save.ownedBoxes = save.ownedBoxes.filter((id) => id !== 'national');
   save.bike = LEGACY_BIKES[save.bike] || save.bike;
   if (save.settings.touchMode === 'zones') save.settings.touchMode = 'buttons';
+  // 이전 버전 계정: 조향 기본값을 드래그 패드로 한 번 전환
+  if (d?.settings?.ctrlVer !== 2) {
+    save.settings.touchMode = 'drag';
+    save.settings.ctrlVer = 2;
+  }
   save.coins = Math.max(0, Math.floor(Number(save.coins) || 0));
   ensureMissions();
 }
@@ -392,7 +402,9 @@ export async function adminSetCountry(code) {
   }
 }
 
-const COLS = 'user_id,nickname,score,bike,dist,country_code,box,outfit,helmet,flag';
+const COLS_V4 = 'user_id,nickname,score,bike,dist,country_code,box,outfit,helmet,flag';
+const COLS = `${COLS_V4},look`;
+let lookColumn = true;
 
 // entry: { score, dist, bike, box, outfit, helmet, flag }
 export const leaderboard = {
@@ -421,7 +433,16 @@ export const leaderboard = {
   // 국가별 TOP 10 + 내 순위
   async fetchTop({ country } = {}) {
     try {
-      const top = await sb(`/rest/v1/leaderboard?select=${COLS}&country_code=eq.${encodeURIComponent(country)}&score=gt.0&order=score.desc,best_at.asc&limit=10`);
+      const q = (cols) => `/rest/v1/leaderboard?select=${cols}&country_code=eq.${encodeURIComponent(country)}&score=gt.0&order=score.desc,best_at.asc&limit=10`;
+      let top;
+      try {
+        top = await sb(q(lookColumn ? COLS : COLS_V4));
+      } catch (err) {
+        // 006 미적용(look 열 없음)이면 look 없이 다시 조회
+        if (!lookColumn || !isMissingSchema(err)) throw err;
+        lookColumn = false;
+        top = await sb(q(COLS_V4));
+      }
       let me = null;
       if (session && country === save.country) {
         const r = await this.myRank();
@@ -434,6 +455,22 @@ export const leaderboard = {
       };
     } catch (err) {
       return { ok: false, error: friendly(err) };
+    }
+  },
+
+  // 내 장착 상태(바이크·상자·의상·헤드기어·국기·페인트)를 랭킹 행에 바로 반영 (006 의 update_my_look)
+  async syncLook(eq) {
+    if (!session) return false;
+    try {
+      await ensureFreshToken();
+      await sb('/rest/v1/rpc/update_my_look', {
+        method: 'POST', auth: true,
+        body: { p_bike: eq.bike, p_box: eq.box, p_outfit: eq.outfit, p_helmet: eq.helmet, p_flag: eq.flag || '', p_look: eq.look || {} },
+      });
+      return true;
+    } catch (e) {
+      if (!isMissingSchema(e)) console.warn('[leaderboard] look sync failed', e);
+      return false;
     }
   },
 

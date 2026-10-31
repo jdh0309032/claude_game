@@ -13,7 +13,7 @@ import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, GACHA_PRICE, GACHA_REFUND, STRE
   FLAG_SHOP_CODES, FLAG_PRICE_THEME, FLAG_PRICE_OTHER, ADMIN_DEBUG_TOGGLE,
 } from './config.js';
 import {
-  save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, getBike,
+  save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, PAINTS, getBike,
   replaceDoneMissions, missionText, auth, leaderboard, getSession, ONLINE, detectCountry,
   loadPlayerData, flushSave, lockCountry, isServerReady, adminSetCountry,
 } from './storage.js';
@@ -34,7 +34,6 @@ const ROAD_HALF = 7.5;
 const BIKE_HW = 0.34, BIKE_HL = 0.95;
 const ROAD_LEN = 420, TILE = 40;
 const CONTINUE_COST = 150;
-const BOOST_TIME = 4;
 const SQUALL_TIME = 30;
 const GRAVITY = 16;
 const CAR_COLORS = [0xd62828, 0xf77f00, 0x2a9d8f, 0x264653, 0x8d99ae, 0xe9ecef, 0x1d3557, 0x6a4c93, 0x40916c, 0x151515, 0xbfc0c0, 0x7f5539, 0x3a86ff];
@@ -43,9 +42,9 @@ const POWER_TYPES = ['shield', 'magnet', 'giant', 'x2', 'slow'];
 const POWER_WEIGHTS = [0.3, 0.3, 0.22, 0.1, 0.08];
 const POWER_LABEL = { shield: 'SHIELD', magnet: 'MAGNET', giant: 'GIANT MODE', x2: 'x2 SCORE', slow: 'SLOW-MO' };
 const GIANT_TIME = 6;
-// 공중 묘기: 회전 속도(rad/s), 착지 허용 각도(rad), 회전수별 보너스
-const AIR_SPIN = 9.5, AIR_FLIP = 9.5, LAND_TOL = 0.5;
-const TRICK_BONUS = [200, 500, 1200, 2500];
+// 공중 묘기: 회전 속도(rad/s), 착지 허용 각도(rad), 착지 무적 시간(s), 회전 종류별 점수(1바퀴당)
+const AIR_FLIP = 9.5, AIR_ROLL = 9.5, LAND_TOL = 0.5, LAND_IFRAMES = 1.8;
+const TRICK_POINTS = { jump: 200, flip: 500, roll: 1200, diagonal: 3000 };
 
 // ---------- 시드 기반 월드 난수 (PRNG: mulberry32)
 // 멀티플레이 시 방장이 만든 시드로 두 기기의 도로/교통/날씨를 동일하게 생성.
@@ -58,7 +57,7 @@ function mulberry32(a) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-const STREAMS = ['car', 'coin', 'cone', 'power', 'weather', 'puddle', 'stall', 'hazard'];
+const STREAMS = ['car', 'coin', 'cone', 'power', 'weather', 'puddle', 'stall', 'hazard', 'ramp'];
 const W = {};
 function seedWorld(seed) {
   STREAMS.forEach((k, i) => { W[k] = mulberry32((seed ^ (i * 0x9e3779b1)) >>> 0); });
@@ -84,7 +83,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPrefere
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87c6ff);
 scene.fog = new THREE.Fog(0x87c6ff, 60, 240);
-const camera = new THREE.PerspectiveCamera(65, 1, 0.1, 500);
+const camera = new THREE.PerspectiveCamera(65, 1, 0.1, 1000); // 원경 랜드마크가 먼 클리핑 면에 잘리지 않게
 const hemi = new THREE.HemisphereLight(0xdfefff, 0x4a5a3a, 2.2);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 2.6);
@@ -317,23 +316,37 @@ function bikeLook(bikeId, code) {
   if (bk.special === 'national') {
     const cc = isCountryCode(code) ? code : save.country;
     const [c1, c2] = nationalLivery(cc);
-    return { color: c1, opts: { style: 'sport', accent: c2, national: true } };
+    return { color: c1, opts: { style: 'sport', accent: c2, national: true, nationalCode: cc } };
   }
   return { color: bk.color, opts: { style: bk.style } };
 }
-const myNationalCode = () => save.nationalCode || save.country;
-function myLook() {
-  const look = bikeLook(save.bike, myNationalCode());
-  const flag = isCountryCode(save.flag) ? save.flag : null;
-  return { color: look.color, opts: { ...look.opts, box: save.box, outfit: save.outfit, helmet: save.helmet, flag } };
+const paintOf = (id) => PAINTS.find((p) => p.id === id) || null;
+const paintOpt = (id) => {
+  const p = paintOf(id);
+  return p ? { hex: p.hex, finish: p.finish } : null;
+};
+// 바이크·배달통·헤드기어·국기·페인트 조합 → createBike 옵션
+function composeLook(bikeId, code, eq) {
+  const look = bikeLook(bikeId, code);
+  const opts = {
+    ...look.opts,
+    nationalCode: isCountryCode(code) ? code : save.country, // 국가대표 배달통 국기
+    box: eq.box || 'basic', outfit: eq.outfit || 'jacket', helmet: eq.helmet || 'basic',
+    flag: isCountryCode(eq.flag) ? eq.flag : null,
+    paint: look.opts.national ? null : paintOpt(eq.bikePaint), // 국가대표 바이크는 국기 래핑 고정
+    helmetPaint: paintOpt(eq.helmetPaint),
+  };
+  return { color: look.color, opts };
 }
+const myNationalCode = () => save.nationalCode || save.country;
+const myLook = () => composeLook(save.bike, myNationalCode(), save);
 const currentBikeKey = () => JSON.stringify(myLook());
 const riderOpts = () => myLook().opts;
-// 랭킹 행(다른 라이더)의 장착 조합 → 3D 미리보기
+// 랭킹 행(다른 라이더)의 장착 조합 → 3D 미리보기. 내 행은 지금 장착한 그대로
 function rowLook(r) {
-  const look = bikeLook(r.bike, r.country);
-  const flag = isCountryCode(r.flag) ? r.flag : null;
-  return { color: look.color, opts: { ...look.opts, box: r.box || 'basic', outfit: r.outfit || 'jacket', helmet: r.helmet || 'basic', flag } };
+  if (r.isMe) return myLook();
+  const lk = r.look || {};
+  return composeLook(r.bike, r.country, { box: r.box, outfit: r.outfit, helmet: r.helmet, flag: r.flag, bikePaint: lk.bikePaint, helmetPaint: lk.helmetPaint });
 }
 
 // 관리자 모드가 아니면 보유하지 않은 아이템 장착을 해제
@@ -341,10 +354,26 @@ function sanitizeEquip() {
   if (isAdminMode()) return;
   if (save.bike === 'national' && !save.nationalUnlocked) save.bike = save.ownedBikes.includes(save.prevBike) ? save.prevBike : 'rookie';
   if (save.bike !== 'national' && !save.ownedBikes.includes(save.bike)) save.bike = 'rookie';
+  if (save.box === 'national' && !save.nationalUnlocked) save.box = save.ownedBoxes.includes(save.prevBox) ? save.prevBox : 'basic';
   for (const [k, own, def] of [['box', 'ownedBoxes', 'basic'], ['outfit', 'ownedOutfits', 'jacket'], ['helmet', 'ownedHelmets', 'basic']]) {
+    if (k === 'box' && save.box === 'national') continue;
     if (!save[own].includes(save[k])) save[k] = def;
   }
   if (save.flag && !save.ownedFlags.includes(save.flag)) save.flag = '';
+  for (const k of ['bikePaint', 'helmetPaint']) if (save[k] && !save.ownedPaints.includes(save[k])) save[k] = '';
+}
+
+// 내 장착 상태를 랭킹 DB(leaderboard)에 동기화 → 다른 사람 랭킹 3D 뷰·전광판에도 지금 모습으로 보임
+let lookSyncTimer = null;
+function syncMyLook() {
+  if (!getSession() || !isServerReady() || isAdminMode()) return;
+  clearTimeout(lookSyncTimer);
+  lookSyncTimer = setTimeout(() => {
+    leaderboard.syncLook({
+      bike: save.bike, box: save.box, outfit: save.outfit, helmet: save.helmet, flag: save.flag || '',
+      look: { bikePaint: save.bikePaint || '', helmetPaint: save.helmetPaint || '' },
+    });
+  }, 800);
 }
 
 function buildBike() {
@@ -642,7 +671,7 @@ function spawnHazard() {
 }
 
 function hitPothole() {
-  if (G.giantT > 0 || G.boostTime > 0) return;
+  if (G.giantT > 0 || G.invuln > 0) return;
   G.speed *= 0.75;
   G.shake = 0.6;
   G.combo = 0;
@@ -651,7 +680,39 @@ function hitPothole() {
   popup('POTHOLE!', 'power');
 }
 
-// ---------- 배달 드롭존: 도로 가장자리 구역을 정확히 통과하면 코인 + 부스트
+// ---------- 독립 점프대 (견인트럭 외에 도로 위 곳곳)
+const jumpRamps = [];
+function spawnJumpRamp() {
+  const r1 = wr('ramp');
+  let jr = jumpRamps.find((k) => !k.active);
+  if (!jr) {
+    jr = { obj: M.createJumpRamp() };
+    scene.add(jr.obj);
+    jumpRamps.push(jr);
+  }
+  Object.assign(jr, { active: true, x: LANES[(r1 * 4) | 0], z: SPAWN_Z, used: false });
+  jr.obj.visible = true;
+}
+function updateJumpRamps(dt, collide) {
+  for (const jr of jumpRamps) {
+    if (!jr.active) continue;
+    jr.z += G.speed * dt;
+    jr.obj.position.set(jr.x, 0, jr.z);
+    jr.obj.neon.color.setHSL(0.13, 1, 0.5 + Math.sin(G.time * 8) * 0.15);
+    // 낮은 쪽 끝이 바이크에 닿는 순간 점프
+    if (collide && !jr.used && !G.air && G.state === 'playing' && jr.z > -0.2 && jr.z < 2.5
+      && Math.abs(G.x - jr.x) < M.JUMP_RAMP.width / 2 + 0.1) {
+      jr.used = true;
+      startJump(jr);
+    }
+    if (jr.z - M.JUMP_RAMP.length > 20) {
+      jr.active = false;
+      jr.obj.visible = false;
+    }
+  }
+}
+
+// ---------- 배달 드롭존: 도로 가장자리 구역을 정확히 통과하면 코인
 const dropZones = [];
 const DROP_REWARD = 30;
 function spawnDropZone() {
@@ -676,9 +737,7 @@ function updateDropZones(dt, collide) {
       d.done = true;
       G.bonusCoins += DROP_REWARD;
       save.coins += DROP_REWARD;
-      G.slingT = Math.max(G.slingT, 1.2);
-      addNitro(15);
-      popup('DROP ZONE!', 'perfect', `+${DROP_REWARD} COINS · BOOST`);
+      popup('DROP ZONE!', 'perfect', `+${DROP_REWARD} COINS`);
       sfx.mission();
       vibrate(25);
     }
@@ -862,16 +921,10 @@ function updateCoins(dt, collide) {
 function collectCoin() {
   G.coinsRun++;
   save.coins++;
-  addNitro(2);
   G.score += 10 * G.mult;
   sfx.coin();
 }
 
-// 니트로 게이지: 니트로 발동(4초 무적) 중에는 충전 차단
-function addNitro(v) {
-  if (G.boostTime > 0) return;
-  G.nitro = Math.min(100, G.nitro + v);
-}
 
 // ---------- 파워업
 const powerMeshes = {};
@@ -957,7 +1010,13 @@ function spawnLandmark(theme, z = -440) {
   }
   landmarks = landmarks.filter((l) => l.obj !== obj);
   obj.visible = true;
-  landmarks.push({ obj, z, x: (Math.random() < 0.5 ? -1 : 1) * rand(85, 120) });
+  // 원경 랜드마크는 크기(반폭)만큼 도로에서 떨어뜨려 놓아, 도로·카메라 위로 걸치지 않게 함
+  if (!obj.userData.half) {
+    const bb = new THREE.Box3().setFromObject(obj);
+    obj.userData.half = { x: (bb.max.x - bb.min.x) / 2, z: (bb.max.z - bb.min.z) / 2 };
+  }
+  const { half } = obj.userData;
+  landmarks.push({ obj, z: z - half.z, x: (Math.random() < 0.5 ? -1 : 1) * (half.x + rand(70, 100)), halfZ: half.z });
 }
 
 function resetThemes() {
@@ -1009,7 +1068,8 @@ function updateThemes(dz, rdt) {
     const l = landmarks[i];
     l.z += dz * 0.28;
     l.obj.position.set(l.x, 0, l.z);
-    if (l.z > -70) {
+    // 앞쪽 끝이 카메라에서 160m 안으로 들어오기 전에 정리 (가까이 오면 화면을 덮는 거대한 형상이 됨)
+    if (l.z + l.halfZ > -160) {
       l.obj.visible = false;
       landmarks.splice(i, 1);
     }
@@ -1236,17 +1296,8 @@ function updateDraft(dt) {
     if (G.draftT === 0) popup('SLIPSTREAM', 'power');
     G.draftT = Math.min(2, G.draftT + dt);
   } else {
-    // 충분히 드래프팅한 뒤 차선을 바꿔 빠져나오면 슬링샷 부스트
-    if (G.draftT > 0.6 && Math.abs(G.vx) > 1.5) {
-      G.slingT = 1.4;
-      G.score += 200;
-      popup('SLINGSHOT!', 'big', '+200');
-      sfx.slingshot();
-      vibrate(25);
-    }
     G.draftT = 0;
   }
-  G.slingT = Math.max(0, G.slingT - dt);
 }
 
 const FEVER_TIME = 5;
@@ -1321,16 +1372,14 @@ function updateFx(rdt) {
     });
     rain.lines.geometry.attributes.position.needsUpdate = true;
   }
-  // 스피드 라인: 니트로 중엔 시안색 터보 라인
+  // 스피드 라인
   const kmh = spd * 3.6;
-  const boosting = G.boostTime > 0 && G.state === 'playing';
-  const op = (G.state === 'playing' ? clamp((kmh - 150) / 120, 0, 0.45) : 0) + (boosting ? 0.55 : 0);
-  streaks.lines.material.color.setHex(boosting ? 0x00e5ff : 0xffffff);
+  const op = G.state === 'playing' ? clamp((kmh - 150) / 120, 0, 0.45) : 0;
   streaks.lines.visible = op > 0.01;
   if (streaks.lines.visible) {
     streaks.lines.material.opacity = op;
     const P = streaks.pos;
-    const len = spd * (boosting ? 0.14 : 0.08);
+    const len = spd * 0.08;
     streaks.drops.forEach((d, i) => {
       d.z += spd * 1.4 * rdt;
       if (d.z > cz + 2) {
@@ -1416,7 +1465,7 @@ function updateCamera(rdt) {
     lookY = lerp(-1.9, -2.6, p);
   }
   const sf = clamp((G.speed * 3.6 - 60) / 220, 0, 1);
-  const fov = lerp(62, 72, p) + sf * 12 + (G.boostTime > 0 ? 8 : 0) + (G.air ? 6 : 0) + (G.feverT > 0 ? 10 : 0) + (G.slingT > 0 ? 5 : 0);
+  const fov = lerp(62, 72, p) + sf * 12 + (G.air ? 6 : 0) + (G.feverT > 0 ? 10 : 0);
   if (Math.abs(camera.fov - fov) > 0.05) {
     camera.fov = lerp(camera.fov, fov, Math.min(1, rdt * 4));
     camera.updateProjectionMatrix();
@@ -1424,7 +1473,7 @@ function updateCamera(rdt) {
   camX = lerp(camX, G.x * 0.75, Math.min(1, rdt * 5));
   camY = lerp(camY, (G.airY || 0) * 0.6, Math.min(1, rdt * 4));
   G.shake = Math.max(0, (G.shake || 0) - rdt * 2.2);
-  const s = G.shake * 0.35 + (G.boostTime > 0 ? 0.04 : 0);
+  const s = G.shake * 0.35;
   giantCam = lerp(giantCam, G.giantT > 0 ? 1 : 0, Math.min(1, rdt * 3));
   camera.position.set(camX + rand(-s, s), baseY + camY + giantCam * 1.6 + rand(-s, s), camZ + giantCam * 2.5);
   camera.lookAt(camX * 0.9, lookY + camY * 0.5, lookZ);
@@ -1450,7 +1499,6 @@ window.addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   if (e.repeat) return;
-  if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') tryBoost();
   if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
   if (e.code === 'Enter') {
     if (G.state === 'menu' && currentScreen === 'menu') startRun();
@@ -1518,10 +1566,6 @@ for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) {
   });
 }
 
-$('btnNitro').addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  tryBoost();
-});
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('click', (e) => {
@@ -1549,7 +1593,7 @@ function clearWorld() {
   while (stalls.length) releaseStall(stalls[0]);
   for (const c of coins) c.active = false;
   for (const pool of [conePool, signPool, puddlePool, potholePool, manholePool, cargoPool]) for (const c of pool.items) c.active = false;
-  for (const d of dropZones) {
+  for (const d of [...dropZones, ...jumpRamps]) {
     d.active = false;
     d.obj.visible = false;
   }
@@ -1564,17 +1608,17 @@ function resetRun(seed) {
   screenRain.reset();
   Object.assign(G, {
     speed: 21, x: 3.5 * driveSign(0), vx: 0, lean: 0, distance: 0, score: 0, mult: 1, time: 0,
-    coinsRun: 0, nearMiss: 0, combo: 0, comboTimer: 0, maxCombo: 0, nitro: 0, boostTime: 0,
+    coinsRun: 0, nearMiss: 0, combo: 0, comboTimer: 0, maxCombo: 0,
     shield: false, magnetTime: 0, x2Time: 0, slowTime: 0, giantT: 0, invuln: 0, oncomingDist: 0,
-    rotPitch: 0, rotYaw: 0, rotationCount: 0, rotShown: 0, tricks: 0,
-    boostsUsed: 0, maxKmh: 0, smashed: 0, jumps: 0, continued: false, finalized: false,
+    rotPitch: 0, rotRoll: 0, rotationCount: 0, rotShown: 0, tricks: 0, landInv: 0,
+    maxKmh: 0, smashed: 0, jumps: 0, continued: false, finalized: false,
     nextSpawn: 25, nextCoins: 60, nextPower: wrand('power', 120, 180), nextCones: wrand('cone', 350, 600),
-    nextStall: wrand('stall', 300, 500), nextHazard: wrand('hazard', 350, 500), nextDrop: wrand('hazard', 400, 600), nextPuddle: wrand('puddle', 400, 700), nextSquall: wrand('weather', 1200, 2000),
+    nextStall: wrand('stall', 300, 500), nextHazard: wrand('hazard', 350, 500), nextDrop: wrand('hazard', 400, 600), nextRamp: wrand('ramp', 250, 400), nextPuddle: wrand('puddle', 400, 700), nextSquall: wrand('weather', 1200, 2000),
     squallT: 0, rain: false, rainAmt: 0, lightning: 0, boltT: 0, shake: 0, crashT: 0,
     air: false, airY: 0, airVy: 0, slipT: 0, slipDir: 0, rpm: 0, braking: false,
     missionsDone: [], cd: 0, cdShown: 0, globalSubmitted: false,
     seed: runSeed, nextBoard: 120, nextMega: 300, nextHot: 500, hot: null, bonusCoins: 0, hotDone: 0,
-    draftT: 0, slingT: 0, feverT: 0, pbDist: save.bestDist || 0, pbPassed: false,
+    draftT: 0, feverT: 0, pbDist: save.bestDist || 0, pbPassed: false,
     rivalDist: 0, rivalName: '', rivalPassed: false, doubled: false, revived: false,
   });
   for (let z = -60; z > SPAWN_Z; z -= wrand('car', 16, 26)) spawnCar(z);
@@ -1622,7 +1666,7 @@ function startRun(opts = {}) {
   G.cdShown = 0;
   $('countdown').classList.remove('hidden');
   if (save.stats.runs === 0) {
-    toast(isTouchDevice ? 'LEFT THUMB: STEER  ·  RIGHT THUMB: THROTTLE / BRAKE / NOS' : 'ARROWS STEER  ·  UP THROTTLE  ·  DOWN BRAKE  ·  SPACE NITRO');
+    toast(isTouchDevice ? 'DRAG TO STEER  ·  OTHER THUMB: THROTTLE / BRAKE' : 'ARROWS STEER  ·  UP THROTTLE  ·  DOWN BRAKE');
     toast('Brush past cars for NEAR MISS bonuses');
   }
 }
@@ -1661,7 +1705,7 @@ function scrollWorld(dz) {
 }
 
 // 거리 기준 스폰 — 절대 거리 일정표(+=)를 써서 멀티에서 같은 거리 → 같은 결과
-const SPAWN_KEYS = ['nextSpawn', 'nextCoins', 'nextPower', 'nextCones', 'nextStall', 'nextPuddle', 'nextSquall', 'nextHazard', 'nextDrop'];
+const SPAWN_KEYS = ['nextSpawn', 'nextCoins', 'nextPower', 'nextCones', 'nextStall', 'nextPuddle', 'nextSquall', 'nextHazard', 'nextDrop', 'nextRamp'];
 function runSpawners() {
   // 비정상적으로 크게 밀린 경우(디버그 점프 등)만 따라잡기
   for (const k of SPAWN_KEYS) if (G.distance - G[k] > 1500) G[k] = G.distance;
@@ -1693,6 +1737,10 @@ function runSpawners() {
   if (G.distance > G.nextHazard) {
     spawnHazard();
     G.nextHazard += wrand('hazard', 160, 320) * lerp(1, 0.6, clamp(G.distance / 15000, 0, 1));
+  }
+  if (G.distance > G.nextRamp) {
+    spawnJumpRamp();
+    G.nextRamp += wrand('ramp', 180, 320); // 점프대 자주 등장
   }
   if (G.distance > G.nextDrop) {
     spawnDropZone();
@@ -1729,8 +1777,8 @@ function updatePlaying(rdt) {
   G.magnetTime = Math.max(0, G.magnetTime - rdt);
   G.x2Time = Math.max(0, G.x2Time - rdt);
   G.giantT = Math.max(0, G.giantT - rdt);
+  G.landInv = Math.max(0, G.landInv - rdt);
   G.invuln = Math.max(0, G.invuln - rdt);
-  G.boostTime = Math.max(0, G.boostTime - rdt);
   G.slipT = Math.max(0, G.slipT - rdt);
   if (G.squallT > 0) {
     G.squallT -= rdt;
@@ -1761,14 +1809,12 @@ function updatePlaying(rdt) {
   if (throttle) target = maxSpd;
   if (brake) target = 50 / 3.6;
   if (G.draftT > 0 && !brake) target *= 1 + 0.1 * clamp(G.draftT / 0.6, 0, 1); // 슬립스트림 가속
-  if (G.slingT > 0) target = Math.max(target, maxSpd * 1.25);                // 슬링샷 부스트
-  if (G.boostTime > 0) target = maxSpd * 1.35;
-  const accel = target > G.speed ? (G.boostTime > 0 || G.slingT > 0 ? 30 : 7 * bk.accel) : brake ? 22 : manual ? 5 : 6;
+  const accel = target > G.speed ? 7 * bk.accel : brake ? 22 : manual ? 5 : 6;
   if (!G.air) G.speed = approach(G.speed, target, accel * rdt); // 공중에선 속도 유지
   G.braking = Boolean(brake);
   // RPM: 스로틀을 감으면 빠르게 치솟고, 놓으면 떨어짐
   const spdRatio = clamp(G.speed / (maxSpd * 1.35), 0, 1);
-  const rpmTarget = G.boostTime > 0 ? 1 : throttle ? clamp(0.72 + spdRatio * 0.25 + Math.sin(G.time * 40) * 0.03, 0, 1) : 0;
+  const rpmTarget = throttle ? clamp(0.72 + spdRatio * 0.25 + Math.sin(G.time * 40) * 0.03, 0, 1) : 0;
   G.rpm = approach(G.rpm, rpmTarget, rdt * (rpmTarget > G.rpm ? 3.2 : 2.2));
 
   // 조향 (물웅덩이에 미끄러지면 반응이 둔해지고 옆으로 밀림)
@@ -1803,12 +1849,10 @@ function updatePlaying(rdt) {
   const onc = G.x * G.ds < -0.3;
   if (onc) {
     G.oncomingDist += dz;
-    addNitro(dt * 3);
   }
   let mult = 1 + Math.min(G.combo, 20) * 0.1;
   if (onc) mult *= 2;
   if (G.x2Time > 0) mult *= 2;
-  if (G.boostTime > 0) mult *= 1.5;
   if (G.rain) mult *= 1.3;
   if (G.feverT > 0) mult *= 3;
   G.mult = mult;
@@ -1829,14 +1873,15 @@ function updatePlaying(rdt) {
   updatePool(puddlePool, dt, true, 1.0, 1.6, 'puddle');
   for (const h of HAZARDS) updatePool(h.pool, dt, true, h.hw, h.hl, h.kind);
   updateDropZones(dt, true);
+  updateJumpRamps(dt, true);
   updateStalls(dt, true);
   if (G.state !== 'playing') return;
   updateCoins(dt, true);
   updatePowerups(dt, true);
   checkMissions();
   poseBike();
-  sfx.engineUpdate(G.speed / (maxSpd * 1.35), G.boostTime > 0);
-  sfx.setIntensity(spdRatio, G.boostTime > 0);
+  sfx.engineUpdate(G.speed / maxSpd, false);
+  sfx.setIntensity(spdRatio, false);
 }
 
 function startJump(c) {
@@ -1845,36 +1890,52 @@ function startJump(c) {
   G.airY = 0.4;
   G.airVy = 9 + G.speed * 0.12; // 공중 묘기를 할 수 있도록 체공 시간 확보
   G.rotPitch = 0;
-  G.rotYaw = 0;
+  G.rotRoll = 0;
   G.rotationCount = 0;
   G.rotShown = 0;
   G.jumps++;
   c.passed = true;
   sfx.jump();
   vibrate(30);
-  popup('AIRBORNE', 'big', isTouchDevice ? 'STEER = SPIN · THROTTLE / BRAKE = FLIP' : 'LEFT/RIGHT = SPIN · UP/DOWN = FLIP');
+  popup('AIRBORNE', 'big', isTouchDevice ? 'STEER = BARREL ROLL · THROTTLE / BRAKE = FLIP' : 'LEFT/RIGHT = ROLL · UP/DOWN = FLIP · BOTH = DIAGONAL');
 }
 
-// 가장 가까운 한 바퀴(2π 배수)까지 남은 각도
-const offLevel = (a) => Math.abs(a - Math.round(a / (Math.PI * 2)) * Math.PI * 2);
+// 가장 가까운 한 바퀴(2π 배수)까지 남은 각도 / 완료한 회전 수
+const TAU = Math.PI * 2;
+const offLevel = (a) => Math.abs(a - Math.round(a / TAU) * TAU);
+const turns = (a) => Math.floor(Math.abs(a) / TAU + 0.08);
 
+// 공중 묘기: 스로틀/브레이크 = 앞뒤 플립(Pitch), 좌우 = 옆 회전(Roll, 배럴 롤), 동시 입력 = 대각선 다축 회전
 function updateAirTricks(rdt, steer, throttle, brake) {
   const flip = (throttle ? 1 : 0) - (brake ? 1 : 0);
-  G.rotYaw += steer * AIR_SPIN * rdt;
   G.rotPitch += flip * AIR_FLIP * rdt;
+  G.rotRoll += steer * AIR_ROLL * rdt;
   // 입력이 없으면 가까운 수평 자세로 살짝 맞춰 줌 (착지 보조)
   const snap = (a) => {
-    const t = Math.round(a / (Math.PI * 2)) * Math.PI * 2;
+    const t = Math.round(a / TAU) * TAU;
     return Math.abs(t - a) < 0.6 ? approach(a, t, 3 * rdt) : a;
   };
-  if (!steer) G.rotYaw = snap(G.rotYaw);
+  if (!steer) G.rotRoll = snap(G.rotRoll);
   if (!flip) G.rotPitch = snap(G.rotPitch);
-  G.rotationCount = Math.floor((Math.abs(G.rotYaw) + Math.abs(G.rotPitch)) / (Math.PI * 2) + 0.08);
+  G.rotationCount = turns(G.rotPitch) + turns(G.rotRoll);
   if (G.rotationCount > G.rotShown) {
     G.rotShown = G.rotationCount;
-    popup(G.rotationCount === 1 ? '360!' : `${G.rotationCount * 360}!`, 'combo', `${G.rotationCount} ROTATION${G.rotationCount > 1 ? 'S' : ''}`);
+    popup(trickName(turns(G.rotPitch), turns(G.rotRoll)), 'combo', `${G.rotationCount * 360}°`);
     sfx.near(true);
   }
+}
+
+function trickName(p, r) {
+  if (p && r) return 'DIAGONAL MEGA FLIP';
+  if (r) return r > 1 ? `${r}x BARREL ROLL` : 'BARREL ROLL';
+  if (p) return p > 1 ? `${p}x FLIP` : 'FLIP';
+  return 'AIR JUMP';
+}
+
+// 회전 축별 차등 점수: 앞뒤 플립 < 옆 회전(배럴 롤) < 대각선 다축 회전
+function trickPoints(p, r) {
+  if (p && r) return TRICK_POINTS.diagonal * Math.max(p, r);
+  return TRICK_POINTS.flip * p + TRICK_POINTS.roll * r || TRICK_POINTS.jump;
 }
 
 function land() {
@@ -1883,27 +1944,22 @@ function land() {
   G.airY = 0;
   G.airVy = 0;
   // 착지 판정: 차체가 수평(한 바퀴 단위)에 가까워야 성공, 아니면 크래시
-  const clean = offLevel(G.rotPitch) < LAND_TOL && offLevel(G.rotYaw) < LAND_TOL;
-  const rots = G.rotationCount;
+  const clean = offLevel(G.rotPitch) < LAND_TOL && offLevel(G.rotRoll) < LAND_TOL;
+  const p = turns(G.rotPitch), r = turns(G.rotRoll);
   if (!clean) {
     popup('CRASH LANDING!', 'big');
     crash({ x: G.x - 0.5 });
     return;
   }
   G.rotPitch = 0;
-  G.rotYaw = 0;
-  G.invuln = Math.max(G.invuln, 0.5); // 착지 직후 잠깐 무적
-  const base = TRICK_BONUS[Math.min(rots, 3)];
-  const pts = Math.round(base * (G.x2Time > 0 ? 2 : 1));
+  G.rotRoll = 0;
+  // 착지 무적: 1.8초 동안 차·장애물과 부딪혀도 통과 (보호막처럼 은은하게 점멸)
+  G.invuln = Math.max(G.invuln, LAND_IFRAMES);
+  G.landInv = LAND_IFRAMES;
+  const pts = Math.round(trickPoints(p, r) * (G.x2Time > 0 ? 2 : 1));
   G.score += pts;
-  if (rots > 0) G.tricks += rots;
-  addNitro(20 + rots * 10);
-  if (rots >= 3) {
-    G.slingT = 1.8; // 3회전 이상: 스피드 부스트
-    popup('INSANE TRICK!', 'perfect', `CLEAN LANDING x${rots} · +${fmt(pts)} · BOOST`);
-  } else {
-    popup(rots ? 'CLEAN LANDING!' : 'AIR JUMP!', 'perfect', `${rots ? `x${rots} · ` : ''}+${fmt(pts)}`);
-  }
+  if (p + r > 0) G.tricks += p + r;
+  popup(p + r ? trickName(p, r) : 'AIR JUMP!', 'perfect', `CLEAN LANDING · +${fmt(pts)}`);
   G.shake = 0.5;
   sfx.land();
   vibrate(40);
@@ -1921,8 +1977,8 @@ function hitPuddle() {
 const pivotTmp = new THREE.Vector3();
 const AIR_PIVOT = 0.9; // 공중 회전 중심 높이 (차체 가운데)
 function poseBike() {
-  if (G.air && (G.rotPitch || G.rotYaw)) {
-    bike.root.rotation.set(G.rotPitch, G.rotYaw, 0, 'YXZ');
+  if (G.air && (G.rotPitch || G.rotRoll)) {
+    bike.root.rotation.set(G.rotPitch, 0, G.rotRoll, 'ZXY');
     pivotTmp.set(0, AIR_PIVOT, 0).applyEuler(bike.root.rotation);
     bike.root.position.set(G.x - pivotTmp.x, (G.airY || 0) + AIR_PIVOT - pivotTmp.y, -pivotTmp.z);
   } else {
@@ -1933,12 +1989,17 @@ function poseBike() {
   const gs = approach(bike.root.scale.x, G.giantT > 0 ? 1.8 : 1, 0.06);
   bike.root.scale.setScalar(gs);
   bike.lean.rotation.z = G.lean;
-  bike.lean.rotation.x = G.air ? clamp(-G.airVy * 0.03, -0.3, 0.25) : G.boostTime > 0 ? -0.06 : 0;
-  bike.flame.visible = G.boostTime > 0;
+  bike.lean.rotation.x = G.air ? clamp(-G.airVy * 0.03, -0.3, 0.25) : 0;
+  bike.flame.visible = false;
   if (bike.flame.visible) bike.flame.scale.set(1, 1, rand(0.7, 1.3));
-  shieldBubble.visible = G.shield;
+  shieldBubble.visible = G.shield || G.landInv > 0;
   shieldBubble.material.opacity = 0.18 + Math.sin(G.time * 6) * 0.06;
-  bike.root.visible = G.invuln > 0 && G.boostTime <= 0 && G.giantT <= 0 && !G.air ? Math.floor(G.time * 12) % 2 === 0 : true;
+  // 무적 점멸: 착지 무적은 은은하게(느리게), 그 외 부딪힌 뒤 무적은 빠르게
+  let visible = true;
+  if (G.invuln > 0 && G.giantT <= 0 && !G.air) {
+    visible = G.landInv > 0 ? Math.floor(G.time * 5) % 3 !== 0 : Math.floor(G.time * 12) % 2 === 0;
+  }
+  bike.root.visible = visible;
   // 브레이크: 스톱램프 점등 + 노면 반사 글로우
   const braking = G.braking && G.state === 'playing';
   if (bike.tailMat) bike.tailMat.emissiveIntensity = braking ? 5 : M.tailMat.emissiveIntensity;
@@ -1962,17 +2023,6 @@ function updateAttract(rdt) {
   sfx.setIntensity(0.15, false);
 }
 
-function tryBoost() {
-  if (G.state !== 'playing' || G.nitro < 100 || G.boostTime > 0) return;
-  G.nitro = 0;
-  G.boostTime = BOOST_TIME;
-  G.boostsUsed++;
-  G.shake = 0.4;
-  sfx.boost();
-  vibrate(40);
-  popup('NITRO!', 'big');
-}
-
 function nearMiss(c, gap) {
   G.combo++;
   G.comboTimer = 3;
@@ -1984,7 +2034,6 @@ function nearMiss(c, gap) {
   if (G.x2Time > 0) pts *= 2;
   pts = Math.round(pts);
   G.score += pts;
-  addNitro(perfect ? 22 : 14);
   const tag = c.type === 'police' ? 'POLICE x2  ' : '';
   popup(perfect ? 'PERFECT!' : 'NEAR MISS!', perfect ? 'perfect' : '', `${tag}+${pts}`);
   if (G.combo >= 2 && G.combo % 5 === 0) popup(`COMBO x${G.combo}`, 'combo');
@@ -1995,7 +2044,7 @@ function nearMiss(c, gap) {
 // kind: 'car' | 'small'(라바콘·표지판) | 'stall'(노점상)
 function hitObstacle(o, kind = 'car') {
   if (G.state !== 'playing') return;
-  const smashing = G.boostTime > 0 || G.giantT > 0; // 니트로·거대화: 부딪힌 걸 날려버림
+  const smashing = G.giantT > 0; // 거대화: 부딪힌 걸 날려버림
   if (G.invuln > 0 && !smashing) return; // 무적(깜빡임) 중엔 통과
   if (kind === 'hole') {
     // 구멍은 날려버릴 수 없음: 니트로·거대화는 그냥 지나가고, 보호막은 깨지며 통과
@@ -2076,6 +2125,7 @@ function updateCrashing(rdt) {
   updatePool(puddlePool, dt, false, 0, 0, 'puddle');
   for (const h of HAZARDS) updatePool(h.pool, dt, false, 0, 0, h.kind);
   updateDropZones(dt, false);
+  updateJumpRamps(dt, false);
   updateStalls(dt, false);
   updateCoins(dt, false);
   updatePowerups(dt, false);
@@ -2110,7 +2160,6 @@ function missionValue(type) {
     case 'score': return G.score;
     case 'coins': return G.coinsRun;
     case 'oncoming': return G.oncomingDist;
-    case 'boost': return G.boostsUsed;
     case 'combo': return G.maxCombo;
     case 'speed': return G.maxKmh;
     case 'smash': return G.smashed;
@@ -2204,8 +2253,7 @@ const fmtCoins = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e8 ? 0 : n >= 1e7
 
 const hud = {
   score: $('hudScore'), mult: $('hudMult'), combo: $('hudCombo'), best: $('hudBest'), tags: $('hudTags'),
-  speed: $('hudSpeed'), dist: $('hudDist'), coins: $('hudCoins'), nitroBar: $('nitroBar'), nitroWrap: $('nitroWrap'),
-  btnNitro: $('btnNitro'), nitroFill: $('nitroFill'), boostFx: $('boostFx'), vs: $('hudVs'),
+  speed: $('hudSpeed'), dist: $('hudDist'), coins: $('hudCoins'), boostFx: $('boostFx'), vs: $('hudVs'),
   speedArc: $('speedArc'), rpmArc: $('rpmArc'), brakeFx: $('brakeFx'),
 };
 let lastTags = '';
@@ -2223,19 +2271,10 @@ function updateHud() {
   hud.speed.textContent = Math.round(G.speed * 3.6);
   hud.dist.textContent = `${fmt(G.distance)} m`;
   hud.coins.textContent = fmtCoins(save.coins);
-  const maxSpd = (getBike(save.bike).maxKmh / 3.6) * 1.35;
+  const maxSpd = getBike(save.bike).maxKmh / 3.6;
   hud.speedArc.setAttribute('stroke-dasharray', `${(clamp(G.speed / maxSpd, 0, 1) * 100).toFixed(1)} 100`);
   hud.rpmArc.setAttribute('stroke-dasharray', `${(G.rpm * 100).toFixed(1)} 100`);
-  const boosting = G.boostTime > 0;
-  const fill = boosting ? (G.boostTime / BOOST_TIME) * 100 : G.nitro;
-  hud.nitroBar.style.width = fill + '%';
-  hud.nitroWrap.classList.toggle('ready', G.nitro >= 100 && !boosting);
-  hud.nitroWrap.classList.toggle('boost', boosting);
-  hud.nitroFill.style.height = fill + '%';
-  hud.btnNitro.classList.toggle('ready', G.nitro >= 100 && !boosting);
-  hud.btnNitro.classList.toggle('firing', boosting);
-  hud.boostFx.classList.toggle('on', boosting);
-  hud.boostFx.classList.toggle('slow', !boosting && G.slowTime > 0);
+  hud.boostFx.classList.toggle('slow', G.slowTime > 0);
   hud.brakeFx.classList.toggle('on', G.braking && G.state === 'playing');
   $('feverFx').classList.toggle('on', G.feverT > 0 && G.state === 'playing');
 
@@ -2251,7 +2290,6 @@ function updateHud() {
 
   const tags = [];
   if (G.feverT > 0) tags.push(tagHtml('bolt', `FEVER x3 ${Math.ceil(G.feverT)}s`, 'fever'));
-  if (G.slingT > 0) tags.push(tagHtml('bolt', 'SLINGSHOT'));
   if (G.giantT > 0) tags.push(tagHtml('giant', `GIANT ${Math.ceil(G.giantT)}s`, 'fever'));
   if (G.air && G.rotationCount > 0) tags.push(tagHtml('flip', `TRICK x${G.rotationCount}`));
   else if (G.draftT > 0) tags.push(tagHtml('gauge', 'SLIPSTREAM'));
@@ -2343,6 +2381,7 @@ const SHOP = {
 
 function shopButton(kind, item, owned, sel) {
   if (sel) return '<button class="btn" disabled>EQUIPPED</button>';
+  if (item.special === 'national' && save.nationalUnlocked) owned = true;
   // 관리자 모드: 구매 없이 모든 아이템 장착
   if (owned || isAdminMode()) return `<button class="btn primary" data-kind="${kind}" data-id="${item.id}" data-act="select">EQUIP</button>`;
   if (item.special === 'national') return '<button class="btn" disabled>#1 ONLY</button>';
@@ -2360,6 +2399,50 @@ function renderShopItems(kind) {
     return `<div class="bike-card ${sel ? 'selected' : ''}">${sw}
       <div><h4>${escapeHtml(it.name)}</h4><p>${escapeHtml(it.desc)}</p></div>${shopButton(kind, it, o, sel)}</div>`;
   }).join('');
+}
+
+// ---------- 컬러 팔레트 (바이크 / 헤드기어)
+const PAINT_SLOTS = [['bike', 'bikePaint', 'BIKE PAINT'], ['helmet', 'helmetPaint', 'HEADGEAR COLOR']];
+function paintSwatch(p) {
+  if (!p) return '<div class="swatch paint-swatch factory"></div>';
+  const hex = '#' + p.hex.toString(16).padStart(6, '0');
+  return `<div class="swatch paint-swatch ${p.finish}" style="--c:${hex}"></div>`;
+}
+function renderPaints() {
+  return PAINT_SLOTS.map(([slot, key, title]) => {
+    const factory = `<div class="bike-card ${save[key] ? '' : 'selected'}">${paintSwatch(null)}
+      <div><h4>Factory Color</h4><p>Original color</p></div>${save[key] ? `<button class="btn primary" data-kind="paint" data-slot="${slot}" data-id="" data-act="select">EQUIP</button>` : '<button class="btn" disabled>EQUIPPED</button>'}</div>`;
+    const items = PAINTS.map((p) => {
+      const owned = save.ownedPaints.includes(p.id) || isAdminMode();
+      const sel = save[key] === p.id;
+      const btn = sel ? '<button class="btn" disabled>EQUIPPED</button>'
+        : owned ? `<button class="btn primary" data-kind="paint" data-slot="${slot}" data-id="${p.id}" data-act="select">EQUIP</button>`
+          : `<button class="btn gold" data-kind="paint" data-slot="${slot}" data-id="${p.id}" data-act="buy" ${save.coins < p.price ? 'disabled' : ''}>${icon('coin')}${fmtCoins(p.price)}</button>`;
+      return `<div class="bike-card ${sel ? 'selected' : ''}">${paintSwatch(p)}
+        <div><h4>${escapeHtml(p.name)}</h4><p>${p.finish.toUpperCase()}</p></div>${btn}</div>`;
+    }).join('');
+    return `<div class="shop-section">${title}</div>${factory}${items}`;
+  }).join('');
+}
+function onPaintAction(id, act, slot) {
+  const key = slot === 'helmet' ? 'helmetPaint' : 'bikePaint';
+  const p = paintOf(id);
+  if (act === 'buy') {
+    if (!p || isAdminMode() || save.coins < p.price || save.ownedPaints.includes(id)) return;
+    save.coins -= p.price;
+    save.ownedPaints.push(id);
+    sfx.power();
+    toast(`UNLOCKED  ·  ${p.name}`);
+  } else {
+    if (id && !save.ownedPaints.includes(id) && !isAdminMode()) return;
+    sfx.click();
+  }
+  save[key] = id;
+  persist();
+  syncMyLook();
+  buildBike();
+  resetBikePose();
+  renderGarage();
 }
 
 // 국가대표 바이크 카드 (국가 1위만 / 관리자)
@@ -2414,9 +2497,12 @@ function renderGarage() {
     const none = `<div class="bike-card ${save.flag ? '' : 'selected'}"><div class="swatch mystery">-</div>
       <div><h4>No Flag</h4><p>Ride without a flag</p></div>${save.flag ? '<button class="btn primary" data-kind="flag" data-id="" data-act="select">EQUIP</button>' : '<button class="btn" disabled>EQUIPPED</button>'}</div>`;
     list.innerHTML = adminNote + none + renderShopItems('flag');
+  } else if (garageTab === 'paint') {
+    $('garageHint').textContent = 'Buy a color once, then use it on your bike and your headgear. The National Team bike keeps its flag wrap.';
+    list.innerHTML = adminNote + renderPaints();
   } else {
-    $('garageHint').textContent = 'Customize your rider outfit and helmet.';
-    list.innerHTML = `${adminNote}<div class="shop-section">OUTFIT</div>${renderShopItems('outfit')}<div class="shop-section">HELMET</div>${renderShopItems('helmet')}`;
+    $('garageHint').textContent = 'Customize your rider outfit and headgear.';
+    list.innerHTML = `${adminNote}<div class="shop-section">OUTFIT</div>${renderShopItems('outfit')}<div class="shop-section">HEADGEAR</div>${renderShopItems('helmet')}`;
   }
 }
 
@@ -2432,6 +2518,10 @@ $('shopList').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-act]');
   if (!btn) return;
   const { kind, id, act } = btn.dataset;
+  if (kind === 'paint') {
+    onPaintAction(id, act, btn.dataset.slot);
+    return;
+  }
   const isBike = kind === 'bike';
   const item = isBike ? getBike(id) : SHOP[kind].list.find((x) => x.id === id);
   const ownedKey = isBike ? 'ownedBikes' : SHOP[kind].owned;
@@ -2448,8 +2538,10 @@ $('shopList').addEventListener('click', (e) => {
     sfx.click();
   }
   if (isBike && id === 'national' && save.bike !== 'national') save.prevBike = save.bike;
+  if (kind === 'box' && id === 'national' && save.box !== 'national') save.prevBox = save.box;
   save[curKey] = id;
   persist();
+  syncMyLook();
   buildBike();
   resetBikePose();
   renderGarage();
@@ -2484,6 +2576,7 @@ $('btnGachaEquip').addEventListener('click', () => {
   if (gachaResult) {
     save[SHOP[gachaResult.kind].cur] = gachaResult.it.id;
     persist();
+    syncMyLook();
     buildBike();
     resetBikePose();
   }
@@ -2739,17 +2832,24 @@ function applyNationalStatus(unlocked, code, { silent = false } = {}) {
   save.nationalUnlocked = unlocked;
   save.nationalCode = unlocked ? code : '';
   if (unlocked) {
+    // 국가대표 패키지: 바이크 + 전용 배달통 동시 지급·장착
     if (save.bike !== 'national') save.prevBike = save.bike;
+    if (save.box !== 'national') save.prevBox = save.box;
     save.bike = 'national';
+    save.box = 'national';
     if (!silent) {
-      toast(`#1 IN ${countryName(code).toUpperCase()}  ·  NATIONAL TEAM BIKE UNLOCKED`);
+      toast(`#1 IN ${countryName(code).toUpperCase()}  ·  NATIONAL TEAM PACKAGE UNLOCKED`);
       sfx.fireworks();
     }
   } else {
-    if (save.bike === 'national' && !isAdminMode()) save.bike = save.ownedBikes.includes(save.prevBike) ? save.prevBike : 'rookie';
-    if (was && !silent) toast('YOU LOST #1  ·  NATIONAL TEAM BIKE LOCKED');
+    if (!isAdminMode()) {
+      if (save.bike === 'national') save.bike = save.ownedBikes.includes(save.prevBike) ? save.prevBike : 'rookie';
+      if (save.box === 'national') save.box = save.ownedBoxes.includes(save.prevBox) ? save.prevBox : 'basic';
+    }
+    if (was && !silent) toast('YOU LOST #1  ·  NATIONAL TEAM PACKAGE TAKEN BACK');
   }
   persist();
+  syncMyLook();
   if (bikeKey !== currentBikeKey()) {
     buildBike();
     if (G.state !== 'playing' && G.state !== 'crashing') resetBikePose();
@@ -2805,6 +2905,7 @@ const SETTING_LABELS = {
   quality: (v) => (v === 'high' ? 'HIGH' : 'LOW (FAST)'),
   throttle: (v) => (v === 'auto' ? 'AUTO' : 'MANUAL'),
   touchMode: (v) => (v === 'buttons' ? 'BUTTONS' : 'DRAG PAD'),
+  flipControls: onOff,
 };
 function renderSettings() {
   for (const b of document.querySelectorAll('[data-setting]')) {
@@ -2854,6 +2955,7 @@ $('btnAdmin').addEventListener('click', () => {
 });
 function applyControlSettings() {
   document.body.classList.toggle('drag-mode', save.settings.touchMode === 'drag');
+  document.body.classList.toggle('flip-controls', Boolean(save.settings.flipControls));
   document.body.classList.toggle('auto-throttle', save.settings.throttle === 'auto');
 }
 applyControlSettings();
@@ -2869,6 +2971,7 @@ for (const b of document.querySelectorAll('[data-setting]')) {
     if (k === 'quality') { s.quality = s.quality === 'high' ? 'low' : 'high'; applyQuality(); }
     if (k === 'throttle') s.throttle = s.throttle === 'auto' ? 'manual' : 'auto';
     if (k === 'touchMode') s.touchMode = s.touchMode === 'buttons' ? 'drag' : 'buttons';
+    if (k === 'flipControls') s.flipControls = !s.flipControls;
     applyControlSettings();
     sfx.click();
     persist();
@@ -3024,6 +3127,7 @@ async function submitGlobal() {
     G.globalSubmitted = false;
     return;
   }
+  syncMyLook();
   let rank = '-';
   try {
     const r = await leaderboard.myRank();
@@ -3431,6 +3535,7 @@ if (DEBUG) {
     board: spawnBillboard,
     jump: () => startJump({}),
     hazard: (kind, x, z) => spawnInPool(HAZARDS.find((h) => h.kind === kind).pool, { x, z, rot: 0 }),
+    ramp: (x, z) => { spawnJumpRamp(); const j = jumpRamps.find((k) => k.active && k.z === SPAWN_Z); if (j) Object.assign(j, { x, z }); },
     drop: (x, z) => { spawnDropZone(); const d = dropZones.find((k) => k.active && k.z === SPAWN_Z); if (d) Object.assign(d, { x, z }); },
     power: (type) => applyPower(type),
     admin: (on) => { debugAdmin = on; onDataReplaced(); },
