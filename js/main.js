@@ -46,8 +46,8 @@ const GIANT_TIME = 6;
 const LANE_BLINK = 1.0, LANE_MOVE = 1.5;
 // 공중 묘기: 회전 속도(rad/s), 착지 허용 각도(rad), 착지 무적 시간(s), 회전 종류별 점수(1바퀴당)
 const AIR_FLIP = 9.5, AIR_SPIN = 9.5, LAND_TOL = 0.68, LAND_IFRAMES = 1.8;
-// 착지 보조: 땅에 닿기 0.55초 전부터, 수평과의 각도가 약 86° 안이면 바퀴가 바닥을 향하도록 자동으로 돌려 줌 (여러 축으로 돌려도 착지가 쉬움)
-const LAND_ASSIST_TIME = 0.55, LAND_ASSIST_ANGLE = 1.5, LAND_ASSIST_RATE = 8;
+// 착지 보조: 땅에 닿기 0.25초 전부터, 수평과의 각도가 40° 안이면 바퀴가 바닥을 향하도록 자동으로 돌려 줌 (여러 축으로 돌려도 착지가 쉬움)
+const LAND_ASSIST_TIME = 0.25, LAND_ASSIST_ANGLE = 0.7, LAND_ASSIST_RATE = 8;
 const TRICK_POINTS = { jump: 200, flip: 500, spin: 1200, diagonal: 3000 };
 
 // ---------- 시드 기반 월드 난수 (PRNG: mulberry32)
