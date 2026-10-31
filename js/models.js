@@ -461,6 +461,11 @@ function glossMat() {
   if (!_glossMat) _glossMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.1, envMap: envTexture(), envMapIntensity: 0.9 });
   return _glossMat;
 }
+function facetMat() {
+  if (!_facetMat) _facetMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.38, metalness: 0.35, envMap: envTexture(), envMapIntensity: 1.0 });
+  return _facetMat;
+}
+let _facetMat = null;
 function metalMat() {
   if (!_metalMat) _metalMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.22, metalness: 0.85, envMap: envTexture(), envMapIntensity: 1.8 });
   return _metalMat;
@@ -486,67 +491,6 @@ function neonHalo(geo, hex, center, scale = 1.12) {
 }
 
 // 국가대표 배달통 면 텍스처: 국기를 면에 꽉 차게(가운데 기준 잘라 맞춤) + 은은한 광택 + 비네팅
-// kind: 'side' (#1 배지) | 'back' (TEAM 국가명 엠블럼) | 'top'
-const nboxCache = new Map();
-function nationalBoxTexture(code, kind) {
-  const key = code + kind;
-  if (nboxCache.has(key)) return nboxCache.get(key);
-  const W = kind === 'side' ? 256 : 288, H = 256;
-  const c = document.createElement('canvas');
-  c.width = W;
-  c.height = H;
-  const x = c.getContext('2d');
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const draw = () => {
-    // 3:2 국기를 면 높이에 맞추고 가운데를 기준으로 좌우를 잘라 꽉 채움
-    const fw = H * 1.5;
-    drawFlag(x, code, fw, H, (W - fw) / 2, 0, () => { draw(); tex.needsUpdate = true; });
-    const gloss = x.createLinearGradient(0, 0, W * 0.6, H);
-    gloss.addColorStop(0, 'rgba(255,255,255,0.28)');
-    gloss.addColorStop(0.45, 'rgba(255,255,255,0)');
-    x.fillStyle = gloss;
-    x.fillRect(0, 0, W, H);
-    const vig = x.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.78);
-    vig.addColorStop(0, 'rgba(0,0,0,0)');
-    vig.addColorStop(1, 'rgba(0,0,0,0.28)');
-    x.fillStyle = vig;
-    x.fillRect(0, 0, W, H);
-    x.textAlign = 'center';
-    x.textBaseline = 'middle';
-    if (kind === 'back') {
-      const band = x.createLinearGradient(0, H * 0.58, 0, H);
-      band.addColorStop(0, 'rgba(10,12,16,0)');
-      band.addColorStop(1, 'rgba(10,12,16,0.78)');
-      x.fillStyle = band;
-      x.fillRect(0, H * 0.58, W, H * 0.42);
-      x.fillStyle = 'rgba(255,255,255,0.8)';
-      x.font = 'bold 18px "Rajdhani", "Arial", sans-serif';
-      x.fillText('N A T I O N A L   T E A M', W / 2, H * 0.76, W - 24);
-      x.fillStyle = '#ffffff';
-      x.font = 'bold 40px "Russo One", "Arial Black", sans-serif';
-      x.shadowColor = 'rgba(0,0,0,0.6)';
-      x.shadowBlur = 8;
-      x.fillText(countryName(code).toUpperCase(), W / 2, H * 0.89, W - 24);
-      x.shadowBlur = 0;
-    } else if (kind === 'side') {
-      // #1 배지: 흰 원 + 검은 글자 (어떤 국기 위에서도 잘 보이는 무채색)
-      x.shadowColor = 'rgba(0,0,0,0.45)';
-      x.shadowBlur = 10;
-      x.fillStyle = '#ffffff';
-      x.beginPath();
-      x.arc(W - 44, H - 44, 28, 0, Math.PI * 2);
-      x.fill();
-      x.shadowBlur = 0;
-      x.fillStyle = '#111111';
-      x.font = 'bold 28px "Russo One", "Arial Black", sans-serif';
-      x.fillText('#1', W - 44, H - 42);
-    }
-  };
-  draw();
-  nboxCache.set(key, tex);
-  return tex;
-}
 
 // ---------- 라이더 몸 (캡슐 관절 모델)
 // 좌표: 앞 = -z. 핸들 그립 (±0.3, 1.08, -0.48), 시트 (0, 1.0, 0.22)
@@ -868,7 +812,7 @@ function headgear(det, glow, hel, paintOpt, shellOut = det, mats = {}) {
   }
 }
 
-// 국가대표 풀 바디 래핑: 국기 + 레이싱 스트라이프 + #1
+// 국가대표 풀 바디 래핑: 국기 + 레이싱 스트라이프
 function nationalWrapTexture(code, accent) {
   const c = document.createElement('canvas');
   c.width = 256;
@@ -888,15 +832,6 @@ function nationalWrapTexture(code, accent) {
     x.fillStyle = acc;
     x.fillRect(-200, -26, 400, 52);
     x.restore();
-    x.fillStyle = '#ffffff';
-    x.beginPath();
-    x.arc(128, 128, 30, 0, Math.PI * 2);
-    x.fill();
-    x.fillStyle = '#111111';
-    x.font = 'bold 40px "Russo One", "Arial Black", sans-serif';
-    x.textAlign = 'center';
-    x.textBaseline = 'middle';
-    x.fillText('1', 128, 131);
   };
   draw();
   return tex;
@@ -1274,13 +1209,6 @@ function seaWrapTexture(code) {
   c.height = 256;
   const x = c.getContext('2d');
   SEA_PAINT[code](x, 512, 256);
-  // 공통: 흰 원 #1 배지
-  x.fillStyle = '#ffffff';
-  x.beginPath(); x.arc(440, 128, 34, 0, Math.PI * 2); x.fill();
-  x.fillStyle = '#111111';
-  x.font = 'bold 46px "Russo One", "Arial Black", sans-serif';
-  x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText('1', 440, 131);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   seaWrapCache[code] = t;
@@ -1348,6 +1276,148 @@ const SEA_NATIONAL = {
 };
 export const SEA_NATIONAL_NAMES = Object.fromEntries(Object.entries(SEA_NATIONAL).map(([k, v]) => [k, v.name]));
 
+// ---------- 국가대표 슈퍼바이크 포인트: 각진(로우폴리) 동물 머리 노즈 + 꼬리 장식
+// 노즈 끝 z -1.04 앞쪽에 머리, 테일 끝 z 1.0 뒤에 꼬리 (배달통 z 0.44~1.0 은 피함)
+function facetKit(F, G) {
+  // 노즈 앞 머리 조각은 30% 크게 (기준점: 노즈 끝)
+  const HEAD_K = 1.3, HA = new THREE.Vector3(0, 0.97, -1.02);
+  const put = (geo, c, list = F) => {
+    geo.computeBoundingBox();
+    const cz = (geo.boundingBox.min.z + geo.boundingBox.max.z) / 2;
+    if (cz < -0.85) {
+      geo.translate(-HA.x, -HA.y, -HA.z);
+      geo.scale(HEAD_K, HEAD_K, HEAD_K);
+      geo.translate(HA.x, HA.y, HA.z);
+    }
+    list.push(paint(geo.index ? geo.toNonIndexed() : geo, c));
+  };
+  const xf = (g, p, s = [1, 1, 1], r = [0, 0, 0]) => {
+    g.scale(s[0], s[1], s[2]);
+    if (r[0]) g.rotateX(r[0]);
+    if (r[1]) g.rotateY(r[1]);
+    if (r[2]) g.rotateZ(r[2]);
+    g.translate(p[0], p[1], p[2]);
+    return g;
+  };
+  return {
+    ico: (r, p, c, s, rot) => put(xf(new THREE.IcosahedronGeometry(r, 0), p, s, rot), c),
+    oct: (r, p, c, s, rot) => put(xf(new THREE.OctahedronGeometry(r, 0), p, s, rot), c),
+    cone: (r, h, p, c, rot, sides = 4, s) => put(xf(new THREE.ConeGeometry(r, h, sides), p, s, rot), c),
+    blk: (w, h, d, p, c, rot) => put(xf(new THREE.BoxGeometry(w, h, d), p, [1, 1, 1], rot), c),
+    eye: (w, p, c, rz = 0) => put(xf(new THREE.BoxGeometry(w, 0.014, 0.012), p, [1, 1, 1], [0, 0, rz]), c, G),
+    gem: (r, p, c) => put(xf(new THREE.OctahedronGeometry(r, 0), p), c, G),
+    // 점들을 잇는 각진 마디 (꼬리·코·뿔)
+    seg: (pts, r0, r1, c, alt = null) => {
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = new THREE.Vector3(...pts[i]), b = new THREE.Vector3(...pts[i + 1]);
+        const len = a.distanceTo(b), r = r0 + (r1 - r0) * (i / Math.max(1, pts.length - 2));
+        const g = new THREE.CylinderGeometry(r * 0.8, r, len, 5);
+        g.translate(0, len / 2, 0);
+        g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()));
+        g.translate(a.x, a.y, a.z);
+        put(g, alt && i % 2 ? alt : c);
+      }
+    },
+  };
+}
+const ACCENTS = {
+  SG(A, led) { // 멀라이언: 각진 사자 머리 + 붉은 갈기 + 물고기 꼬리 지느러미
+    A.ico(0.12, [0, 0.97, -1.1], 0xe9ecef, [1, 0.85, 1.25]);
+    A.blk(0.12, 0.07, 0.1, [0, 0.93, -1.23], 0xdfe3e8, [0.2, 0, 0]);
+    A.blk(0.1, 0.035, 0.08, [0, 0.875, -1.2], 0x9aa0a6);
+    for (let i = 0; i < 9; i++) { const a = -1.9 + (i / 8) * 3.8; A.cone(0.045, 0.17, [Math.sin(a) * 0.12, 0.97 + Math.cos(a) * 0.11, -1.0], i % 2 ? 0xc1121f : 0xef3340, [Math.PI / 2 - 0.5, 0, -a]); }
+    for (const s of [-1, 1]) { A.cone(0.03, 0.07, [s * 0.07, 1.07, -1.08], 0xe9ecef, [0, 0, s * 0.3], 3); A.eye(0.045, [s * 0.05, 1.0, -1.235], led, s * 0.3); }
+    for (const s of [-1, 1]) A.cone(0.09, 0.32, [s * 0.07, 1.02, 1.1], 0xc1121f, [-0.9, 0, s * 0.55], 4, [0.25, 1, 1]);
+    A.cone(0.05, 0.12, [0, 1.0, 0.96], 0xef3340, [-0.6, 0, 0], 4, [0.25, 1, 1]);
+  },
+  MY(A, led) { // 하리마우: 각진 호랑이 머리(귀·송곳니·줄무늬) + 말린 줄무늬 꼬리
+    A.ico(0.12, [0, 0.97, -1.1], 0xf3901e, [1.1, 0.85, 1.2]);
+    A.ico(0.065, [0, 0.92, -1.22], 0xfff3e0, [1.3, 0.7, 1]);
+    A.oct(0.022, [0, 0.955, -1.285], 0x1b1b1b);
+    for (const s of [-1, 1]) {
+      A.cone(0.045, 0.09, [s * 0.08, 1.07, -1.07], 0xf3901e, [0, 0, s * 0.35], 3);
+      A.cone(0.022, 0.05, [s * 0.08, 1.065, -1.09], 0x1b1b1b, [0, 0, s * 0.35], 3);
+      A.cone(0.012, 0.05, [s * 0.03, 0.86, -1.25], 0xffffff, [Math.PI, 0, 0], 4);
+      for (let k = 0; k < 3; k++) A.blk(0.012, 0.07, 0.05, [s * (0.1 + k * 0.012), 1.0 - k * 0.035, -1.12 + k * 0.03], 0x1b1b1b, [0, 0, s * 0.5]);
+      A.eye(0.04, [s * 0.055, 1.0, -1.225], 0xffcc00, s * 0.35);
+    }
+    for (let k = 0; k < 3; k++) A.blk(0.05, 0.012, 0.03, [0, 1.07 - k * 0.02, -1.11 + k * 0.018], 0x1b1b1b);
+    const tail = [];
+    for (let i = 0; i <= 6; i++) { const t = i / 6; tail.push([0, 0.92 + Math.sin(t * 2.4) * 0.32, 1.0 + t * 0.22 - t * t * 0.1]); }
+    A.seg(tail, 0.035, 0.018, 0xf3901e, 0x1b1b1b);
+  },
+  ID(A, led) { // 가루다: 각진 독수리 머리 + 갈고리 부리 + 볏 + 깃털 부채 꼬리
+    A.oct(0.1, [0, 1.0, -1.1], 0xe6b422, [0.9, 1, 1.3]);
+    A.cone(0.045, 0.16, [0, 0.96, -1.25], 0xff9f1c, [-Math.PI / 2 - 0.45, 0, 0], 4);
+    A.cone(0.02, 0.06, [0, 0.9, -1.3], 0xff9f1c, [Math.PI, 0, 0], 4);
+    for (let i = 0; i < 4; i++) A.cone(0.025, 0.2 - i * 0.025, [0, 1.09 + i * 0.01, -1.04 + i * 0.05], i % 2 ? 0xffd34d : 0xe6b422, [0.9 + i * 0.15, 0, 0], 3, [0.5, 1, 1]);
+    for (const s of [-1, 1]) A.eye(0.035, [s * 0.05, 1.03, -1.19], led, s * 0.35);
+    for (let i = -2; i <= 2; i++) A.cone(0.04, 0.34, [i * 0.05, 1.02, 1.08], i % 2 ? 0xce1126 : 0xe6b422, [-1.1, 0, i * 0.3], 4, [1, 1, 0.25]);
+  },
+  TH(A, led) { // 왕실 흰 코끼리: 각진 머리 + 큰 귀 + 코 + 상아 + 금빛 관(차다) + 금빛 초파 꼬리
+    A.ico(0.12, [0, 0.98, -1.08], 0xd9d4cc, [1.1, 1, 1.1]);
+    for (const s of [-1, 1]) {
+      A.blk(0.02, 0.17, 0.15, [s * 0.14, 0.98, -1.03], 0xc9c2b8, [0, s * 0.5, 0]);
+      A.blk(0.022, 0.03, 0.15, [s * 0.145, 1.07, -1.03], 0xe8b923, [0, s * 0.5, 0]);
+      A.cone(0.015, 0.15, [s * 0.05, 0.88, -1.21], 0xfff8e7, [-Math.PI / 2 + 0.35, 0, 0], 5);
+      A.eye(0.03, [s * 0.055, 1.02, -1.17], led, s * 0.2);
+    }
+    A.seg([[0, 0.94, -1.17], [0, 0.88, -1.25], [0, 0.81, -1.28], [0, 0.75, -1.27], [0, 0.71, -1.22]], 0.04, 0.02, 0xd9d4cc);
+    A.cone(0.055, 0.13, [0, 1.12, -1.07], 0xe8b923, [0, 0, 0], 6);
+    A.blk(0.14, 0.025, 0.12, [0, 1.06, -1.07], 0xe8b923);
+    A.gem(0.016, [0, 1.06, -1.135], 0xe63946);
+    A.seg([[0, 0.95, 1.02], [0, 1.02, 1.12], [0, 1.12, 1.17], [0, 1.2, 1.16], [0, 1.25, 1.1]], 0.03, 0.012, 0xe8b923);
+  },
+  VN(A, led) { // 용: 각진 긴 머리 + 벌린 턱·이빨 + 금빛 뿔·수염 + 여의주 + 가시 꼬리
+    A.oct(0.1, [0, 0.98, -1.1], 0xc1121f, [1, 0.8, 1.5]);
+    A.blk(0.1, 0.05, 0.12, [0, 0.965, -1.25], 0xc1121f, [0.1, 0, 0]);
+    A.blk(0.08, 0.03, 0.1, [0, 0.9, -1.23], 0x8b0a18, [0.35, 0, 0]);
+    for (let i = 0; i < 4; i++) A.cone(0.01, 0.035, [-0.03 + i * 0.02, 0.935, -1.29], 0xffffff, [Math.PI, 0, 0], 4);
+    for (const s of [-1, 1]) {
+      A.seg([[s * 0.05, 1.05, -1.06], [s * 0.08, 1.12, -0.98], [s * 0.1, 1.15, -0.88]], 0.016, 0.006, 0xffcd00);
+      A.seg([[s * 0.05, 0.96, -1.28], [s * 0.14, 0.94, -1.25], [s * 0.2, 0.9, -1.15]], 0.006, 0.003, 0xffcd00);
+      A.eye(0.045, [s * 0.05, 1.03, -1.17], 0xffcd00, s * 0.25);
+    }
+    A.gem(0.03, [0, 0.9, -1.36], 0xfff3b0);
+    for (let i = 0; i < 4; i++) A.cone(0.025, 0.09, [0, 0.99 + i * 0.005, 0.66 + i * 0.1], 0xffcd00, [-0.5, 0, 0], 3, [0.4, 1, 1]);
+    for (const a of [-0.6, 0, 0.6]) A.cone(0.04, 0.22, [0, 1.0, 1.08], a ? 0xffb703 : 0xc1121f, [-1.0, 0, a], 3, [0.4, 1, 1]);
+  },
+  PH(A, led) { // 카라바오(물소): 각진 머리 + 크게 휜 뿔 + 금 코뚜레 + 태양 광선 꼬리
+    A.ico(0.12, [0, 0.97, -1.09], 0x4a4e57, [1.15, 0.9, 1.15]);
+    A.ico(0.07, [0, 0.92, -1.21], 0x6b6f78, [1.3, 0.8, 0.9]);
+    A.seg([[-0.03, 0.89, -1.28], [0, 0.875, -1.29], [0.03, 0.89, -1.28]], 0.006, 0.006, 0xfcd116);
+    for (const s of [-1, 1]) {
+      A.seg([[s * 0.08, 1.04, -1.08], [s * 0.18, 1.07, -1.06], [s * 0.26, 1.09, -1.0], [s * 0.3, 1.14, -0.92], [s * 0.3, 1.2, -0.86]], 0.028, 0.008, 0xe9e2cf);
+      A.eye(0.035, [s * 0.06, 1.0, -1.2], 0xfcd116, s * 0.3);
+    }
+    A.oct(0.035, [0, 0.98, 1.04], 0xfcd116);
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; A.cone(0.022, 0.1, [Math.sin(a) * 0.08, 0.98 + Math.cos(a) * 0.08, 1.05], i % 2 ? 0xfcd116 : 0xffe066, [Math.PI / 2, 0, -a], 3, [1, 1, 0.3]); }
+  },
+  KH(A, led) { // 나가(코브라): 펼친 각진 후드 + 머리 + 독니 + 갈라진 혀 + 솟은 꼬리
+    A.oct(0.16, [0, 1.0, -1.0], 0xcdb68a, [1.4, 1.1, 0.35]);
+    for (let i = 0; i < 3; i++) A.blk(0.02, 0.08, 0.01, [-0.06 + i * 0.06, 1.0, -1.06], 0xe8b923, [0, 0, (i - 1) * 0.4]);
+    A.oct(0.07, [0, 0.98, -1.14], 0xb59f74, [1, 0.8, 1.5]);
+    for (const s of [-1, 1]) { A.cone(0.008, 0.04, [s * 0.025, 0.93, -1.22], 0xffffff, [Math.PI, 0, 0], 4); A.eye(0.03, [s * 0.035, 1.0, -1.2], 0xe00025, s * 0.3); }
+    A.blk(0.008, 0.004, 0.08, [0, 0.95, -1.27], 0xe00025);
+    const tail = [];
+    for (let i = 0; i <= 6; i++) { const t = i / 6; tail.push([Math.sin(t * Math.PI * 1.5) * 0.06, 0.93 + t * 0.35, 1.0 + t * 0.12]); }
+    A.seg(tail, 0.035, 0.01, 0xcdb68a, 0xb59f74);
+    A.cone(0.02, 0.07, tail[tail.length - 1], 0xe8b923, [0, 0, 0], 4);
+  },
+  MM(A, led) { // 녹색 공작: 각진 머리 + 볏(금 끝) + 부채꼴 꼬리 깃(금 눈알)
+    A.blk(0.08, 0.1, 0.08, [0, 0.98, -1.06], 0x2a9df4, [0.4, 0, 0]);
+    A.oct(0.06, [0, 1.06, -1.12], 0x1b998b, [0.9, 1, 1.4]);
+    A.cone(0.018, 0.07, [0, 1.05, -1.2], 0x9aa0a6, [-Math.PI / 2, 0, 0], 4);
+    for (let i = -1.5; i <= 1.5; i += 1) { A.seg([[i * 0.015, 1.1, -1.11], [i * 0.025, 1.19, -1.1]], 0.004, 0.004, 0x1b998b); A.gem(0.012, [i * 0.025, 1.2, -1.1], 0xffd34d); }
+    for (const s of [-1, 1]) A.eye(0.02, [s * 0.035, 1.07, -1.15], led, s * 0.2);
+    for (let i = -3; i <= 3; i++) {
+      const a = i * 0.32;
+      A.oct(0.12, [Math.sin(a) * 0.15, 1.0 + Math.cos(a) * 0.15, 1.08], [0x1b998b, 0x2a9df4, 0x34b233][(i + 3) % 3], [0.35, 1, 0.12], [0, 0, -a]);
+      A.gem(0.016, [Math.sin(a) * 0.22, 1.0 + Math.cos(a) * 0.22, 1.09], 0xffd34d);
+    }
+  },
+};
+
 function nationalSuperbike(K, code, accent) {
   const kit = SEA_NATIONAL[code];
   const rim = kit ? kit.rim : accent ?? 0xffd700;
@@ -1357,7 +1427,12 @@ function nationalSuperbike(K, code, accent) {
   B(sideExtrude([[-1.04, 0.9], [-0.98, 1.0], [-0.8, 1.11], [-0.62, 1.15], [-0.5, 1.06], [-0.47, 0.84], [-0.62, 0.7], [-0.92, 0.76]], 0.36, 0.03,
     (z) => lerpT(1, 0.45, (-z - 0.6) / 0.44)));
   // 옆 카울 (엔진 덮개, 무릎 자리는 좁게)
-  B(sideExtrude([[-0.6, 0.84], [-0.46, 0.97], [-0.14, 0.95], [0.06, 0.78], [0.04, 0.54], [-0.32, 0.47], [-0.58, 0.6]], 0.3, 0.025));
+  // 무릎·발 자리(z -0.45 뒤)는 폭을 좁혀 부츠가 카울에 파묻히지 않게
+  B(sideExtrude([[-0.6, 0.84], [-0.46, 0.97], [-0.14, 0.95], [0.06, 0.78], [0.04, 0.54], [-0.32, 0.47], [-0.58, 0.6]], 0.3, 0.025,
+    (z) => lerpT(1, 0.58, (z + 0.45) / 0.35)));
+  // 엔진 (카울 안쪽보다 좁게 → 옆면이 카울 면과 겹치지 않음) + 냉각 핀
+  K.det.push(box(0.2, 0.3, 0.5, 0, 0.6, -0.12, 0x2b2e33));
+  for (let k = 0; k < 4; k++) K.det.push(box(0.22, 0.012, 0.36, 0, 0.5 + k * 0.05, -0.15, 0x3d4148));
   // 연료탱크
   B(sideExtrude([[-0.52, 1.03], [-0.42, 1.14], [-0.14, 1.13], [0.02, 1.03], [-0.04, 0.95], [-0.46, 0.95]], 0.34, 0.04,
     (z) => lerpT(0.75, 1, (z + 0.52) / 0.3)));
@@ -1366,8 +1441,8 @@ function nationalSuperbike(K, code, accent) {
     (z) => lerpT(1, 0.45, (z - 0.1) / 0.9)));
   // 벨리 팬
   B(sideExtrude([[-0.5, 0.5], [0.02, 0.44], [0.05, 0.36], [-0.42, 0.38]], 0.26, 0.02));
-  // 윈드스크린 (틴트) + 램에어 흡입구 + LED 헤드램프 2개 + 미러
-  K.det.push(paint(sideExtrude([[-0.8, 1.11], [-0.6, 1.27], [-0.56, 1.25], [-0.66, 1.14]], 0.26, 0.008, (z) => lerpT(0.7, 1, (z + 0.8) / 0.25)), 0x2a3d55));
+  // 윈드스크린 (틴트, 노즈 윗면에서 띄움) + 램에어 흡입구 + LED 헤드램프 2개 + 미러
+  K.det.push(paint(sideExtrude([[-0.79, 1.135], [-0.6, 1.29], [-0.56, 1.27], [-0.65, 1.165]], 0.24, 0.008, (z) => lerpT(0.7, 1, (z + 0.8) / 0.25)), 0x2a3d55));
   K.det.push(box(0.09, 0.05, 0.06, 0, 0.88, -1.02, 0x111111));
   for (const s of [-1, 1]) {
     const l = new THREE.BoxGeometry(0.1, 0.022, 0.05);
@@ -1377,8 +1452,11 @@ function nationalSuperbike(K, code, accent) {
     K.glow.push(paint(l, led));
     K.det.push(box(0.012, 0.012, 0.09, s * 0.17, 1.13, -0.66, 0x111111));
     K.det.push(box(0.07, 0.035, 0.02, s * 0.2, 1.15, -0.7, 0x16181c));
-    // 카울 측면 공기구멍 (3줄)
-    for (let k = 0; k < 3; k++) K.det.push(box(0.008, 0.02, 0.14, s * 0.166, 0.84 - k * 0.05, -0.3 + k * 0.03, 0x111111, 0.35));
+  }
+  // 풋페그 (부츠 바로 아래, 부츠와 면이 겹치지 않게 아래로 띄움)
+  for (const sx of [-1, 1]) {
+    K.metal.push(cylX(0.016, 0.12, sx * 0.17, 0.575, -0.12, 0xc9ced3, 8));
+    K.det.push(box(0.03, 0.06, 0.03, sx * 0.12, 0.6, -0.12, 0x2b2e33));
   }
   // 골드 도립식 포크 2개 + 앞 흙받이
   for (const s of [-1, 1]) {
@@ -1387,7 +1465,7 @@ function nationalSuperbike(K, code, accent) {
     f.translate(s * 0.1, 0.7, -0.62);
     K.metal.push(paint(f, 0xd4a017));
   }
-  K.body.push(sideUV(sideExtrude([[-0.95, 0.76], [-0.72, 0.84], [-0.5, 0.76], [-0.55, 0.72], [-0.72, 0.79], [-0.92, 0.72]], 0.14, 0.01)));
+  K.body.push(sideUV(sideExtrude([[-0.97, 0.83], [-0.72, 0.91], [-0.48, 0.83], [-0.53, 0.8], [-0.72, 0.87], [-0.94, 0.79]], 0.14, 0.01)));
   // 스윙암 (양쪽) + 체인 가드
   for (const s of [-1, 1]) {
     const a = new THREE.BoxGeometry(0.035, 0.07, 0.7);
@@ -1417,11 +1495,11 @@ function nationalSuperbike(K, code, accent) {
   K.metal.push(paint(m, 0x7f86a6));
   K.det.push(paint(new THREE.CylinderGeometry(0.046, 0.046, 0.02, 14).rotateX(Math.PI / 2 + 0.28).translate(0.2, 0.68, 0.69), 0x2b2e33));
   K.metal.push(paint(new THREE.CylinderGeometry(0.03, 0.03, 0.4, 8).rotateX(Math.PI / 2 - 0.1).translate(0.16, 0.48, 0.12), 0x9aa0a6));
-  // 테일 LED + 번호판 #1
-  K.glow.push(box(0.16, 0.02, 0.02, 0, 0.93, 0.99, 0xff2a2a));
-  K.det.push(box(0.16, 0.11, 0.015, 0, 0.74, 0.98, 0xffffff, -0.3));
-  K.det.push(box(0.03, 0.08, 0.015, 0, 0.74, 0.99, 0x111111, -0.3));
+  // 테일 LED + 검은 번호판 홀더
+  K.glow.push(box(0.16, 0.02, 0.02, 0, 0.93, 1.0, 0xff2a2a));
+  K.det.push(box(0.15, 0.09, 0.015, 0, 0.74, 0.98, 0x1b1d22, -0.3));
   if (kit) kit.emblem(K.metal, K.glow);
+  if (ACCENTS[code]) ACCENTS[code](facetKit(K.facet, K.glow), led);
 }
 
 // ======================================================================
@@ -1477,8 +1555,6 @@ function nationalPodTexture(code) {
     // 속도감 사선 + 아래 검은 띠에 NATIONAL TEAM · 나라 이름
     x.fillStyle = 'rgba(0,0,0,0.55)';
     x.beginPath(); x.moveTo(0, 196); x.lineTo(512, 176); x.lineTo(512, 256); x.lineTo(0, 256); x.fill();
-    x.fillStyle = 'rgba(255,255,255,0.85)';
-    for (let i = 0; i < 3; i++) { x.beginPath(); x.moveTo(300 + i * 40, 30); x.lineTo(340 + i * 40, 30); x.lineTo(290 + i * 40, 150); x.lineTo(250 + i * 40, 150); x.fill(); }
     x.fillStyle = '#ffffff';
     x.font = 'bold 34px "Russo One", "Arial Black", sans-serif';
     x.textAlign = 'left'; x.textBaseline = 'middle';
@@ -1486,18 +1562,12 @@ function nationalPodTexture(code) {
     x.font = 'bold 22px "Russo One", "Arial Black", sans-serif';
     x.textAlign = 'right';
     x.fillText(String(countryName(code)).toUpperCase(), 496, 224, 170);
-    x.fillStyle = '#ffffff';
-    x.beginPath(); x.arc(452, 96, 40, 0, Math.PI * 2); x.fill();
-    x.fillStyle = '#111111';
-    x.font = 'bold 54px "Russo One", "Arial Black", sans-serif';
-    x.textAlign = 'center';
-    x.fillText('1', 452, 100);
   };
   draw();
   podTexCache[code] = tex;
   return tex;
 }
-// 포드 뒷면 아트: 나라 문양 + 큰 국가 코드 + #1 (주행 중 가장 많이 보이는 면)
+// 포드 뒷면 아트: 나라 문양 + 큰 국가 코드 + NATIONAL TEAM (주행 중 가장 많이 보이는 면)
 const podBackCache = {};
 function nationalPodBackTexture(code) {
   if (podBackCache[code]) return podBackCache[code];
@@ -1520,13 +1590,8 @@ function nationalPodBackTexture(code) {
     x.lineWidth = 8;
     x.font = 'bold 150px "Russo One", "Arial Black", sans-serif';
     x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.strokeText(code, 230, 190);
-    x.fillText(code, 230, 190);
-    x.beginPath(); x.arc(430, 190, 52, 0, Math.PI * 2); x.fill();
-    x.fillStyle = '#111111';
-    x.font = 'bold 74px "Russo One", "Arial Black", sans-serif';
-    x.fillText('1', 430, 195);
-    x.fillStyle = '#ffffff';
+    x.strokeText(code, 256, 190);
+    x.fillText(code, 256, 190);
     x.font = 'bold 34px "Russo One", "Arial Black", sans-serif';
     x.fillText('NATIONAL TEAM', 256, 290, 460);
   };
@@ -1535,17 +1600,6 @@ function nationalPodBackTexture(code) {
   return tex;
 }
 
-// 나라별 스포일러 끝 장식 (작고 날렵하게)
-const POD_ACCENT = {
-  SG: (mt) => { for (const s of [-1, 1]) mt.push(paint(new THREE.ConeGeometry(0.035, 0.16, 4).scale(0.3, 1, 1).rotateX(-0.9).rotateZ(s * 0.4).translate(s * 0.2, 1.6, 1.0), 0xd9dde1)); },
-  MY: (mt) => { for (const s of [-1, 1]) mt.push(paint(new THREE.CylinderGeometry(0.012, 0.016, 0.12, 8).translate(s * 0.2, 1.62, 0.95), 0xdfe6ec)); },
-  ID: (mt) => { for (const s of [-1, 1]) for (let i = 0; i < 3; i++) mt.push(paint(new THREE.ConeGeometry(0.03, 0.2 - i * 0.04, 4).scale(1, 1, 0.25).rotateZ(-s * (0.9 + i * 0.25)).translate(s * (0.28 + i * 0.02), 1.55 + i * 0.01, 0.93), 0xe6b422)); },
-  TH: (mt) => { for (const s of [-1, 1]) for (let i = 0; i < 3; i++) mt.push(paint(new THREE.CylinderGeometry(0.012, 0.018, 0.07, 6).rotateX(-0.5 - i * 0.45).translate(s * 0.23, 1.58 + i * 0.04, 1.0 + i * 0.02), 0xe8b923)); },
-  VN: (mt) => { mt.push(paint(new THREE.CylinderGeometry(0.05, 0.05, 0.012, 5).translate(0, 1.55, 0.72), 0xffcd00)); },
-  PH: (mt) => { for (const s of [-1, 1]) { mt.push(paint(new THREE.SphereGeometry(0.025, 8, 6).scale(0.6, 0.7, 1.4).translate(s * 0.14, 1.56, 0.68), 0xe9ecef)); mt.push(paint(new THREE.SphereGeometry(0.016, 8, 6).translate(s * 0.14, 1.6, 0.64), 0xe9ecef)); } },
-  KH: (mt) => { for (let i = 0; i < 3; i++) mt.push(paint(new THREE.CylinderGeometry(0.03 - i * 0.008, 0.035 - i * 0.008, 0.035, 8).translate(0, 1.55 + i * 0.035, 0.72), 0xe8b923)); mt.push(paint(new THREE.ConeGeometry(0.012, 0.06, 8).translate(0, 1.68, 0.72), 0xffd34d)); },
-  MM: (mt) => { mt.push(paint(new THREE.SphereGeometry(0.035, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.6).scale(1, 1.2, 1).translate(0, 1.54, 0.72), 0xf2c230)); mt.push(paint(new THREE.ConeGeometry(0.012, 0.1, 8).translate(0, 1.62, 0.72), 0xffd34d)); },
-};
 function nationalPod(code, det, glow, metal, gloss) {
   const [c1, c2] = nationalLivery(code);
   gloss.push(paint(podShellGeometry(), c1));
@@ -1558,7 +1612,7 @@ function nationalPod(code, det, glow, metal, gloss) {
   det.push(box(0.44, 0.05, 0.06, 0, 1.1, 0.97, 0x1b1d22));
   // 레이싱 디퓨저 핀 (뒤 아래 양쪽)
   for (const s of [-1, 1]) det.push(box(0.02, 0.09, 0.1, s * 0.16, 1.12, 1.0, 0x1b1d22));
-  (POD_ACCENT[code] || (() => {}))(metal);
+
 }
 // 위쪽 스트라이프: 실루엣 윗선을 따라가는 얇은 띠
 function podShellStripe(x) {
@@ -1636,7 +1690,8 @@ export function createBike(color, opts = {}) {
   const out = OUTFIT_STYLES[opts.outfit] || OUTFIT_STYLES.jacket;
   const hel = HELMET_STYLES[opts.helmet] || HELMET_STYLES.basic;
   const gloss = [], metal = []; // 광택(헬멧 쉘·바이저·일부 배달통) / 금속 반사(골드·크롬·국가대표 장식)
-  if (superbike) nationalSuperbike({ body, det, glow, metal, gloss }, opts.nationalCode, opts.accent);
+  const facet = []; // 각진 동물 머리·꼬리 (플랫 셰이딩)
+  if (superbike) nationalSuperbike({ body, det, glow, metal, gloss, facet }, opts.nationalCode, opts.accent);
   else bikeShape(opts.style || 'scooter', body, det, glow, opts.accent);
   const JACKET = out.top;
   const PANTS = out.pants;
@@ -1648,7 +1703,7 @@ export function createBike(color, opts = {}) {
     det.push(paint(t, 0x111111));
     det.push(cylX(0.13, 0.14, 0, 0.4, z, 0x8a8f96, 10));
   }
-  det.push(box(0.3, 0.32, 0.6, 0, 0.58, 0.05, 0x3a3a3a));
+  if (!superbike) det.push(box(0.3, 0.32, 0.6, 0, 0.58, 0.05, 0x3a3a3a));
   if (!superbike) {
     // 기본 머플러·포크 (국가대표 슈퍼바이크는 전용 티타늄 머플러·골드 포크)
     const ex = new THREE.CylinderGeometry(0.06, 0.085, 0.75, 8);
@@ -1660,7 +1715,7 @@ export function createBike(color, opts = {}) {
     fork.translate(0, 0.74, -0.58);
     det.push(paint(fork, 0x666666));
   }
-  det.push(box(0.3, 0.08, 0.42, 0, superbike ? 1.04 : 1.0, 0.22, 0x161616));
+  det.push(box(0.3, 0.08, 0.42, 0, superbike ? 1.065 : 1.0, 0.22, 0x161616));
   det.push(box(0.64, 0.045, 0.045, 0, 1.06, -0.5, 0x222222));
   if (!superbike) {
     // 기본 차체
@@ -1693,6 +1748,7 @@ export function createBike(color, opts = {}) {
   if (glow.length) lean.add(new THREE.Mesh(merge(glow), new THREE.MeshBasicMaterial({ vertexColors: true })));
   if (gloss.length) lean.add(new THREE.Mesh(merge(gloss), glossMat()));
   if (metal.length) lean.add(new THREE.Mesh(merge(metal), metalMat()));
+  if (facet.length) lean.add(new THREE.Mesh(merge(facet), facetMat()));
   // 네온 바이크: 차체 후광
   if (opts.paint && opts.paint.finish === 'neon' && !opts.national) lean.add(neonHalo(bodyGeo, opts.paint.hex, new THREE.Vector3(0, 0.88, -0.15), 1.1));
   // 메탈릭·네온 헤드기어 쉘
