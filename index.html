@@ -36,12 +36,13 @@
       <span id="hudAdmin" class="admin-badge hud-admin hidden">ADMIN MODE · NOT RECORDED</span>
       <!-- Touch controls: steering (drag pad by default) / throttle + brake cluster. FLIP CONTROLS swaps the sides -->
       <div id="touchControls" class="touch-layer hidden">
+        <!-- 터치 조향 영역: 누른 지점 기준으로 좌우 슬라이드 -->
+        <div id="steerZone" class="steer-zone"><span id="steerDot"><i id="steerKnob"></i></span><small class="steer-hint">TOUCH &amp; SLIDE TO STEER</small></div>
         <div class="thumb left">
           <div id="steerBtns" class="steer-btns">
             <button id="btnLeft" class="tbtn steer" aria-label="Steer left" data-icon="left"></button>
             <button id="btnRight" class="tbtn steer" aria-label="Steer right" data-icon="right"></button>
           </div>
-          <div id="steerPad" class="steer-pad"><span id="steerKnob"></span><small>DRAG TO STEER</small></div>
         </div>
         <div class="thumb right cluster">
           <div class="cluster-row">
@@ -115,7 +116,7 @@
         </div>
         <div class="help" id="menuHelp">
           <span class="kbd-only">ARROWS / A D steer &middot; UP throttle &middot; DOWN brake &middot; P pause</span>
-          <span class="touch-only">DRAG to steer &middot; other thumb throttle and brake</span>
+          <span class="touch-only">TOUCH &amp; SLIDE to steer &middot; other thumb throttle and brake</span>
         </div>
       </div>
     </section>
@@ -234,7 +235,7 @@
           <li><b>COMBO</b> — chain near misses within 3 s to raise your multiplier.</li>
           <li><b>KEEP LEFT / KEEP RIGHT</b> — Indonesia, Thailand, Japan and Singapore drive on the left; Korea, Vietnam, the USA and France drive on the right. Check the sign at each border gate.</li>
           <li><b>WRONG WAY</b> — riding in the oncoming lanes scores x2. Watch out for head-on traffic.</li>
-          <li><b>JUMPS</b> — ride up a ramp truck or a gold-striped jump ramp. In the air, throttle / brake = <b>FLIP</b> (+500), steer = <b>BARREL ROLL</b> (+1,200), both at once = <b>DIAGONAL MEGA FLIP</b> (+3,000) per rotation. Land level and you are invincible for a moment; land crooked and you crash.</li>
+          <li><b>JUMPS</b> — ride up a ramp truck or a gold-striped jump ramp. In the air, throttle / brake = <b>FLIP</b> (+500), steer = <b>360 SPIN</b> (+1,200), both at once = <b>DIAGONAL MEGA FLIP</b> (+3,000) per rotation. Land level and you are invincible for a moment; land crooked and you crash.</li>
           <li><b>SQUALL</b> — 30 s of heavy rain (score x1.3). Puddles make you slide.</li>
           <li>Avoid roadside stalls, center-line cones and road signs, and cars drifting over the center line.</li>
           <li><b>POWER-UPS</b> (every 100-150 m) — Shield, Magnet, <b>Giant Mode</b> (huge and unstoppable), x2 Score, Slow-Mo.</li>

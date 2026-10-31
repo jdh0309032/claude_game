@@ -43,8 +43,8 @@ const POWER_WEIGHTS = [0.3, 0.3, 0.22, 0.1, 0.08];
 const POWER_LABEL = { shield: 'SHIELD', magnet: 'MAGNET', giant: 'GIANT MODE', x2: 'x2 SCORE', slow: 'SLOW-MO' };
 const GIANT_TIME = 6;
 // 공중 묘기: 회전 속도(rad/s), 착지 허용 각도(rad), 착지 무적 시간(s), 회전 종류별 점수(1바퀴당)
-const AIR_FLIP = 9.5, AIR_ROLL = 9.5, LAND_TOL = 0.5, LAND_IFRAMES = 1.8;
-const TRICK_POINTS = { jump: 200, flip: 500, roll: 1200, diagonal: 3000 };
+const AIR_FLIP = 9.5, AIR_SPIN = 9.5, LAND_TOL = 0.5, LAND_IFRAMES = 1.8;
+const TRICK_POINTS = { jump: 200, flip: 500, spin: 1200, diagonal: 3000 };
 
 // ---------- 시드 기반 월드 난수 (PRNG: mulberry32)
 // 멀티플레이 시 방장이 만든 시드로 두 기기의 도로/교통/날씨를 동일하게 생성.
@@ -83,7 +83,8 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPrefere
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87c6ff);
 scene.fog = new THREE.Fog(0x87c6ff, 60, 240);
-const camera = new THREE.PerspectiveCamera(65, 1, 0.1, 1000); // 원경 랜드마크가 먼 클리핑 면에 잘리지 않게
+// near 0.5: 모바일(16비트 깊이 버퍼)에서도 바이크 장식 면이 지직거리지 않게 / far 1000: 원경 랜드마크용
+const camera = new THREE.PerspectiveCamera(65, 1, 0.5, 1000);
 const hemi = new THREE.HemisphereLight(0xdfefff, 0x4a5a3a, 2.2);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 2.6);
@@ -1520,7 +1521,8 @@ function refreshHeld() {
   for (const k of Object.keys(held)) held[k] = false;
   for (const v of holdPointers.values()) held[v] = true;
   for (const [k, el] of Object.entries(holdButtons)) el.classList.toggle('active', held[k]);
-  $('steerKnob').style.transform = `translateX(${pad.value * 52}px)`;
+  $('steerKnob').style.transform = `translateX(${pad.value * STEER_RANGE}px)`;
+  $('steerDot').classList.toggle('on', pad.id !== null);
 }
 
 // 버튼마다 포인터 ID 를 따로 추적 → 조향·가속·브레이크·니트로 동시 입력
@@ -1541,24 +1543,30 @@ function bindHold(el, key) {
 }
 for (const [k, el] of Object.entries(holdButtons)) bindHold(el, k);
 
-// 드래그 조향 패드 (아날로그)
-const steerPad = $('steerPad');
-steerPad.addEventListener('pointerdown', (e) => {
+// 터치 조향: 화면의 조향 쪽 영역 아무 데나 누른 지점이 기준점. 거기서 좌우로 민 만큼 조향 (패드 없음)
+const STEER_RANGE = 55; // 기준점에서 이만큼(px) 밀면 최대 조향
+const steerZone = $('steerZone');
+const steerDot = $('steerDot');
+steerZone.addEventListener('pointerdown', (e) => {
   e.preventDefault();
-  try { steerPad.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
-  const r = steerPad.getBoundingClientRect();
+  if (pad.id !== null) return;
+  if (e.pointerType === 'touch') enableTouchUI();
+  try { steerZone.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  const r = steerZone.getBoundingClientRect();
   pad.id = e.pointerId;
-  pad.originX = r.left + r.width / 2;
-  pad.value = clamp((e.clientX - pad.originX) / 52, -1, 1);
+  pad.originX = e.clientX;
+  pad.value = 0;
+  steerDot.style.left = `${e.clientX - r.left}px`;
+  steerDot.style.top = `${e.clientY - r.top}px`;
   refreshHeld();
 });
-steerPad.addEventListener('pointermove', (e) => {
+steerZone.addEventListener('pointermove', (e) => {
   if (e.pointerId !== pad.id) return;
-  pad.value = clamp((e.clientX - pad.originX) / 52, -1, 1);
+  pad.value = clamp((e.clientX - pad.originX) / STEER_RANGE, -1, 1);
   refreshHeld();
 });
 for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-  steerPad.addEventListener(ev, (e) => {
+  steerZone.addEventListener(ev, (e) => {
     if (e.pointerId !== pad.id) return;
     pad.id = null;
     pad.value = 0;
@@ -1610,7 +1618,7 @@ function resetRun(seed) {
     speed: 21, x: 3.5 * driveSign(0), vx: 0, lean: 0, distance: 0, score: 0, mult: 1, time: 0,
     coinsRun: 0, nearMiss: 0, combo: 0, comboTimer: 0, maxCombo: 0,
     shield: false, magnetTime: 0, x2Time: 0, slowTime: 0, giantT: 0, invuln: 0, oncomingDist: 0,
-    rotPitch: 0, rotRoll: 0, rotationCount: 0, rotShown: 0, tricks: 0, landInv: 0,
+    rotPitch: 0, rotSpin: 0, rotationCount: 0, rotShown: 0, tricks: 0, landInv: 0,
     maxKmh: 0, smashed: 0, jumps: 0, continued: false, finalized: false,
     nextSpawn: 25, nextCoins: 60, nextPower: wrand('power', 120, 180), nextCones: wrand('cone', 350, 600),
     nextStall: wrand('stall', 300, 500), nextHazard: wrand('hazard', 350, 500), nextDrop: wrand('hazard', 400, 600), nextRamp: wrand('ramp', 250, 400), nextPuddle: wrand('puddle', 400, 700), nextSquall: wrand('weather', 1200, 2000),
@@ -1666,7 +1674,7 @@ function startRun(opts = {}) {
   G.cdShown = 0;
   $('countdown').classList.remove('hidden');
   if (save.stats.runs === 0) {
-    toast(isTouchDevice ? 'DRAG TO STEER  ·  OTHER THUMB: THROTTLE / BRAKE' : 'ARROWS STEER  ·  UP THROTTLE  ·  DOWN BRAKE');
+    toast(isTouchDevice ? 'TOUCH & SLIDE LEFT / RIGHT TO STEER  ·  OTHER THUMB: THROTTLE / BRAKE' : 'ARROWS STEER  ·  UP THROTTLE  ·  DOWN BRAKE');
     toast('Brush past cars for NEAR MISS bonuses');
   }
 }
@@ -1890,14 +1898,14 @@ function startJump(c) {
   G.airY = 0.4;
   G.airVy = 9 + G.speed * 0.12; // 공중 묘기를 할 수 있도록 체공 시간 확보
   G.rotPitch = 0;
-  G.rotRoll = 0;
+  G.rotSpin = 0;
   G.rotationCount = 0;
   G.rotShown = 0;
   G.jumps++;
   c.passed = true;
   sfx.jump();
   vibrate(30);
-  popup('AIRBORNE', 'big', isTouchDevice ? 'STEER = BARREL ROLL · THROTTLE / BRAKE = FLIP' : 'LEFT/RIGHT = ROLL · UP/DOWN = FLIP · BOTH = DIAGONAL');
+  popup('AIRBORNE', 'big', isTouchDevice ? 'STEER = 360 SPIN · THROTTLE / BRAKE = FLIP' : 'LEFT/RIGHT = SPIN · UP/DOWN = FLIP · BOTH = DIAGONAL');
 }
 
 // 가장 가까운 한 바퀴(2π 배수)까지 남은 각도 / 완료한 회전 수
@@ -1905,37 +1913,37 @@ const TAU = Math.PI * 2;
 const offLevel = (a) => Math.abs(a - Math.round(a / TAU) * TAU);
 const turns = (a) => Math.floor(Math.abs(a) / TAU + 0.08);
 
-// 공중 묘기: 스로틀/브레이크 = 앞뒤 플립(Pitch), 좌우 = 옆 회전(Roll, 배럴 롤), 동시 입력 = 대각선 다축 회전
+// 공중 묘기: 스로틀/브레이크 = 앞뒤 플립(Pitch), 좌우 = 옆으로 도는 360 스핀(Yaw), 동시 입력 = 대각선 다축 회전
 function updateAirTricks(rdt, steer, throttle, brake) {
   const flip = (throttle ? 1 : 0) - (brake ? 1 : 0);
   G.rotPitch += flip * AIR_FLIP * rdt;
-  G.rotRoll += steer * AIR_ROLL * rdt;
+  G.rotSpin += steer * AIR_SPIN * rdt;
   // 입력이 없으면 가까운 수평 자세로 살짝 맞춰 줌 (착지 보조)
   const snap = (a) => {
     const t = Math.round(a / TAU) * TAU;
     return Math.abs(t - a) < 0.6 ? approach(a, t, 3 * rdt) : a;
   };
-  if (!steer) G.rotRoll = snap(G.rotRoll);
+  if (!steer) G.rotSpin = snap(G.rotSpin);
   if (!flip) G.rotPitch = snap(G.rotPitch);
-  G.rotationCount = turns(G.rotPitch) + turns(G.rotRoll);
+  G.rotationCount = turns(G.rotPitch) + turns(G.rotSpin);
   if (G.rotationCount > G.rotShown) {
     G.rotShown = G.rotationCount;
-    popup(trickName(turns(G.rotPitch), turns(G.rotRoll)), 'combo', `${G.rotationCount * 360}°`);
+    popup(trickName(turns(G.rotPitch), turns(G.rotSpin)), 'combo', `${G.rotationCount * 360}°`);
     sfx.near(true);
   }
 }
 
 function trickName(p, r) {
   if (p && r) return 'DIAGONAL MEGA FLIP';
-  if (r) return r > 1 ? `${r}x BARREL ROLL` : 'BARREL ROLL';
+  if (r) return r > 1 ? `${r * 360} SPIN` : '360 SPIN';
   if (p) return p > 1 ? `${p}x FLIP` : 'FLIP';
   return 'AIR JUMP';
 }
 
-// 회전 축별 차등 점수: 앞뒤 플립 < 옆 회전(배럴 롤) < 대각선 다축 회전
+// 회전 축별 차등 점수: 앞뒤 플립 < 옆으로 도는 스핀 < 대각선 다축 회전
 function trickPoints(p, r) {
   if (p && r) return TRICK_POINTS.diagonal * Math.max(p, r);
-  return TRICK_POINTS.flip * p + TRICK_POINTS.roll * r || TRICK_POINTS.jump;
+  return TRICK_POINTS.flip * p + TRICK_POINTS.spin * r || TRICK_POINTS.jump;
 }
 
 function land() {
@@ -1944,15 +1952,15 @@ function land() {
   G.airY = 0;
   G.airVy = 0;
   // 착지 판정: 차체가 수평(한 바퀴 단위)에 가까워야 성공, 아니면 크래시
-  const clean = offLevel(G.rotPitch) < LAND_TOL && offLevel(G.rotRoll) < LAND_TOL;
-  const p = turns(G.rotPitch), r = turns(G.rotRoll);
+  const clean = offLevel(G.rotPitch) < LAND_TOL && offLevel(G.rotSpin) < LAND_TOL;
+  const p = turns(G.rotPitch), r = turns(G.rotSpin);
   if (!clean) {
     popup('CRASH LANDING!', 'big');
     crash({ x: G.x - 0.5 });
     return;
   }
   G.rotPitch = 0;
-  G.rotRoll = 0;
+  G.rotSpin = 0;
   // 착지 무적: 1.8초 동안 차·장애물과 부딪혀도 통과 (보호막처럼 은은하게 점멸)
   G.invuln = Math.max(G.invuln, LAND_IFRAMES);
   G.landInv = LAND_IFRAMES;
@@ -1977,8 +1985,8 @@ function hitPuddle() {
 const pivotTmp = new THREE.Vector3();
 const AIR_PIVOT = 0.9; // 공중 회전 중심 높이 (차체 가운데)
 function poseBike() {
-  if (G.air && (G.rotPitch || G.rotRoll)) {
-    bike.root.rotation.set(G.rotPitch, 0, G.rotRoll, 'ZXY');
+  if (G.air && (G.rotPitch || G.rotSpin)) {
+    bike.root.rotation.set(G.rotPitch, G.rotSpin, 0, 'YXZ');
     pivotTmp.set(0, AIR_PIVOT, 0).applyEuler(bike.root.rotation);
     bike.root.position.set(G.x - pivotTmp.x, (G.airY || 0) + AIR_PIVOT - pivotTmp.y, -pivotTmp.z);
   } else {
@@ -2904,7 +2912,7 @@ const SETTING_LABELS = {
   wetFx: onOff,
   quality: (v) => (v === 'high' ? 'HIGH' : 'LOW (FAST)'),
   throttle: (v) => (v === 'auto' ? 'AUTO' : 'MANUAL'),
-  touchMode: (v) => (v === 'buttons' ? 'BUTTONS' : 'DRAG PAD'),
+  touchMode: (v) => (v === 'buttons' ? 'BUTTONS' : 'TOUCH & SLIDE'),
   flipControls: onOff,
 };
 function renderSettings() {
