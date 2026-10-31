@@ -107,7 +107,7 @@ python3 -m http.server 8000
 변경되면 0.3초 안에 묶어서 바로 전송하고, 앱 전환·종료 직전에도 한 번 더 저장합니다. 기기에는 **로그인 유지용 토큰만** 남습니다.
 비로그인(게스트)은 메모리에서만 플레이하고 새로고침하면 진행이 사라집니다. 새 계정으로 처음 로그인하면 그때까지의 게스트 진행이 계정으로 옮겨집니다.
 
-설정 방법:
+설정 방법 (가장 쉬운 방법: [`supabase/setup_all.sql`](supabase/setup_all.sql) 하나를 SQL Editor 에서 실행 — 아래 3·4단계 + admin 관리자 지정이 모두 들어 있고 여러 번 실행해도 안전):
 
 1. [Supabase](https://supabase.com) 프로젝트 생성
 2. Authentication → Providers → Email 에서 **Confirm email 끄기** (아이디를 `아이디@grabrider.game` 가상 이메일로 가입시킴)
