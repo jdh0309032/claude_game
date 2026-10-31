@@ -1,4 +1,4 @@
--- Grab Rider 002: 지역 랭킹 + 주행 거리 + 장착 아이템(전광판 / Flex View 용)
+-- Grub Rider 002: 지역 랭킹 + 주행 거리 + 장착 아이템(전광판 / Flex View 용)
 -- schema.sql 을 이미 실행한 프로젝트의 SQL Editor 에서 이 파일을 실행하세요. 여러 번 실행해도 안전합니다.
 
 alter table public.leaderboard add column if not exists dist   integer not null default 0 check (dist >= 0);

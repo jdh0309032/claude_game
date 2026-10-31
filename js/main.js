@@ -10,12 +10,13 @@ import {
 import { PreviewStage, renderRiderSnapshot } from './preview.js';
 import { showRewarded, adsEnabled } from './ads.js';
 import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, GACHA_PRICE, GACHA_REFUND, STREAK_REWARDS, STREAK_SPECIAL_HELMET, FLAG_CHECK_INTERVAL_SEC,
-  FLAG_SHOP_CODES, FLAG_PRICE_THEME, FLAG_PRICE_OTHER, ADMIN_DEBUG_TOGGLE,
+  FLAG_SHOP_CODES, FLAG_PRICE_THEME, FLAG_PRICE_OTHER, ADMIN_DEBUG_TOGGLE, APP_INFO,
 } from './config.js';
+import { paymentsMode, initPayments, getPacks, buyPack } from './payments.js';
 import {
   save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, PAINTS, getBike,
   replaceDoneMissions, missionText, auth, leaderboard, getSession, ONLINE, detectCountry,
-  loadPlayerData, flushSave, lockCountry, isServerReady, adminSetCountry,
+  loadPlayerData, flushSave, lockCountry, isServerReady, adminSetCountry, claimPendingCoins, deleteAccount,
 } from './storage.js';
 
 const $ = (id) => document.getElementById(id);
@@ -281,7 +282,8 @@ const strips = [
     it.sx = rand(8, 16);
     it.sy = rand(12, 50);
     it.sz = rand(8, 14);
-    bldgMesh.setColorAt(k, tmpColor.setHSL(rand(0.05, 0.6), rand(0.05, 0.2), rand(0.55, 0.8)));
+    // 원경 빌딩: 하늘·안개와 구분되는 중간 밝기 (너무 밝으면 몸체가 안개에 묻혀 창문만 떠 보임)
+    bldgMesh.setColorAt(k, tmpColor.setHSL(rand(0.05, 0.62), rand(0.08, 0.22), rand(0.38, 0.55)));
     if (bldgMesh.instanceColor) bldgMesh.instanceColor.needsUpdate = true;
   }),
 ];
@@ -436,7 +438,18 @@ function laneClear(lane, z, len, self) {
     if (o.lane !== lane && o.targetLane !== lane) continue;
     if (Math.abs(o.z - z) < (o.len + len) / 2 + 7) return false;
   }
+  // 점프대가 있는 차선의 앞뒤는 비워 둠 (점프대로 달려가는데 차가 튀어나오지 않게)
+  if (rampNear(LANES[lane], z, len / 2 + 25)) return false;
   return true;
+}
+
+// x 차선의 z 주변(margin)에 아직 쓰이지 않은 점프대가 있는지
+function rampNear(x, z, margin) {
+  for (const r of jumpRamps) {
+    if (!r.active || r.used || Math.abs(r.x - x) > 2) continue;
+    if (z > r.z - M.JUMP_RAMP.length - margin && z < r.z + margin) return true;
+  }
+  return false;
 }
 
 // 같은 z 근처에서 네 차선이 모두 막히지 않도록 (항상 빠져나갈 틈 유지)
@@ -500,7 +513,7 @@ function spawnCar(z = SPAWN_Z, forced = null) {
     const c = acquireCar(type);
     const dir = (lane >= 2) === (ds > 0) ? 1 : -1;
     Object.assign(c, {
-      lane, targetLane: lane, dir, ds, side: Math.sign(LANES[lane]), baseX: LANES[lane], x: LANES[lane], z, offset: 0,
+      ghost: false, lane, targetLane: lane, dir, ds, side: Math.sign(LANES[lane]), baseX: LANES[lane], x: LANES[lane], z, offset: 0,
       speed: lerp(def.speed[0], def.speed[1], r[4]) * (dir < 0 ? 1.1 : 1),
       passed: false, minGap: 99, changing: false, changeT: 0, flying: false, honked: false,
       wob: r[5] * Math.PI * 2,
@@ -615,7 +628,15 @@ function updateCars(dt, collide) {
       continue;
     }
 
-    if (!solid || G.air || G.state !== 'playing') continue;
+    // 점프대 위·앞뒤를 지나는 차: 멀리 있으면 정리, 가까우면 라이더와 충돌하지 않게 (억울한 죽음 방지)
+    if (!c.ghost && rampNear(c.x, c.z, c.len / 2 + 6)) {
+      if (c.z < -45) {
+        releaseCar(c);
+        continue;
+      }
+      c.ghost = true;
+    }
+    if (!solid || G.air || c.ghost || G.state !== 'playing') continue;
     const dx = Math.abs(c.x - G.x), dz = Math.abs(c.z);
     // 슬립스트림: 같은 방향 대형차(트럭·버스·견인트럭) 바로 뒤
     if (c.dir > 0 && (c.type === 'truck' || c.type === 'bus' || c.type === 'ramp')) {
@@ -701,7 +722,17 @@ function spawnJumpRamp() {
     scene.add(jr.obj);
     jumpRamps.push(jr);
   }
-  Object.assign(jr, { active: true, x: LANES[(r1 * 4) | 0], z: SPAWN_Z, used: false });
+  // 기본 차선은 시드로 정하고, 그 자리에 차가 있으면 옆 차선부터 차례로 시도 (없으면 그대로)
+  const base = (r1 * 4) | 0;
+  let lane = base;
+  for (let k = 0; k < 4; k++) {
+    const l = (base + k) % 4;
+    if (cars.every((o) => o.flying || (o.lane !== l && o.targetLane !== l) || Math.abs(o.z - SPAWN_Z) > o.len / 2 + 20)) {
+      lane = l;
+      break;
+    }
+  }
+  Object.assign(jr, { active: true, x: LANES[lane], z: SPAWN_Z, used: false });
   jr.obj.visible = true;
 }
 function updateJumpRamps(dt, collide) {
@@ -2109,7 +2140,7 @@ function nearMiss(c, gap) {
   G.maxCombo = Math.max(G.maxCombo, G.combo);
   G.nearMiss++;
   const perfect = gap < 0.35;
-  let pts = 100 * (1 + G.combo * 0.25) * (perfect ? 2 : 1) * (c.type === 'police' ? 2 : 1) * (c.dir < 0 ? 1.5 : 1);
+  let pts = 100 * (1 + Math.min(G.combo, 40) * 0.25) * (perfect ? 2 : 1) * (c.type === 'police' ? 2 : 1) * (c.dir < 0 ? 1.5 : 1);
   if (G.x2Time > 0) pts *= 2;
   pts = Math.round(pts);
   G.score += pts;
@@ -2261,7 +2292,7 @@ function checkMissions() {
 }
 
 // ---------- UI 헬퍼
-const SCREENS = ['menu', 'garage', 'ranking', 'missions', 'settings', 'pause', 'gameover', 'auth', 'multi', 'daily', 'gacha'];
+const SCREENS = ['menu', 'garage', 'ranking', 'missions', 'settings', 'pause', 'gameover', 'auth', 'multi', 'daily', 'gacha', 'coinshop'];
 let currentScreen = null;
 function show(id) {
   currentScreen = id;
@@ -2565,6 +2596,7 @@ function renderGarage() {
     stage.setRider(look.opts, look.color);
   }
   $('btnGacha').disabled = save.coins < GACHA_PRICE;
+  $('gachaOdds').textContent = `MYSTERY BOX ODDS · equal ${gachaPoolSize() ? `1 in ${gachaPoolSize()}` : '-'} chance for each box, outfit and helmet you don't own`;
   $('btnAdCoins').classList.toggle('hidden', !adsEnabled());
   updateAdCoinsLabel();
   for (const b of $('garageTabs').children) b.classList.toggle('on', b.dataset.tab === garageTab);
@@ -2620,6 +2652,13 @@ $('garageAction').addEventListener('click', (e) => {
 
 // ---------- 랜덤 가차 상자 (1,000 코인)
 let gachaResult = null;
+function gachaPoolSize() {
+  let n = 0;
+  for (const [kind, cat] of Object.entries(SHOP)) {
+    if (kind !== 'flag') for (const it of cat.list) if (it.price > 0 && !it.special && !save[cat.owned].includes(it.id)) n++;
+  }
+  return n;
+}
 $('btnGacha').addEventListener('click', () => {
   if (save.coins < GACHA_PRICE) return;
   const pool = [];
@@ -2657,6 +2696,117 @@ $('btnGachaEquip').addEventListener('click', () => {
 $('btnGachaClose').addEventListener('click', () => {
   renderGarage();
   show('garage');
+});
+
+// ======================================================================
+// 코인 상점 (인앱 결제). native: 스토어 결제 → 서버 웹훅이 pending_coins 지급 → claim 으로 받음
+// ======================================================================
+let shopFrom = 'menu';
+let shopBusy = false;
+function refreshCoinLabels() {
+  $('menuCoins').textContent = fmtCoins(save.coins);
+  $('garageCoins').textContent = fmtCoins(save.coins);
+  $('shopCoins').textContent = fmtCoins(save.coins);
+}
+// 서버가 지급한 결제 코인 받기 (로그인 상태에서만)
+let claiming = false;
+async function claimCoins() {
+  if (claiming || !getSession() || !isServerReady()) return 0;
+  claiming = true;
+  try {
+    const n = await claimPendingCoins();
+    if (n > 0) {
+      toast(`PURCHASE COMPLETE  ·  +${fmt(n)} COINS`);
+      sfx.fireworks();
+      refreshCoinLabels();
+      if (currentScreen === 'garage') renderGarage();
+    }
+    return n;
+  } catch (e) {
+    console.warn('[pay] claim', e);
+    return 0;
+  } finally {
+    claiming = false;
+  }
+}
+function openCoinShop(from) {
+  if (G.state === 'playing' || G.state === 'crashing') return;
+  shopFrom = from;
+  sfx.init();
+  sfx.click();
+  show('coinshop');
+  renderCoinShop();
+}
+async function renderCoinShop() {
+  refreshCoinLabels();
+  const mode = paymentsMode();
+  const grid = $('packGrid');
+  const note = $('shopNote');
+  note.textContent = mode === 'mock' ? 'TEST MODE · no real money is charged.'
+    : mode === 'off' ? 'Coin purchases are available in the mobile app.'
+      : !getSession() ? 'Sign in to buy coins so they are saved to your account.' : '';
+  grid.innerHTML = '<div class="muted">LOADING…</div>';
+  const packs = mode === 'off' ? [] : await getPacks();
+  if (currentScreen !== 'coinshop') return;
+  if (!packs.length) {
+    grid.innerHTML = `<div class="muted">${mode === 'off' ? 'Not available on the web version.' : 'The store is not available right now. Try again later.'}</div>`;
+    return;
+  }
+  grid.innerHTML = '';
+  for (const pk of packs) {
+    const b = document.createElement('button');
+    b.className = `pack${pk.tag ? ' tagged' : ''}`;
+    const tier = Math.min(4, Math.max(1, Math.round(Math.log10(pk.coins) * 2 - 5)));
+    b.innerHTML = `${pk.tag ? `<span class="pack-tag">${escapeHtml(pk.tag)}</span>` : ''}
+      <span class="pack-coins tier${tier}">${'<i></i>'.repeat(tier)}</span>
+      <b>${fmt(pk.coins)}</b>${pk.bonus ? `<small class="pack-bonus">+${pk.bonus}% BONUS</small>` : '<small class="pack-bonus">&nbsp;</small>'}
+      <span class="pack-price">${escapeHtml(pk.price)}</span>`;
+    b.addEventListener('click', () => purchasePack(pk));
+    grid.appendChild(b);
+  }
+}
+async function purchasePack(pk) {
+  if (shopBusy) return;
+  const mode = paymentsMode();
+  if (mode === 'native' && !getSession()) {
+    toast('SIGN IN FIRST  ·  COINS ARE SAVED TO YOUR ACCOUNT');
+    renderAuth();
+    openScreen('auth');
+    return;
+  }
+  shopBusy = true;
+  sfx.click();
+  try {
+    const res = await buyPack(pk);
+    if (!res.ok) {
+      if (!res.cancelled) toast(`PURCHASE FAILED  ·  ${res.error || 'Try again'}`);
+      return;
+    }
+    if (res.test) {
+      save.coins += pk.coins;
+      persist();
+      toast(`TEST PURCHASE  ·  +${fmt(pk.coins)} COINS`);
+      sfx.fireworks();
+    } else {
+      // 스토어 결제 완료 → 서버 지급(웹훅)을 기다렸다가 받기
+      toast('PAYMENT RECEIVED  ·  DELIVERING YOUR COINS…');
+      let got = 0;
+      for (let i = 0; i < 15 && !got; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        got = await claimCoins();
+      }
+      if (!got) toast('COINS WILL ARRIVE SHORTLY  ·  REOPEN THE APP IF NOT');
+    }
+    refreshCoinLabels();
+  } finally {
+    shopBusy = false;
+  }
+}
+$('menuCoinBtn').addEventListener('click', () => openCoinShop('menu'));
+$('garageCoinBtn').addEventListener('click', () => openCoinShop('garage'));
+$('btnShopBack').addEventListener('click', () => {
+  sfx.click();
+  if (shopFrom === 'garage') { renderGarage(); show('garage'); } else { refreshMenu(); show('menu'); }
 });
 
 // ---------- 차고 무료 코인 (보상형 광고, 3분 쿨타임)
@@ -2887,6 +3037,8 @@ async function onSignedIn({ uploadBest = false } = {}) {
   // 새 계정이면 게스트로 세운 기록을 올림
   if (uploadBest && res.fresh && save.best > 0) await leaderboard.submit(scoreEntry(save.best, save.bestDist), { admin: isAdminMode() });
   regionTopsDirty(save.country);
+  initPayments(getSession()?.userId).catch((e) => console.warn('[pay] init', e));
+  await claimCoins();
   await checkNationalStatus();
   showDailyStreak();
   if (backTo === 'gameover' && currentScreen === 'auth') {
@@ -2962,7 +3114,7 @@ setInterval(() => {
   if (document.visibilityState === 'visible') checkNationalStatus();
 }, FLAG_CHECK_INTERVAL_SEC * 1000);
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') checkNationalStatus();
+  if (document.visibilityState === 'visible') { checkNationalStatus(); claimCoins(); }
   else flushSave({ keepalive: true }); // 앱 전환·종료 직전 서버에 저장
 });
 window.addEventListener('pagehide', () => flushSave({ keepalive: true }));
@@ -3007,7 +3159,26 @@ function renderSettings() {
   $('adminRow').classList.toggle('hidden', !showAdmin && !serverAdmin);
   $('btnAdmin').textContent = isAdminMode() ? 'ON' : 'OFF';
   $('btnAdmin').disabled = serverAdmin;
+  $('appVersion').textContent = `${APP_INFO.name} v${APP_INFO.version}`;
+  $('btnDeleteAccount').classList.toggle('hidden', !getSession());
 }
+// 계정 삭제 (스토어 정책 필수): 두 번 확인 → 서버에서 계정·기록·데이터 삭제
+$('btnDeleteAccount').addEventListener('click', async () => {
+  if (!getSession()) return;
+  if (!confirm('Delete your account permanently? Your coins, items, ranking records and purchases cannot be recovered.')) return;
+  if (prompt('Type DELETE to confirm.') !== 'DELETE') return;
+  const res = await deleteAccount();
+  if (!res.ok) {
+    toast(`DELETE FAILED  ·  ${res.error}`);
+    return;
+  }
+  serverAdmin = false;
+  debugAdmin = false;
+  toast('ACCOUNT DELETED');
+  onDataReplaced();
+  applyNationalStatus(false, '', { silent: true });
+  renderSettings();
+});
 $('adminCountry').addEventListener('change', async (e) => {
   if (!isAdminMode()) return;
   const code = e.target.value;
@@ -3282,7 +3453,7 @@ $('btnAdDouble').addEventListener('click', async () => {
 $('btnWhatsApp').addEventListener('click', () => {
   const base = SHARE_BASE_URL || `${location.origin}${location.pathname}`;
   const url = `${base}${base.includes('?') ? '&' : '?'}seed=${G.seed}`;
-  const text = `I scored ${fmt(G.score)} (${fmt(G.distance)} m) on Grab Rider! Ride the exact same road and beat me: ${url}`;
+  const text = `I scored ${fmt(G.score)} (${fmt(G.distance)} m) on Grub Rider! Ride the exact same road and beat me: ${url}`;
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
 });
 

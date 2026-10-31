@@ -1,4 +1,4 @@
--- Grab Rider 005: 관리자만 국가 변경 (004 실행 후 실행하세요. 여러 번 실행해도 안전합니다)
+-- Grub Rider 005: 관리자만 국가 변경 (004 실행 후 실행하세요. 여러 번 실행해도 안전합니다)
 -- 일반 계정은 lock_country 로 처음 고정된 국가를 바꿀 수 없고, 관리자(player_data.is_admin)만 이 함수로 변경 가능
 
 create or replace function public.admin_set_country(p_country text)

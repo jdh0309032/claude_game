@@ -946,3 +946,44 @@ body:not(.one-hand) #steerDot b { display: none; }
 .tv.dot.neon { background: var(--c); box-shadow: 0 0 10px var(--c), inset 0 0 6px rgba(255, 255, 255, 0.7); }
 .tv.dot.factory { background: repeating-linear-gradient(45deg, #e9ecef 0 5px, #fff 5px 10px); box-shadow: inset 0 0 0 1px #d0d5da; }
 #garage .garage-actions { margin-top: 6px; }
+
+/* ---------- 코인 상점 */
+.coin-btn { border: 0; cursor: pointer; font: inherit; font-weight: 700; }
+.coin-btn .plus {
+  font-style: normal; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--gold); color: #fff; font-size: 14px; line-height: 1; margin-left: 2px;
+}
+.coin-btn:active { transform: scale(0.96); }
+#coinshop .panel { display: flex; flex-direction: column; gap: 12px; }
+.shop-note { margin: 0; font-size: 13px; min-height: 1em; }
+.pack-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.pack {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 18px 8px 10px; border-radius: 16px; border: 2px solid var(--line); background: var(--card);
+  color: var(--text); font: inherit; cursor: pointer; min-width: 0;
+}
+.pack.tagged { border-color: var(--gold); background: #fffaf0; }
+.pack:active { transform: scale(0.97); }
+.pack b { font-family: var(--display); font-weight: 400; font-size: 22px; font-variant-numeric: tabular-nums; }
+.pack-tag {
+  position: absolute; top: -9px; left: 50%; transform: translateX(-50%); white-space: nowrap;
+  background: var(--red); color: #fff; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; padding: 2px 8px; border-radius: 999px;
+}
+.pack-coins { display: flex; justify-content: center; height: 34px; align-items: flex-end; }
+.pack-coins i {
+  display: block; width: 26px; height: 26px; margin: 0 -7px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff2b0, #ffcc33 45%, #d99a00); border: 2px solid #b97f00;
+  box-shadow: 0 2px 0 #9a6900;
+}
+.pack-coins i:nth-child(2) { transform: translateY(-6px); }
+.pack-coins i:nth-child(4) { transform: translateY(-4px); }
+.pack-bonus { color: var(--green-dark); font-weight: 800; font-size: 11px; }
+.pack-price {
+  margin-top: 4px; width: 100%; padding: 8px 4px; border-radius: 10px; background: var(--green); color: #fff;
+  font-weight: 800; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.shop-legal { font-size: 11px; margin: 0; line-height: 1.4; }
+.shop-legal a, .legal-links a { color: var(--green-dark); font-weight: 700; }
+.legal-links { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; margin-bottom: 12px; }
+#btnDeleteAccount { margin-top: 8px; }
+.gacha-odds { font-size: 11px; margin: 4px 0 0; text-align: center; }

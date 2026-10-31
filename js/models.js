@@ -179,6 +179,16 @@ const GLASS = 0x1b2735;
 const RUBBER = 0x141414;
 const TRIM = 0x2a2a2a;
 
+// 박스 윗면만 좁혀 사다리꼴로 (경사진 앞유리·뒷유리)
+function taperTop(g, sx, sz) {
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    if (pos.getY(i) > 0) pos.setXYZ(i, pos.getX(i) * sx, pos.getY(i), pos.getZ(i) * sz);
+  }
+  pos.needsUpdate = true;
+  return g;
+}
+
 function buildCar(type) {
   const d = CAR_DEFS[type];
   const L = d.len, W = d.w, hl = L / 2, hw = W / 2;
@@ -248,30 +258,58 @@ function buildCar(type) {
     body.push(box(W * 0.96, 0.9, 1.9, 0, 2.3, -hl + 1.25));
     det.push(box(W * 0.9, 0.6, 0.05, 0, 2.35, -hl + 0.28, GLASS));
     det.push(box(W + 0.04, 2.7, L - 2.6, 0, 2.1, -hl + 2.4 + (L - 2.6) / 2, 0xe9e9e9));
-    det.push(box(W + 0.06, 0.12, L - 2.6, 0, 3.0, -hl + 2.4 + (L - 2.6) / 2, 0xff6b00));
+    det.push(box(W + 0.08, 0.12, L - 2.6, 0, 3.0, -hl + 2.4 + (L - 2.6) / 2, 0xff6b00));
+    // 컨테이너 세로 리브 + 뒷문 + 옆 거울
+    for (let z = -hl + 2.7; z < hl - 0.2; z += 0.9) for (const sx of [-1, 1]) det.push(box(0.04, 2.6, 0.08, sx * (hw + 0.04), 2.1, z, 0xc9ced3));
+    det.push(box(0.04, 2.5, 0.04, 0, 2.1, hl + 0.03, 0x9aa0a6));
+    for (const sx of [-1, 1]) det.push(box(0.1, 0.3, 0.06, sx * (hw + 0.12), 2.2, -hl + 0.5, 0x222222));
     det.push(box(W, 0.3, L, 0, 0.6, 0, 0x333333));
     lightY = 0.95;
   } else if (type === 'bus') {
     body.push(box(W, 2.6, L, 0, 1.75, 0));
-    det.push(box(W + 0.02, 0.85, L * 0.9, 0, 2.2, 0.3, GLASS));
-    det.push(box(W * 0.9, 1.1, 0.05, 0, 2.0, -hl - 0.01, GLASS));
-    det.push(box(W + 0.02, 0.22, L + 0.02, 0, 0.6, 0, TRIM));
-    det.push(box(W * 0.7, 0.25, 0.05, 0, 2.85, -hl - 0.02, 0x101010));
+    det.push(box(W + 0.03, 0.85, L * 0.9, 0, 2.2, 0.3, GLASS));
+    det.push(box(W * 0.9, 1.1, 0.05, 0, 2.0, -hl - 0.02, GLASS));
+    det.push(box(W + 0.03, 0.22, L + 0.03, 0, 0.6, 0, TRIM));
+    // 창틀(기둥) + 앞문 + 행선지 LED + 옆 줄무늬
+    for (let k = 0; k < 7; k++) for (const sx of [-1, 1]) det.push(box(0.05, 0.86, 0.1, sx * (hw + 0.03), 2.2, -hl + 1.6 + k * 1.35, 0x2b2b2b));
+    det.push(box(0.05, 1.7, 1.0, hw + 0.03, 1.35, -hl + 0.9, 0x1f2b38));
+    det.push(box(W * 0.7, 0.25, 0.05, 0, 2.85, -hl - 0.03, 0x101010));
+    head.push(box(W * 0.5, 0.12, 0.03, 0, 2.85, -hl - 0.06));
+    for (const sx of [-1, 1]) det.push(box(0.04, 0.14, L * 0.86, sx * (hw + 0.02), 1.15, 0, 0xffffff));
     lightY = 0.9;
   } else {
     const suv = type === 'suv';
     const bh = suv ? 0.8 : 0.62, by = 0.3;
     body.push(box(W, bh, L, 0, by + bh / 2, 0));
-    const ch = suv ? 0.62 : 0.5, cl = suv ? L * 0.62 : L * 0.5, cz = suv ? 0.3 : 0.25;
-    det.push(box(W * 0.86, ch, cl, 0, by + bh + ch / 2, cz, GLASS));
-    body.push(box(W * 0.84, 0.08, cl * 0.92, 0, by + bh + ch + 0.04, cz));
+    // 보닛·트렁크 위 살짝 경사진 숄더 라인
+    body.push(taperTop(new THREE.BoxGeometry(W * 0.98, 0.08, L * 0.98), 0.96, 0.94).translate(0, by + bh + 0.04, 0));
+    const ch = suv ? 0.62 : 0.52, cl = suv ? L * 0.62 : L * 0.52, cz = suv ? 0.3 : 0.25;
+    // 사다리꼴 캐빈(경사 앞·뒷유리) + 같은 모양으로 좁힌 차체색 지붕
+    const tz = suv ? 0.86 : 0.7;
+    det.push(paint(taperTop(new THREE.BoxGeometry(W * 0.86, ch, cl), 0.9, tz).translate(0, by + bh + 0.08 + ch / 2, cz), GLASS));
+    body.push(box(W * 0.8, 0.08, cl * tz * 0.98, 0, by + bh + 0.08 + ch + 0.04, cz));
+    // B필러 (차체색) + 사이드미러
+    for (const sx of [-1, 1]) {
+      body.push(box(0.06, ch * 0.92, 0.12, sx * W * 0.405, by + bh + 0.08 + ch / 2, cz, null));
+      body.push(box(0.16, 0.1, 0.08, sx * (hw + 0.06), by + bh + 0.12, cz - cl / 2 + 0.05));
+    }
+    // 범퍼, 그릴, 번호판, 문 틈, 사이드 스커트
     det.push(box(W + 0.04, 0.2, 0.22, 0, by + 0.12, -hl, TRIM));
     det.push(box(W + 0.04, 0.2, 0.22, 0, by + 0.12, hl, TRIM));
+    det.push(box(W * 0.45, 0.16, 0.03, 0, by + bh * 0.55, -hl - 0.02, 0x16181c));
+    det.push(box(0.46, 0.13, 0.03, 0, by + 0.28, -hl - 0.13, 0xf4f4f4));
+    det.push(box(0.46, 0.13, 0.03, 0, by + 0.28, hl + 0.13, type === 'taxi' ? 0xffd60a : 0xf4f4f4));
+    for (const sx of [-1, 1]) {
+      for (const dz of [cz - cl * 0.05, cz + cl * 0.42]) det.push(box(0.02, bh * 0.7, 0.025, sx * (hw + 0.012), by + bh * 0.5, dz, 0x1b1d22));
+      det.push(box(0.03, 0.08, L * 0.62, sx * (hw + 0.015), by + 0.06, 0, 0x1b1d22));
+    }
     lightY = by + bh - 0.17;
-    const roofY = by + bh + ch + 0.08;
+    const roofY = by + bh + 0.08 + ch + 0.08;
     if (type === 'taxi') {
-      det.push(box(0.6, 0.22, 0.3, 0, roofY + 0.11, cz, 0xfff3b0));
-      det.push(box(W + 0.01, 0.1, L * 0.7, 0, by + bh * 0.5, 0, 0x222222));
+      det.push(box(0.62, 0.24, 0.3, 0, roofY + 0.12, cz, 0xfff3b0));
+      det.push(box(0.64, 0.06, 0.32, 0, roofY + 0.27, cz, 0x111111));
+      // 체크무늬 띠
+      for (let k = 0; k < 10; k++) for (const sx of [-1, 1]) det.push(box(0.02, 0.09, L * 0.07, sx * (hw + 0.012), by + bh * 0.5 + (k % 2) * 0.09, -L * 0.35 + k * L * 0.07, 0x111111));
     }
     if (type === 'police') {
       det.push(box(W + 0.01, 0.16, L * 0.8, 0, by + bh * 0.5, 0, 0x1e4fd8));
@@ -1054,6 +1092,9 @@ export function lampHeadGeometry() {
 
 export function buildingGeometry() {
   const g = new THREE.BoxGeometry(1, 1, 1);
+  // 지붕(+y)·바닥(-y) 면은 창문 없는 텍스처 모서리(벽색)만 쓰도록 UV 를 한 점으로 모음
+  const uv = g.attributes.uv;
+  for (let i = 8; i < 16; i++) uv.setXY(i, 0.02, 0.99);
   g.translate(0, 0.5, 0);
   return g;
 }
@@ -1263,6 +1304,11 @@ export function rukoGeometry() {
   roof.rotateZ(0.22);
   roof.translate(0, H + 0.55, 0);
   p.push(paint(roof, 0xd07a4a));
+  // 옥상: 주황색 물탱크(토렌) + TV 안테나
+  { const tank = new THREE.CylinderGeometry(0.45, 0.45, 0.9, 10); tank.translate(-1.2, H + 1.2, -2.6); p.push(paint(tank, 0xf77f00)); }
+  p.push(box(0.9, 0.12, 0.9, -1.2, H + 0.72, -2.6, 0x555555));
+  { const pole = new THREE.CylinderGeometry(0.03, 0.03, 1.6, 4); pole.translate(-1.8, H + 1.5, 2.4); p.push(paint(pole, 0x888888)); }
+  p.push(box(0.04, 0.04, 0.9, -1.8, H + 2.1, 2.4, 0x888888));
   for (let k = 0; k < 3; k++) {
     const z = -L / 2 + L / 6 + (k * L) / 3;
     // 1층 셔터 + 간판
@@ -1315,7 +1361,7 @@ export function buildingStyle(style) {
     // 하노이 튜브하우스: 좁고 높은 집 2채 + 녹색 덧창 + 홍등
     for (const [z, h, c] of [[-2.5, 11, 0xf2c14e], [2.5, 9.5, 0xe9d8a6]]) {
       b.push(box(W, h, 4.8, 0, h / 2, z, c));
-      for (let fl = 1; fl < h / 3; fl++) {
+      for (let fl = 1; fl * 3 + 1.5 < h; fl++) { // 창 위쪽(층*3+1.3)이 지붕(h) 아래에 있는 층만
         b.push(box(0.1, 1.4, 1.1, face + 0.04, fl * 3 + 0.6, z - 1, 0x2d6a4f));
         b.push(box(0.1, 1.4, 1.1, face + 0.04, fl * 3 + 0.6, z + 1, 0x2d6a4f));
         b.push(box(0.6, 0.1, 3.8, face + 0.3, fl * 3 - 0.3, z, 0x9c6644));
@@ -1323,6 +1369,9 @@ export function buildingStyle(style) {
       b.push(box(0.12, 2.4, 3.6, face + 0.05, 1.2, z, 0x6c757d));
       for (const lz of [z - 1.4, z + 1.4]) g.push(paint(new THREE.SphereGeometry(0.28, 8, 6).translate(face + 0.55, 2.9, lz), 0xff3b30));
       g.push(box(0.15, 0.7, 3.4, face + 0.12, 3.4, z, 0xd00000));
+      // 옥상: 스테인리스 물탱크 + 화분
+      { const t = new THREE.CylinderGeometry(0.35, 0.35, 1.0, 10); t.rotateX(Math.PI / 2); t.translate(-1, h + 0.45, z); b.push(paint(t, 0xc9ced3)); }
+      for (const pz of [z - 1.6, z + 1.6]) b.push(paint(new THREE.SphereGeometry(0.35, 6, 5).translate(1.8, h + 0.35, pz), 0x2d6a4f));
     }
     return { base: merge(b), glow: merge(g) };
   }
@@ -1337,6 +1386,13 @@ export function buildingStyle(style) {
       g.push(paint(box(0.2, 0.7, 2.6, face + 0.2, 2.9 + k * 0.1, z), NEON[(k * 2 + 1) % NEON.length]));
     }
     g.push(paint(box(0.2, 1.2, L * 0.8, face + 0.15, h - 2, 0), 0xffffff));
+    // 옥상: 실외기 줄 + 옥상 광고판 프레임 + 안테나
+    for (let k = 0; k < 3; k++) b.push(box(0.9, 0.6, 0.9, -1.5, h + 0.3, -3 + k * 1.4, 0x9aa3ad));
+    b.push(box(0.2, 2.4, 5, 1.6, h + 1.6, 1.5, 0x1d2230));
+    for (const pz of [-0.6, 3.6]) b.push(box(0.15, 1.6, 0.15, 1.6, h + 0.8, pz, 0x55595e));
+    g.push(paint(box(0.22, 1.9, 4.6, 1.72, h + 1.6, 1.5), NEON[3 % NEON.length]));
+    { const pole = new THREE.CylinderGeometry(0.04, 0.04, 3, 4); pole.translate(-2, h + 1.5, 3.5); b.push(paint(pole, 0x777777)); }
+    g.push(paint(new THREE.SphereGeometry(0.12, 6, 4).translate(-2, h + 3.05, 3.5), 0xff3b30));
     return { base: merge(b), glow: merge(g) };
   }
   if (style === 'modern') {
@@ -1348,6 +1404,12 @@ export function buildingStyle(style) {
       b.push(box(1.0, 0.35, L * 0.9, face * 0.9 + 0.4, 3.3 + fl * 3, 0, 0x52b788));
     }
     g.push(paint(box(0.1, 0.25, L * 0.88, face * 0.9 + 0.05, h - 0.5, 0), 0x9bf6ff));
+    // 옥상 정원: 나무 + 유리 난간
+    for (const [tx, tz] of [[-1, -2.5], [0.8, 0.5], [-0.6, 3]]) {
+      b.push(paint(new THREE.CylinderGeometry(0.08, 0.1, 0.9, 5).translate(tx, h + 0.45, tz), 0x6b4f2a));
+      b.push(paint(new THREE.IcosahedronGeometry(0.7, 0).translate(tx, h + 1.2, tz), 0x40916c));
+    }
+    g.push(paint(box(0.06, 0.6, L * 0.86, face * 0.9 - 0.05, h + 0.3, 0), 0xcfefff));
     return { base: merge(b), glow: merge(g) };
   }
   if (style === 'brick') {
@@ -1362,6 +1424,10 @@ export function buildingStyle(style) {
     tank.translate(-0.5, h + 2.1, -2);
     b.push(paint(tank, 0x7f5539));
     g.push(paint(box(0.15, 0.6, 3, face + 0.1, 2.4, -2.5), 0xff595e));
+    // 옥상: 실외기 + 난간
+    for (const pz of [1, 3]) b.push(box(1.0, 0.7, 1.0, 1, h + 0.35, pz, 0xa0a7ae));
+    b.push(box(W, 0.5, 0.15, 0, h + 0.25, L / 2 - 0.08, 0x7f2f22));
+    b.push(box(W, 0.5, 0.15, 0, h + 0.25, -L / 2 + 0.08, 0x7f2f22));
     return { base: merge(b), glow: merge(g) };
   }
   if (style === 'haussmann') {
@@ -1382,6 +1448,12 @@ export function buildingStyle(style) {
       b.push(paint(aw, k % 2 ? 0xc1121f : 0xffffff));
     }
     g.push(paint(box(0.12, 0.45, 3.2, face + 0.08, 3.25, 0), 0xffd166));
+    // 맨사드 지붕 위 굴뚝 + 다락 창
+    for (const pz of [-3.2, 0.2, 3.4]) {
+      b.push(box(0.7, 1.4, 0.9, -1.2, h + 3.1, pz, 0xb5651d));
+      b.push(box(0.8, 0.12, 1.0, -1.2, h + 3.85, pz, 0x6c4a2f));
+    }
+    for (let k = 0; k < 3; k++) b.push(box(0.3, 0.9, 1.0, face + 0.1, h + 1.3, -3 + k * 3, 0x2b3a4a));
     return { base: merge(b), glow: merge(g) };
   }
   return { base: rukoGeometry(), glow: null };
@@ -1980,13 +2052,13 @@ export function makeBuildingMaterial() {
     c.width = 64;
     c.height = 128;
     const x = c.getContext('2d');
-    x.fillStyle = lit ? '#000' : '#d8d8d8';
+    x.fillStyle = lit ? '#000' : '#ffffff'; // 벽은 흰색 → 인스턴스 색이 그대로 벽색이 됨
     x.fillRect(0, 0, 64, 128);
     for (let r = 0; r < 12; r++) {
       for (let k = 0; k < 5; k++) {
         if (lit) x.fillStyle = Math.random() < 0.45 ? '#ffd98a' : '#000';
-        else x.fillStyle = '#3b4656';
-        x.fillRect(4 + k * 12, 4 + r * 10, 8, 6);
+        else x.fillStyle = '#56606e';
+        x.fillRect(4 + k * 12, 6 + r * 10, 8, 6);
       }
     }
     const t = new THREE.CanvasTexture(c);

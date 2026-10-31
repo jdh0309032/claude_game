@@ -1,6 +1,6 @@
-# 🛵 Grab Rider — 3D 배달 러너
+# 🛵 Grub Rider — 3D 배달 러너
 
-그랩(Grab) 배달 라이더 컨셉의 3D 러너 게임입니다. 그린 재킷과 배달 박스를 단 라이더가 도로 위 자동차들 사이를 비집고 달립니다.
+배달 라이더 컨셉의 3D 러너 게임 **Grub Rider** 입니다. 그린 재킷과 배달 박스를 단 라이더가 도로 위 자동차들 사이를 비집고 달립니다.
 메뉴·HUD·팝업은 배달 앱처럼 그린 헤더 + 흰 카드 + 하단 시트 스타일로 구성했습니다.
 모바일(터치)과 PC(키보드) 둘 다 지원하며, 브라우저만 있으면 설치 없이 바로 플레이할 수 있습니다.
 
@@ -96,6 +96,32 @@ python3 -m http.server 8000
 - 기본값은 테스트용 가짜 광고(`ADS.provider: 'mock'`, 5초 카운트다운)입니다. 실제 광고는 Google H5 Games Ads(AdSense) 승인 후
   `js/config.js` 에서 `ADS.provider: 'h5'`, `adClient: 'ca-pub-...'` 를 넣고 `testMode: false` 로 바꾸세요. 광고를 끄려면 `'none'`.
 
+## 코인 결제 (인앱 결제)
+
+- 메뉴·차고의 코인 표시(**+**)를 누르면 **COIN SHOP** 이 열립니다. 상품 4종(`js/config.js` 의 `COIN_PACKS`):
+  2,000 / 6,600(+10%) / 15,000(+25%) / 45,000(+50%) 코인. 보너스 %는 기본 팩 대비 실제 비율과 같아야 합니다(과장 표시 금지).
+- `PAYMENTS.provider`
+  - `'mock'`(기본): 테스트 결제 창 → 코인이 바로 들어옴(실제 돈 없음). **출시 빌드에서는 반드시 `'native'` 로 바꾸세요.**
+  - `'native'`: Capacitor 앱 + RevenueCat(`@revenuecat/purchases-capacitor`) 으로 Google Play / App Store 결제. 웹에서는 상점이 비활성화됩니다.
+- 실제 결제 흐름 (코인 위조 방지):
+  1. 로그인 시 RevenueCat `app_user_id` = Supabase 사용자 ID
+  2. 스토어 결제 → RevenueCat 이 영수증 검증 → 웹훅으로 Edge Function [`revenuecat-webhook`](supabase/functions/revenuecat-webhook/index.ts) 호출
+  3. Edge Function(service_role)이 `credit_purchase` 로 `purchases` 원장에 기록(거래 ID 중복 지급 방지)하고 `pending_coins` 를 올림
+  4. 게임이 `claim_pending_coins()` 로 받아 감(결제 직후 2초 간격 재시도, 로그인·앱 복귀 때도 확인)
+- 설정 순서: Play Console / App Store Connect 에 소모성 상품 `grub_coins_s/m/l/xl` 등록 → RevenueCat 프로젝트에 연결 →
+  `supabase functions deploy revenuecat-webhook --no-verify-jwt` → `supabase secrets set REVENUECAT_WEBHOOK_AUTH=<임의의 긴 값>` →
+  RevenueCat 웹훅 URL `https://<프로젝트>.supabase.co/functions/v1/revenuecat-webhook`, Authorization 헤더에 같은 값 →
+  `js/config.js` 의 `revenuecatApiKeyAndroid/Ios`(공개 SDK 키) 입력.
+- 미스터리 박스는 차고에 확률(미보유 아이템 균등 1/N)을 표시합니다(가챠 확률 공개 정책).
+
+## 스토어 정책 · 개인정보
+
+- **계정 삭제:** 설정 → *DELETE ACCOUNT* (두 번 확인) → `delete_my_account()` 로 계정·저장 데이터·랭킹·구매 기록 삭제 (Google Play / App Store 필수).
+- **개인정보처리방침 / 이용약관:** [`privacy.html`](privacy.html), [`terms.html`](terms.html) — 설정 하단과 코인 상점에서 링크.
+  출시 전 `[OPERATOR NAME]`, `[CONTACT EMAIL]` 을 실제 값으로 바꾸고, 스토어 등록 시 이 주소를 개인정보처리방침 URL 로 입력하세요.
+- **점수 검증(007):** 서버가 거리 대비 비정상 점수(거리 x 500 + 50,000 초과)를 거부하고, 3초 안의 연속 전송은 무시합니다.
+- 광고판·상점 간판은 모두 가상의 패러디 브랜드입니다(실제 상표·로고 미사용).
+
 ## 공유 · 챌린지
 
 - 결과 화면 **CHALLENGE ON WHATSAPP** — 내 점수와 `?seed=` 링크를 WhatsApp으로 공유. 링크로 들어온 친구는 메뉴에 *CHALLENGE ROAD* 칩이 뜨고 똑같은 도로(교통·장애물)를 달립니다.
@@ -107,7 +133,7 @@ python3 -m http.server 8000
 변경되면 0.3초 안에 묶어서 바로 전송하고, 앱 전환·종료 직전에도 한 번 더 저장합니다. 기기에는 **로그인 유지용 토큰만** 남습니다.
 비로그인(게스트)은 메모리에서만 플레이하고 새로고침하면 진행이 사라집니다. 새 계정으로 처음 로그인하면 그때까지의 게스트 진행이 계정으로 옮겨집니다.
 
-설정 방법 (가장 쉬운 방법: [`supabase/setup_all.sql`](supabase/setup_all.sql) 하나를 SQL Editor 에서 실행 — 아래 3·4단계 + admin 관리자 지정이 모두 들어 있고 여러 번 실행해도 안전):
+설정 방법 (가장 쉬운 방법: [`supabase/setup_all.sql`](supabase/setup_all.sql) 하나를 SQL Editor 에서 실행 — 아래 3·4단계 + admin 관리자 지정 + 007(결제·계정 삭제·점수 검증)이 모두 들어 있고 여러 번 실행해도 안전):
 
 1. [Supabase](https://supabase.com) 프로젝트 생성
 2. Authentication → Providers → Email 에서 **Confirm email 끄기** (아이디를 `아이디@grabrider.game` 가상 이메일로 가입시킴)
@@ -116,6 +142,7 @@ python3 -m http.server 8000
    (002·003 내용 포함: `player_data` 테이블, `load_player_data`/`save_player_data`/`lock_country`/`submit_score_v4`/`my_rank_v4`, 예전 전송 함수 차단)
    그다음 [`supabase/migrations/005_admin_country.sql`](supabase/migrations/005_admin_country.sql) 실행 (관리자 국가 변경)
    그다음 [`supabase/migrations/006_look_sync.sql`](supabase/migrations/006_look_sync.sql) 실행 (장착을 바꿀 때마다 랭킹 행의 바이크·상자·의상·헤드기어·국기·페인트를 바로 갱신 — 랭킹 3D 미리보기·전광판 동기화)
+   그다음 [`supabase/migrations/007_payments_compliance.sql`](supabase/migrations/007_payments_compliance.sql) 실행 (코인 결제 원장, 계정 삭제, 서버 점수 검증)
 5. `js/config.js` 에 `SUPABASE_URL`, `SUPABASE_ANON_KEY` 입력 (publishable/anon 키만 사용, service_role 키는 절대 넣지 마세요)
 
 - **국가 고정:** 접속 시 IP Geolocation(`GEO_IP_ENDPOINTS`: country.is → geojs → ipapi.co)으로 국가를 판별하고, 로그인 계정은 처음 판별된 국가가
@@ -160,13 +187,16 @@ js/themes.js          8개국 테마, 국기 그리기, 국가 목록·이름, �
 js/models.js          ModelManager(GLTF 로더) + 로우폴리 모델·건물·랜드마크·광고판·텍스처
 js/preview.js         3D 쇼룸 / Flex View / 전광판 라이더 스냅샷
 js/ads.js             보상형 광고 (mock / Google H5 Games Ads)
+js/payments.js        코인 결제 (mock / Capacitor + RevenueCat)
 js/storage.js         서버 저장(player_data), 미션, 계정 인증, 국가 랭킹 API, IP 국가 판별·고정
 js/net.js             1v1 연결 (PeerJS)
 js/audio.js           WebAudio 합성 효과음 + 128 BPM BGM 시퀀서
 js/rainfx.js          화면 빗물 오버레이 (Canvas 2D 굴절)
 js/icons.js           미니멀 라인 아이콘 (SVG)
 supabase/schema.sql   랭킹 DB 기본 스키마
-supabase/migrations/  002 지역·Flex View, 003 국가 랭킹, 004 서버 저장·국가 고정·관리자, 005 관리자 국가 변경, 006 랭킹 외형 동기화
+supabase/migrations/  002 지역·Flex View, 003 국가 랭킹, 004 서버 저장·국가 고정·관리자, 005 관리자 국가 변경, 006 랭킹 외형 동기화, 007 결제·계정 삭제·점수 검증
+supabase/functions/   revenuecat-webhook (결제 → 코인 지급 Edge Function)
+privacy.html terms.html  개인정보처리방침 / 이용약관
 assets/flags/         실제 국기 SVG (country-flag-icons, MIT)
 assets/models/        외부 3D 모델 폴더
 vendor/               Three.js r160 + GLTFLoader (MIT), PeerJS 1.5.4 (MIT)
@@ -176,4 +206,4 @@ vendor/               Three.js r160 + GLTFLoader (MIT), PeerJS 1.5.4 (MIT)
 
 - 랭킹은 `js/config.js` 의 Supabase 설정을 사용합니다.
 - URL에 `?debug`를 붙이면 콘솔에서 `window.__G`로 게임 상태를 확인할 수 있습니다.
-- "Grab"은 Grab Holdings의 상표입니다. 개인 학습/팬 프로젝트 용도로 쓰고, 공개 배포·스토어 출시 시에는 `index.html`, `manifest.webmanifest`의 이름을 자체 브랜드로 바꾸세요.
+- 게임 이름은 **Grub Rider** 입니다. 내부 저장 키(`grabrider.session.v1`)와 계정용 가상 이메일 도메인(`grabrider.game`)은 기존 계정 호환을 위해 그대로 둡니다(사용자에게 보이지 않음).

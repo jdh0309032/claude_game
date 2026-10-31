@@ -172,48 +172,49 @@ export const STREAK_REWARDS = [200, 300, 400, 600, 800, 1000, 1500];
 export const STREAK_SPECIAL_HELMET = 'crown';
 
 // ======================================================================
-// 도로변 빌보드 포스터 (국가별 브랜드 패러디)
+// 도로변 빌보드 포스터 (국가별 가상 브랜드 패러디)
 // ======================================================================
+// 실제 상표·로고·고유 배색을 흉내 내지 않는 가상 브랜드 말장난만 사용 (나라 분위기만 살림)
 export const BILLBOARD_POSTERS = {
   ID: [
-    { title: 'INDOMIE GO', sub: 'Mie goreng 24/7', bg: '#d62828', fg: '#ffd60a' },
-    { title: 'TEH BOTOL', sub: 'Ice cold, extra sweet', bg: '#ffb703', fg: '#1d3557' },
-    { title: 'GRAB FOOD', sub: 'Lapar? Order now', bg: '#00b14f', fg: '#ffffff' },
+    { title: 'MIE GORENG MANIA', sub: 'Pedas level 10. Berani?', bg: '#d62828', fg: '#ffd60a' },
+    { title: 'ES TEH SEGER', sub: 'Manis, dingin, mantap', bg: '#2d6a4f', fg: '#f1faee' },
+    { title: 'GRUB FOOD', sub: 'Lapar? Kami antar!', bg: '#00b14f', fg: '#ffffff' },
   ],
   VN: [
-    { title: 'PHO KING', sub: 'Hanoi\'s finest broth', bg: '#c1121f', fg: '#fdf0d5' },
-    { title: 'BANH MI BRO', sub: 'Crunchy since 1958', bg: '#ffb703', fg: '#432818' },
-    { title: 'CA PHE SUA', sub: 'Strong. Sweet. Iced.', bg: '#3e2723', fg: '#ffe8d6' },
+    { title: 'PHO SHO', sub: 'Broth that slaps since forever', bg: '#c1121f', fg: '#fdf0d5' },
+    { title: 'BANH MI BRO', sub: 'Crunch o\'clock', bg: '#ffb703', fg: '#432818' },
+    { title: 'CA PHE DA DA', sub: 'Strong. Sweet. Iced.', bg: '#3e2723', fg: '#ffe8d6' },
   ],
   TH: [
-    { title: 'TOM YUM MAX', sub: 'Spicy level 99', bg: '#ff006e', fg: '#ffffff' },
-    { title: 'SIAM COLA', sub: 'Taste of Bangkok', bg: '#3a0ca3', fg: '#f72585' },
-    { title: 'TUK TUK GO', sub: 'Ride in 2 min', bg: '#06d6a0', fg: '#073b4c' },
+    { title: 'TOM YUM BOOM', sub: 'Spicy level: volcano', bg: '#ff006e', fg: '#ffffff' },
+    { title: 'MANGO STICKY', sub: 'Dessert first, always', bg: '#ffbe0b', fg: '#3a0ca3' },
+    { title: 'TUK TUK TURBO', sub: 'Ride in 2 min', bg: '#06d6a0', fg: '#073b4c' },
   ],
   KR: [
-    { title: 'KIMCHI COLA', sub: 'Fermented fizz', bg: '#e63946', fg: '#ffffff' },
-    { title: 'SOJU LIGHT', sub: 'Only 12 kcal*', bg: '#2a9d8f', fg: '#e9f5db' },
-    { title: 'K-POP LIVE', sub: 'Gangnam Arena tonight', bg: '#7209b7', fg: '#4cc9f0' },
+    { title: 'KIMCHI FIZZ', sub: 'Fermented soda (yes, really)', bg: '#e63946', fg: '#ffffff' },
+    { title: 'BANCHAN BAR', sub: 'Unlimited side dishes', bg: '#2a9d8f', fg: '#e9f5db' },
+    { title: 'K-STAR LIVE', sub: 'Lightsticks up tonight', bg: '#7209b7', fg: '#4cc9f0' },
   ],
   JP: [
-    { title: 'RAMEN 24H', sub: 'Shibuya station exit 8', bg: '#ffbe0b', fg: '#d00000' },
+    { title: 'RAMEN RUSH 24H', sub: 'Slurp loudly. It\'s polite.', bg: '#ffbe0b', fg: '#d00000' },
     { title: 'NEKO PHONE', sub: 'Purrfect signal', bg: '#ff70a6', fg: '#ffffff' },
-    { title: 'SUSHI EXPRESS', sub: 'Conveyor at light speed', bg: '#0077b6', fg: '#caf0f8' },
+    { title: 'CONVEYOR SUSHI', sub: 'Plates at light speed', bg: '#0077b6', fg: '#caf0f8' },
   ],
   SG: [
-    { title: 'MERLION AIR', sub: 'Fly the lion city', bg: '#d90429', fg: '#ffffff' },
-    { title: 'KAYA TOAST', sub: 'Breakfast of legends', bg: '#80b918', fg: '#ffffff' },
-    { title: 'HAWKER HUB', sub: 'Michelin on a budget', bg: '#ff9f1c', fg: '#2b2d42' },
+    { title: 'LION CITY AIR', sub: 'Fly the little red dot', bg: '#d90429', fg: '#ffffff' },
+    { title: 'KAYA KAYA TOAST', sub: 'Breakfast of legends', bg: '#80b918', fg: '#ffffff' },
+    { title: 'HAWKER HEAVEN', sub: 'Chilli crab, zero queue*', bg: '#ff9f1c', fg: '#2b2d42' },
   ],
   US: [
-    { title: 'BURGER KINGDOM', sub: 'Have it your way-ish', bg: '#f77f00', fg: '#3d0c02' },
-    { title: 'STARBUZZ', sub: 'Venti everything', bg: '#1b4332', fg: '#d8f3dc' },
-    { title: 'COCA LOCA', sub: 'Open crazyness', bg: '#c1121f', fg: '#ffffff' },
+    { title: 'BURGER BARN', sub: 'Double stack, no regrets', bg: '#f77f00', fg: '#3d0c02' },
+    { title: 'BEAN THERE', sub: 'Coffee, but bigger', bg: '#1b4332', fg: '#d8f3dc' },
+    { title: 'FIZZY POP', sub: 'Bubbles for breakfast', bg: '#3a86ff', fg: '#ffffff' },
   ],
   FR: [
     { title: 'CROISSANT & CO', sub: 'Beurre. Toujours.', bg: '#fefae0', fg: '#bc6c25' },
-    { title: 'LOUVRE VIP', sub: 'Skip the line', bg: '#14213d', fg: '#fca311' },
-    { title: 'VELO PARIS', sub: 'Pedal the boulevards', bg: '#e63946', fg: '#f1faee' },
+    { title: 'MUSEE NIGHT PASS', sub: 'Art after dark', bg: '#14213d', fg: '#fca311' },
+    { title: 'VELO VELO', sub: 'Pedal the boulevards', bg: '#e63946', fg: '#f1faee' },
   ],
 };
 
@@ -234,3 +235,28 @@ export const ADS = {
   freeCoins: 300,        // 차고 무료 코인 보상
   freeCoinsCooldownSec: 180, // 3분 쿨타임 (어뷰징 방지 / eCPM 유지)
 };
+
+// ======================================================================
+// 코인 결제 (인앱결제)
+// ======================================================================
+// provider: 'mock'   → 테스트용 가짜 결제 (실제 돈 안 나감, 코인은 이 기기 계정에만 바로 추가)
+//           'native' → 앱(Capacitor) + RevenueCat 플러그인으로 구글/애플 결제. 코인은 서버 웹훅이 지급
+//           'off'    → 상점 숨김
+// 상품 ID 는 플레이 콘솔/앱스토어 커넥트/RevenueCat 에 같은 이름으로 만들고,
+// supabase/functions/revenuecat-webhook/index.ts 의 PRODUCT_COINS 와 코인 수를 맞춰야 합니다.
+export const PAYMENTS = {
+  provider: 'mock',
+  revenuecatApiKeyAndroid: '', // RevenueCat 공개 SDK 키 (goog_...)
+  revenuecatApiKeyIos: '',     // RevenueCat 공개 SDK 키 (appl_...)
+};
+// testPrice: mock 모드에서만 보이는 예시 가격 (실제 가격은 스토어가 나라별 현지 통화로 표시)
+// bonus: 기본 팩(2,000 / $0.99) 대비 같은 가격당 추가 코인 비율. 표시는 정확해야 함(소비자보호법)
+export const COIN_PACKS = [
+  { id: 'grub_coins_s',  coins: 2000,  bonus: 0,  testPrice: '$0.99',  tag: '' },
+  { id: 'grub_coins_m',  coins: 6600,  bonus: 10, testPrice: '$2.99',  tag: 'POPULAR' },
+  { id: 'grub_coins_l',  coins: 15000, bonus: 25, testPrice: '$5.99',  tag: '' },
+  { id: 'grub_coins_xl', coins: 45000, bonus: 50, testPrice: '$14.99', tag: 'BEST VALUE' },
+];
+
+// 앱 정보 (설정 화면 하단)
+export const APP_INFO = { name: 'Grub Rider', version: '1.0.0', contactEmail: '' };

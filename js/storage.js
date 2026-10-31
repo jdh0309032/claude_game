@@ -184,6 +184,38 @@ export function resetToGuest() {
   save.nationalCode = '';
 }
 
+// 서버(결제 웹훅)가 지급해 둔 코인 받기. 받은 코인 수 반환
+export async function claimPendingCoins() {
+  if (!serverReady || !session) return 0;
+  try {
+    await ensureFreshToken();
+    const n = Number(await sb('/rest/v1/rpc/claim_pending_coins', { method: 'POST', auth: true, body: {} })) || 0;
+    if (n > 0) {
+      save.coins += n;
+      persist();
+      await flushSave();
+    }
+    return n;
+  } catch (e) {
+    if (!isMissingSchema(e)) console.warn('[pay] claim failed', e);
+    return 0;
+  }
+}
+
+// 계정 삭제 (스토어 필수): 서버의 계정·기록·데이터 삭제 후 게스트로
+export async function deleteAccount() {
+  if (!session) return { ok: false, error: 'Sign in required' };
+  try {
+    await ensureFreshToken();
+    await sb('/rest/v1/rpc/delete_my_account', { method: 'POST', auth: true, body: {} });
+    setSession(null);
+    resetToGuest();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: isMissingSchema(e) ? 'Server needs the 007 database migration' : friendly(e) };
+  }
+}
+
 export function resetSave() {
   applyData({});
   persist();

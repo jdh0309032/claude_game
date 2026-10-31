@@ -1,4 +1,4 @@
--- Grab Rider 글로벌 랭킹 스키마 (Supabase SQL Editor 에서 실행)
+-- Grub Rider 글로벌 랭킹 스키마 (Supabase SQL Editor 에서 실행)
 -- 1) Authentication > Providers > Email 에서 "Confirm email" 을 끄세요 (아이디 가입용 가상 이메일 사용)
 -- 2) 이 스크립트를 실행한 뒤 js/config.js 에 SUPABASE_URL / SUPABASE_ANON_KEY 를 입력하세요
 

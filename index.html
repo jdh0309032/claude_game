@@ -7,7 +7,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Grab Rider - 3D Delivery Runner</title>
+  <title>Grub Rider - 3D Delivery Runner</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -89,9 +89,9 @@
     <section id="menu" class="screen app menu-v3">
       <header class="mhead">
         <div class="mhead-top">
-          <span class="brand">Grab<b>Rider</b></span>
+          <span class="brand">Grub<b>Rider</b></span>
           <div class="app-top-right">
-            <span class="stat-pill coin light"><i data-icon="coin"></i><b id="menuCoins">0</b></span>
+            <button id="menuCoinBtn" class="stat-pill coin light coin-btn" aria-label="Coin shop"><i data-icon="coin"></i><b id="menuCoins">0</b><em class="plus">+</em></button>
             <button id="btnAccount" class="account-chip" data-icon="user"><span id="accountLabel">SIGN IN</span></button>
           </div>
         </div>
@@ -175,7 +175,7 @@
     <!-- Garage / Shop -->
     <section id="garage" class="screen hidden">
       <div class="panel">
-        <div class="panel-head"><h2>GARAGE</h2><span class="stat-pill coin"><i data-icon="coin"></i><span id="garageCoins">0</span></span></div>
+        <div class="panel-head"><h2>GARAGE</h2><button id="garageCoinBtn" class="stat-pill coin coin-btn" aria-label="Coin shop"><i data-icon="coin"></i><span id="garageCoins">0</span><em class="plus">+</em></button></div>
         <div id="garageStage" class="stage"><small class="stage-hint">DRAG TO ROTATE</small></div>
         <div id="garageAction" class="garage-action"></div>
         <div class="tabs" id="garageTabs">
@@ -189,6 +189,7 @@
           <button id="btnGacha" class="btn gold" data-icon="box"><span>MYSTERY BOX · 1,000</span></button>
           <button id="btnAdCoins" class="btn ad-btn" data-icon="play"><span id="adCoinsLabel">WATCH AD FOR 300 COINS</span></button>
         </div>
+        <p id="gachaOdds" class="muted gacha-odds"></p>
         <button class="btn back" data-back data-icon="back"><span>BACK</span></button>
       </div>
     </section>
@@ -247,7 +248,10 @@
           <li><b>DROP ZONE</b> — ride straight through the glowing green zone at the road edge for +30 coins.</li>
           <li><b>NATIONAL TEAM BIKE</b> — be #1 in your country to ride it. Lose #1 and it is taken back.</li>
         </ul>
+        <h3>ABOUT</h3>
+        <div class="legal-links"><a href="privacy.html" target="_blank" rel="noopener">PRIVACY POLICY</a><a href="terms.html" target="_blank" rel="noopener">TERMS OF SERVICE</a><span id="appVersion" class="muted"></span></div>
         <button id="btnReset" class="btn danger">RESET PROGRESS</button>
+        <button id="btnDeleteAccount" class="btn danger hidden">DELETE ACCOUNT</button>
         <button class="btn back" data-back data-icon="back"><span>BACK</span></button>
       </div>
     </section>
@@ -256,7 +260,7 @@
     <section id="pause" class="screen hidden">
       <div class="receipt">
         <div class="rc-head">
-          <span class="brand dark">Grab<b>Rider</b></span>
+          <span class="brand dark">Grub<b>Rider</b></span>
           <small>DELIVERY RECEIPT &middot; PAUSED</small>
         </div>
         <div class="rc-line"><span>ORDER NO.</span><b id="rcOrder">#GR-00000</b></div>
@@ -309,6 +313,17 @@
       </div>
     </section>
 
+    <!-- Coin shop -->
+    <section id="coinshop" class="screen hidden">
+      <div class="panel">
+        <div class="panel-head"><h2>COIN SHOP</h2><span class="stat-pill coin"><i data-icon="coin"></i><span id="shopCoins">0</span></span></div>
+        <p id="shopNote" class="muted shop-note"></p>
+        <div id="packGrid" class="pack-grid"></div>
+        <p class="muted shop-legal">Coins are a virtual in-game currency with no cash value and cannot be refunded or transferred, except as required by law or store policy. See <a href="terms.html" target="_blank" rel="noopener">Terms</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+        <button id="btnShopBack" class="btn back" data-icon="back"><span>BACK</span></button>
+      </div>
+    </section>
+
     <!-- Mystery box result -->
     <section id="gacha" class="screen hidden">
       <div class="panel center">
@@ -321,7 +336,7 @@
       </div>
     </section>
 
-    <div id="loading" class="screen"><span class="brand big">Grab<b>Rider</b></span></div>
+    <div id="loading" class="screen"><span class="brand big">Grub<b>Rider</b></span></div>
   </div>
 
   <script type="module" src="js/main.js"></script>
