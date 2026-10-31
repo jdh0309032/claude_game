@@ -25,24 +25,42 @@ python3 -m http.server 8000
 
 ## 조작법
 
-| 동작 | 키보드 | 터치 |
-| --- | --- | --- |
-| 좌/우 조향 | ← → 또는 A D | **터치 & 슬라이드**(기본): 조향 쪽 화면 아무 데나 누르면 그 지점이 기준점, 좌우로 민 만큼 조향 (패드 없음, 80px 에서 최대·가운데는 부드럽게). 설정의 *TOUCH STEERING* 에서 ◀ ▶ 버튼으로 변경 |
-| 한 손 조작 | - | **ONE-HAND SLIDE**(기본 ON): 같은 손가락으로 위로 밀면 스로틀, 아래로 밀면 브레이크 (플레이 화면에는 조작 설명 문구 없음, 링 색으로만 표시) |
-| 가속 | ↑ 또는 W | 오른손: 핸들 그립 모양 **THROTTLE** (누르면 그립이 감기고 속도계에 붉은 RPM 아크) |
-| 브레이크 | ↓ 또는 S | 오른손: 디스크/메탈 레버 **BRAKE** (붉은 하이라이트 + 화면 외곽·후미등 글로우) |
-| 일시정지 | P / Esc | 우측 상단 ❚❚ |
-| 시작 / 재시작 | Enter | 버튼 |
+설정의 **CONTROLS** 로 3가지 중 선택합니다.
 
-- 버튼마다 포인터 ID를 따로 추적하므로 조향·가속·브레이크를 동시에 누를 수 있습니다.
-- 설정의 **FLIP CONTROL LAYOUT**: 조향 영역(기본 왼쪽)과 스로틀·브레이크(기본 오른쪽)의 위치를 좌우로 바꿉니다.
-- 니트로(부스트)는 없습니다. 조작은 조향 + 스로틀 + 브레이크뿐입니다.
-- 설정의 **가속 방식**: *자동 가속*(기본, THROTTLE은 최고속 가속) / *수동*(THROTTLE을 누르고 있어야 가속).
+| 방식 | 조향 | 가속 / 브레이크 |
+| --- | --- | --- |
+| **ONE-HAND**(기본) | 화면 아무 데나 누른 지점에서 좌우로 슬라이드 (80px 에서 최대) | 없음 — 자동 가속 (스로틀·브레이크 버튼 숨김) |
+| **SLIDE + PEDALS** | 조향 쪽 화면에서 좌우 슬라이드 | 반대쪽 THROTTLE(최고속 가속) / BRAKE |
+| **ARROWS + PEDALS** | ◀ ▶ 버튼 | 반대쪽 THROTTLE / BRAKE |
+
+- 키보드: ← → / A D 조향, ↑ / W 가속, ↓ / S 브레이크, P / Esc 일시정지, Enter 시작·재시작.
+- 공중 묘기: 슬라이드 중이면 손가락을 위·아래(플립)·옆(스핀)·대각선(메가 플립)으로 밀기. 페달 방식은 페달도 함께 사용.
+- **FLIP CONTROL LAYOUT**(페달 방식에서만): 조향 쪽과 페달 쪽 좌우를 바꿉니다.
+- 플레이 화면 HUD 는 배경 상자 없이 글자·아이콘만 표시하고, 켜진 아이템·부스터는 속도계 아래에 **이름 + 남은 초 + 줄어드는 막대**로 보입니다.
+
+## 소모성 부스트
+
+- 메뉴 **BOOSTS** 줄: 보유 중이면 탭해서 다음 판에 장착(체크), 없으면 두 번 탭해서 코인으로 구매 후 바로 장착.
+- 판 시작 시 장착한 부스트를 1개씩 소모. 남은 개수가 있으면 다음 판에도 장착 유지.
+
+| 부스트 | 효과 | 가격 |
+| --- | --- | --- |
+| SHIELD | 충돌 1회 막는 보호막으로 출발 | 300 |
+| MAGNET 30s | 처음 30초 코인 자석 | 250 |
+| x2 SCORE 30s | 처음 30초 점수 2배 | 400 |
+| GIANT START | 거대 모드로 출발 | 500 |
+| SECOND CHANCE | 크래시 후 1회 무료 부활 (이어달리기 기회와 별개) | 800 |
+
+- 코인 상점 하단 **BOOST BUNDLES**: 5개 묶음을 4개 가격에. 설정은 `js/config.js` 의 `BOOSTS`, `BOOST_BUNDLE`.
+
+## 국가 순서
+
+매 판 시작 국가와 국가 순서가 무작위로 섞입니다(판 시드 기반이라 챌린지 링크로 들어오면 같은 순서). 메뉴에서 보던 나라에서 그대로 출발합니다.
 
 ## UI · 사운드
 
 - 게임 UI는 글로벌 영문(`NEAR MISS!`, `WRONG WAY x2`, `DELIVERY RECEIPT`, `CRASHED!` / `DELIVERED!` 등)과 미니멀 라인 아이콘(`js/icons.js`)을 사용합니다.
-  결과 화면은 신기록 또는 멀티 승리 시 `DELIVERED!`, 그 외 `CRASHED!` 입니다.
+  결과 화면은 신기록 시 `DELIVERED!`, 그 외 `CRASHED!` 입니다.
 - 엔진음은 이전 대비 약 37% 볼륨, 128 BPM 합성 BGM(킥·클랩·하이햇·베이스·아르페지오)이 깔리며 속도가 오를수록 비트가 촘촘해집니다.
 - 설정: SOUND FX / MUSIC / VIBRATION / GRAPHICS / **SCREEN WET EFFECT** / THROTTLE / TOUCH STEERING / **FLIP CONTROL LAYOUT** / MY COUNTRY.
 
@@ -160,17 +178,6 @@ python3 -m http.server 8000
   (`ADMIN_DEBUG_TOGGLE`, 이 토글 상태에서도 기록 전송 안 함).
 - 코인·아이템은 클라이언트에서 계산해 저장하므로 조작을 완전히 막을 수는 없습니다(서버 함수에서 형식·범위만 검증).
 
-## 1v1 멀티플레이 (PeerJS)
-
-- 메뉴 → **1v1 멀티플레이** → 방 만들기(5자리 Room Code) / 코드 입력 후 참가 → 방장이 *대결 시작*.
-- 방장이 보낸 **난수 시드**로 두 기기가 같은 교통·라바콘·노점상·물웅덩이·스콜을 생성합니다.
-- 방장의 도로 시드는 참가자가 접속하는 즉시 전달되고, 대결 시작 시 다시 확정됩니다(mulberry32 PRNG, 스폰 종류별 스트림).
-- 위치·속도·점수는 **최대 15 FPS(≈66ms)** 로 제한해 보내고, DataChannel 버퍼가 64KB 넘게 쌓이면 상태 패킷을 건너뜁니다.
-  받는 쪽은 스냅샷 버퍼를 100ms 늦게 재생하며 사이를 보간(lerp)해 **60 FPS로 부드럽게** 그립니다. 상대는 **반투명 고스트**, 둘 다 끝나면 점수로 승패. 재대결 지원.
-- ICE 서버: Google STUN 3개 + PeerJS 기본 TURN 릴레이(`js/config.js` 의 `PEER_ICE_SERVERS`). 로그 레벨은 `PEER_DEBUG`(기본 2).
-  브라우저 콘솔의 `[net]` 로그로 피어 오픈, ICE 상태, 연결 종료, 오류를 확인할 수 있습니다.
-- 중개는 PeerJS 공개 브로커(0.peerjs.com)를 씁니다. 자체 서버는 `js/config.js` 의 `PEER_SERVER` 로 지정하세요.
-
 ## 외부 3D 모델
 
 `assets/models/` 에 .glb/.gltf 를 넣고 `js/config.js` 의 `MODEL_CONFIG` 에 경로를 지정하면 기본 로우폴리 모델 대신 사용됩니다.
@@ -179,17 +186,16 @@ python3 -m http.server 8000
 ## 파일 구조
 
 ```
-index.html            화면/HUD/모달 마크업 (로그인, 랭킹, 멀티, 차고, 출석, 가챠, 주문서 일시정지)
+index.html            화면/HUD/모달 마크업 (로그인, 랭킹, 차고, 코인 상점, 출석, 가챠, 주문서 일시정지)
 css/style.css         앱 스타일 UI + 터치 조작계 레이아웃
-js/config.js          Supabase / PeerJS / 3D 모델 / 상점 카탈로그·가격 / 광고판 포스터 / 광고 설정
-js/main.js            게임 루프, 입력, 교통·기믹, 국가 구간, 시드 동기화, 멀티플레이, UI 흐름
+js/config.js          Supabase / 3D 모델 / 상점 카탈로그·가격 / 부스트 / 결제 / 광고판 포스터 / 광고 설정
+js/main.js            게임 루프, 입력, 교통·기믹, 국가 구간(판마다 순서 섞기), 부스트, UI 흐름
 js/themes.js          8개국 테마, 국기 그리기, 국가 목록·이름, 시간대 추정
 js/models.js          ModelManager(GLTF 로더) + 로우폴리 모델·건물·랜드마크·광고판·텍스처
 js/preview.js         3D 쇼룸 / Flex View / 전광판 라이더 스냅샷
 js/ads.js             보상형 광고 (mock / Google H5 Games Ads)
 js/payments.js        코인 결제 (mock / Capacitor + RevenueCat)
 js/storage.js         서버 저장(player_data), 미션, 계정 인증, 국가 랭킹 API, IP 국가 판별·고정
-js/net.js             1v1 연결 (PeerJS)
 js/audio.js           WebAudio 합성 효과음 + 128 BPM BGM 시퀀서
 js/rainfx.js          화면 빗물 오버레이 (Canvas 2D 굴절)
 js/icons.js           미니멀 라인 아이콘 (SVG)
@@ -199,7 +205,7 @@ supabase/functions/   revenuecat-webhook (결제 → 코인 지급 Edge Function
 privacy.html terms.html  개인정보처리방침 / 이용약관
 assets/flags/         실제 국기 SVG (country-flag-icons, MIT)
 assets/models/        외부 3D 모델 폴더
-vendor/               Three.js r160 + GLTFLoader (MIT), PeerJS 1.5.4 (MIT)
+vendor/               Three.js r160 + GLTFLoader (MIT)
 ```
 
 ## 참고

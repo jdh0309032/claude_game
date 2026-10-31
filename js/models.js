@@ -434,6 +434,17 @@ function envTexture() {
 }
 
 // 페인트 마감: solid(무광 단색) / metallic(금속 반사 + 하이라이트) / neon(완전 발광 + 후광)
+// 정점 색 + 광택 / 금속 반사 (헬멧·배달통 공용, 한 번만 생성)
+let _glossMat = null, _metalMat = null;
+function glossMat() {
+  if (!_glossMat) _glossMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.1, envMap: envTexture(), envMapIntensity: 0.9 });
+  return _glossMat;
+}
+function metalMat() {
+  if (!_metalMat) _metalMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.22, metalness: 0.85, envMap: envTexture(), envMapIntensity: 1.8 });
+  return _metalMat;
+}
+
 export function paintMaterial(hex, finish) {
   if (finish === 'metallic') {
     return new THREE.MeshStandardMaterial({ color: hex, metalness: 0.85, roughness: 0.18, envMap: envTexture(), envMapIntensity: 2.0 });
@@ -591,23 +602,62 @@ function rider(det, glow, out) {
   }
 }
 
-// 헤드기어 (머리 중심 0, 1.58, -0.2 / 앞쪽 -z). paintOpt: { hex, finish } 로 껍데기 색 변경
-function headgear(det, glow, hel, paintOpt, shellOut = det) {
+// 헤드기어 (머리 중심 0, 1.6, -0.19 / 앞쪽 -z). paintOpt: { hex, finish } 로 껍데기 색 변경
+// mats.gloss: 광택 재질(쉘·바이저) / mats.metal: 금속 반사(골드·크롬). 모든 장식은 쉘 표면에 반쯤 묻혀 떠 보이지 않게 배치
+function headgear(det, glow, hel, paintOpt, shellOut = det, mats = {}) {
   const shell = paintOpt ? paintOpt.hex : hel.shell;
-  // 메탈릭·네온 페인트는 쉘을 따로 모아 전용 재질(금속 반사 / 발광 + 후광)로 그림
-  const shellList = paintOpt && paintOpt.finish !== 'solid' ? shellOut : det;
-  const sph = (r, x, y, z, c, list = det, sx = 1, sy = 1, sz = 1) => {
-    const g = new THREE.SphereGeometry(r, 12, 10);
+  const gloss = mats.gloss || det;
+  const metal = mats.metal || gloss;
+  // 메탈릭·네온 페인트는 쉘을 따로 모아 전용 재질로, 아니면 기본 광택(골드·크롬은 금속)
+  const shellList = paintOpt ? (paintOpt.finish !== 'solid' ? shellOut : gloss) : hel.shine ? metal : gloss;
+  const sph = (r, x, y, z, c, list = det, sx = 1, sy = 1, sz = 1, seg = 12) => {
+    const g = new THREE.SphereGeometry(r, seg, Math.max(8, seg - 2));
     g.scale(sx, sy, sz);
     g.translate(x, y, z);
     list.push(paint(g, c));
   };
   const face = 0xf1c8a0;
+  const HC = V(0, 1.6, -0.19);
+  const R = 0.19;
+  const SC = [0.96, 1.0, 1.1];
+  const FRONT = Math.PI * 1.5; // 구의 phi 기준 정면(-z)
+  const BACK = Math.PI * 0.5;
+  // 쉘 조각 (구의 phi/theta 범위)
+  const part = (r, phiS, phiL, thS, thL, c, list, seg = 22) => {
+    const g = new THREE.SphereGeometry(r, seg, 16, phiS, phiL, thS, thL);
+    g.scale(SC[0], SC[1], SC[2]);
+    g.translate(HC.x, HC.y, HC.z);
+    list.push(paint(g, c));
+    return g;
+  };
+  // 쉘 표면 위의 점 (phi, theta)
+  const onShell = (r, phi, th) => V(
+    HC.x - r * Math.cos(phi) * Math.sin(th) * SC[0],
+    HC.y + r * Math.cos(th) * SC[1],
+    HC.z + r * Math.sin(phi) * Math.sin(th) * SC[2],
+  );
+  // 앞→뒤로 정수리를 지나는 띠 (두 장의 얇은 구면 조각)
+  const lune = (w, c, list, thFront = Math.PI * 0.36, thBack = Math.PI * 0.82, off = 0) => {
+    part(R * 1.012, FRONT + off - w / 2, w, 0, thFront, c, list, 6);
+    part(R * 1.012, BACK - off - w / 2, w, 0, thBack, c, list, 6);
+  };
+  const eyes = (z = -0.33, y = 1.57) => {
+    for (const sx of [-1, 1]) {
+      sph(0.02, sx * 0.05, y, z, 0x1b1b1b, det, 1, 1.2, 0.8);
+      sph(0.007, sx * 0.045, y + 0.008, z - 0.016, 0xffffff, glow);
+    }
+  };
+  const faceBall = () => {
+    sph(0.14, 0, 1.55, -0.2, face, det, 0.95, 1.05, 1, 16);
+    eyes();
+    det.push(box(0.04, 0.008, 0.01, 0, 1.495, -0.333, 0xb5655a)); // 입
+  };
+
   switch (hel.kind) {
-    case 'cap': { // 스냅백: 얼굴 + 머리카락 + 둥근 크라운 + 평평한 챙 + 단추
-      sph(0.15, 0, 1.56, -0.2, face, det, 0.95, 1.05, 1);
-      for (const sx of [-1, 1]) sph(0.018, sx * 0.05, 1.57, -0.34, 0x1b1b1b);
-      const crown = new THREE.SphereGeometry(0.165, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    case 'cap': { // 스냅백: 얼굴 + 둥근 크라운 + 평평한 챙 + 단추
+      sph(0.15, 0, 1.56, -0.2, face, det, 0.95, 1.05, 1, 16);
+      eyes(-0.34);
+      const crown = new THREE.SphereGeometry(0.165, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2);
       crown.scale(1, 0.85, 1.08);
       crown.translate(0, 1.62, -0.19);
       shellList.push(paint(crown, shell));
@@ -615,154 +665,184 @@ function headgear(det, glow, hel, paintOpt, shellOut = det) {
       brim.scale(1.05, 1, 1.15);
       brim.translate(0, 1.625, -0.3);
       det.push(paint(brim, hel.brim));
-      sph(0.022, 0, 1.76, -0.19, hel.brim);
+      sph(0.022, 0, 1.755, -0.19, hel.brim);
+      // 정면 로고 패치
+      det.push(box(0.07, 0.045, 0.02, 0, 1.69, -0.355, hel.brim, -0.45));
       return;
     }
     case 'straw': { // 밀짚모자: 얼굴(눈) + 넓은 챙 + 크라운 + 붉은 띠
-      sph(0.15, 0, 1.56, -0.2, face, det, 0.95, 1.05, 1);
-      for (const sx of [-1, 1]) sph(0.018, sx * 0.05, 1.57, -0.34, 0x1b1b1b);
-      const brim = new THREE.CylinderGeometry(0.36, 0.36, 0.02, 20);
+      sph(0.15, 0, 1.56, -0.2, face, det, 0.95, 1.05, 1, 16);
+      eyes(-0.34);
+      const brim = new THREE.CylinderGeometry(0.36, 0.36, 0.02, 24);
       brim.translate(0, 1.66, -0.2);
       shellList.push(paint(brim, shell));
-      const top = new THREE.CylinderGeometry(0.13, 0.16, 0.14, 16);
+      const top = new THREE.CylinderGeometry(0.13, 0.16, 0.14, 18);
       top.translate(0, 1.74, -0.2);
       shellList.push(paint(top, shell));
-      const band = new THREE.CylinderGeometry(0.162, 0.162, 0.035, 16);
+      const band = new THREE.CylinderGeometry(0.162, 0.162, 0.035, 18);
       band.translate(0, 1.69, -0.2);
       det.push(paint(band, hel.band));
       return;
     }
-    case 'dino': { // 공룡 머리: 큰 머리 + 주둥이 + 눈 + 등 가시
-      sph(0.21, 0, 1.6, -0.18, shell, shellList, 1, 1, 1.15);
-      sph(0.13, 0, 1.55, -0.42, shell, shellList, 1.1, 0.8, 1.1);
+    case 'dino': { // 공룡 후드: 머리를 덮는 공룡 머리 + 앞으로 튀어나온 주둥이(이빨) + 큰 눈 + 등 가시. 얼굴은 입 아래로 보임
+      faceBall();
+      const r = R * 1.06;
+      part(r, 0, Math.PI * 2, 0, Math.PI * 0.42, shell, shellList);                       // 정수리
+      part(r, FRONT + 0.8, Math.PI * 2 - 1.6, Math.PI * 0.42, Math.PI * 0.36, shell, shellList); // 옆·뒤 (얼굴 쪽은 열림)
+      { // 후드 안감 (안쪽에서 보이도록 뒤집은 면)
+        const g = new THREE.SphereGeometry(r * 0.97, 22, 10, FRONT + 0.8, Math.PI * 2 - 1.6, Math.PI * 0.42, Math.PI * 0.36);
+        g.scale(-SC[0], SC[1], SC[2]);
+        g.translate(HC.x, HC.y, HC.z);
+        det.push(paint(g, 0x2d6a4f));
+      }
+      // 위턱 주둥이 + 콧구멍
+      sph(0.13, 0, 1.675, -0.39, shell, shellList, 1.0, 0.55, 1.05, 18);
+      for (const sx of [-1, 1]) sph(0.016, sx * 0.045, 1.71, -0.515, 0x1b4332);
+      // 이빨: 주둥이 아래 가장자리를 따라
+      for (let i = -3; i <= 3; i++) {
+        const x = i * 0.034;
+        const z = -0.39 - 0.125 * Math.sqrt(Math.max(0, 1 - (x / 0.13) ** 2));
+        const t = new THREE.ConeGeometry(0.014, 0.045, 4);
+        t.rotateX(Math.PI);
+        t.translate(x, 1.6, z + 0.01);
+        det.push(paint(t, 0xffffff));
+      }
+      // 큰 눈 + 눈두덩
       for (const sx of [-1, 1]) {
-        sph(0.045, sx * 0.1, 1.72, -0.33, 0xffffff);
-        sph(0.022, sx * 0.1, 1.72, -0.37, 0x111111);
-        det.push(box(0.03, 0.02, 0.05, sx * 0.06, 1.5, -0.53, 0xffffff));
+        sph(0.05, sx * 0.1, 1.78, -0.36, 0xffffff, det, 1, 1, 0.9, 14);
+        sph(0.026, sx * 0.105, 1.78, -0.402, 0x111111);
+        sph(0.009, sx * 0.095, 1.792, -0.425, 0xffffff, glow);
+        sph(0.054, sx * 0.1, 1.8, -0.35, shell, shellList, 1.05, 0.5, 1);
       }
-      for (let i = 0; i < 4; i++) {
-        const sp = new THREE.ConeGeometry(0.045, 0.1, 4);
-        sp.translate(0, 1.82 - i * 0.03, -0.15 + i * 0.09);
-        det.push(paint(sp, 0xffd166));
-      }
+      // 등 가시: 정수리 앞에서 뒤통수까지 표면 법선 방향으로
+      const spikes = [[-0.12, 0.075], [0.12, 0.085], [0.38, 0.08], [0.64, 0.07], [0.9, 0.06], [1.15, 0.05]];
+      spikes.forEach(([a, s], i) => {
+        const p = V(0, HC.y + r * Math.cos(a) * SC[1], HC.z + r * Math.sin(a) * SC[2]);
+        const c = new THREE.ConeGeometry(s * 0.6, s * 1.5, 4);
+        c.scale(0.45, 1, 1.15);
+        c.translate(0, s * 0.55, 0);
+        c.rotateX(a);
+        c.translate(p.x, p.y, p.z);
+        det.push(paint(c, i % 2 ? 0xffd166 : 0xff9f1c));
+      });
       return;
     }
-    case 'chibi': // 대두 가면: 커다란 얼굴 + 큰 눈 + 볼터치 + 앞머리
-      sph(0.3, 0, 1.68, -0.18, shell, shellList);
+    case 'chibi': // 대두 가면: 커다란 얼굴 + 큰 눈 + 볼터치 + 앞머리 + 머리 위 삐침
+      sph(0.3, 0, 1.68, -0.18, shell, shellList, 1, 1, 1, 18);
       for (const sx of [-1, 1]) {
         sph(0.06, sx * 0.11, 1.7, -0.45, 0x2b2d42, det, 1, 1.25, 0.6);
-        sph(0.02, sx * 0.09, 1.74, -0.49, 0xffffff);
+        sph(0.02, sx * 0.09, 1.74, -0.49, 0xffffff, glow);
+        sph(0.01, sx * 0.125, 1.67, -0.485, 0xffffff, glow);
         sph(0.04, sx * 0.19, 1.6, -0.43, 0xff8fab, det, 1, 0.6, 0.5);
       }
-      { const hair = new THREE.SphereGeometry(0.31, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2.4); hair.translate(0, 1.71, -0.17); det.push(paint(hair, 0x3d2b1f)); }
+      { const hair = new THREE.SphereGeometry(0.31, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2.4); hair.translate(0, 1.71, -0.17); det.push(paint(hair, 0x3d2b1f)); }
+      { const tuft = new THREE.ConeGeometry(0.035, 0.14, 5); tuft.rotateZ(-0.5); tuft.translate(0.04, 2.04, -0.17); det.push(paint(tuft, 0x3d2b1f)); }
       det.push(box(0.08, 0.02, 0.02, 0, 1.58, -0.47, 0xd62828));
       return;
-    case 'cyber': { // 사이버 네온 헬멧: 매끈한 검은 쉘 + 발광 곡면 바이저 + 네온 라인
-      const g = new THREE.SphereGeometry(0.19, 20, 14);
-      g.scale(0.97, 1.02, 1.15);
-      g.translate(0, 1.6, -0.19);
-      shellList.push(paint(g, shell));
-      const v = new THREE.SphereGeometry(0.197, 20, 6, Math.PI * 1.5 - 1.0, 2.0, Math.PI * 0.42, Math.PI * 0.12);
-      v.scale(0.98, 1.02, 1.16);
-      v.translate(0, 1.6, -0.19);
-      glow.push(paint(v, hel.visor));
-      const ring = new THREE.TorusGeometry(0.197, 0.01, 3, 28, Math.PI);
-      ring.rotateY(Math.PI / 2);
-      ring.scale(0.98, 1.03, 1.16);
-      ring.translate(0, 1.6, -0.19);
-      glow.push(paint(ring, hel.neon));
-      for (const sx of [-1, 1]) {
-        const fin = new THREE.BoxGeometry(0.015, 0.05, 0.16);
-        fin.translate(sx * 0.12, 1.74, -0.12);
-        glow.push(paint(fin, hel.neon));
-      }
+    case 'cyber': { // 사이버 네온: 매끈한 검은 쉘 + 발광 바이저 + 플러시 네온 라인 + 측면 핀
+      part(R, 0, Math.PI * 2, 0, Math.PI * 0.8, shell, shellList);
+      sph(0.1, 0, 1.47, -0.31, shell, shellList, 1.3, 0.75, 0.9, 16);
+      part(R * 1.03, FRONT - 0.95, 1.9, Math.PI * 0.38, Math.PI * 0.14, hel.visor, glow);
+      lune(0.05, hel.neon, glow);
+      lune(0.018, hel.visor, glow, Math.PI * 0.36, Math.PI * 0.75, 0.32);
+      lune(0.018, hel.visor, glow, Math.PI * 0.36, Math.PI * 0.75, -0.32);
       return;
     }
     default:
       break;
   }
-  // ---- 헬멧: 쉘(앞뒤로 살짝 긴 구) + 곡면 바이저 + 턱 가드 + 통풍구 + 장식
-  const HC = V(0, 1.6, -0.19);
-  const part = (r, phiS, phiL, thS, thL, c, list, sx = 0.97, sy = 1.02, sz = 1.12) => {
-    const g = new THREE.SphereGeometry(r, 20, 14, phiS, phiL, thS, thL);
-    g.scale(sx, sy, sz);
-    g.translate(HC.x, HC.y, HC.z);
-    list.push(paint(g, c));
-  };
-  const FRONT = Math.PI * 1.5; // 구의 phi 기준 정면(-z)
-  const open = !hel.full; // 오픈페이스(하프) 헬멧은 얼굴이 보임
-  if (open) {
-    // 얼굴 + 눈
-    ball(V(0, 1.55, -0.2), 0.14, SKIN, det, 0.95, 1.05, 1);
-    for (const sx of [-1, 1]) ball(V(sx * 0.05, 1.57, -0.33), 0.018, 0x1b1b1b, det);
-    // 하프 쉘: 위쪽 절반 + 귀 덮개
-    part(0.19, 0, Math.PI * 2, 0, Math.PI * 0.55, shell, shellList);
-    for (const sx of [-1, 1]) ball(V(sx * 0.165, 1.55, -0.18), 0.06, shell, shellList, 0.5, 1.1, 1);
-    // 이마 챙
-    { const g = new THREE.SphereGeometry(0.2, 16, 4, FRONT - 0.7, 1.4, Math.PI * 0.47, 0.12); g.scale(1, 1, 1.25); g.translate(HC.x, HC.y + 0.01, HC.z); det.push(paint(g, hel.visor)); }
-  } else {
-    // 풀페이스: 쉘 + 곡면 바이저 + 턱 가드
-    part(0.19, 0, Math.PI * 2, 0, Math.PI, shell, shellList);
-    part(0.196, FRONT - 0.95, 1.9, Math.PI * 0.4, Math.PI * 0.17, hel.visor, det, 0.98, 1.02, 1.13);
-    ball(V(0, 1.47, -0.3), 0.1, shell, shellList, 1.25, 0.75, 0.85);
-    // 통풍구
-    for (const sx of [-0.05, 0.05]) det.push(box(0.025, 0.02, 0.08, sx, 1.79, -0.27, 0x222222));
-    det.push(box(0.12, 0.025, 0.02, 0, 1.45, -0.395, 0x222222));
-  }
-  if (hel.goggles) {
-    // 레트로 고글 (이마 위)
-    for (const sx of [-1, 1]) {
-      const g = new THREE.CylinderGeometry(0.042, 0.042, 0.035, 14);
-      g.rotateX(Math.PI / 2);
-      g.translate(sx * 0.055, 1.68, -0.37);
-      det.push(paint(g, 0x8a6a3a));
-      const l = new THREE.CylinderGeometry(0.032, 0.032, 0.02, 14);
-      l.rotateX(Math.PI / 2);
-      l.translate(sx * 0.055, 1.68, -0.39);
-      glow.push(paint(l, 0x9bd8ff));
+
+  // ---- 헬멧
+  if (!hel.full) {
+    // 오픈페이스(하프): 얼굴이 보이는 반구 쉘 + 귀 덮개 + 테두리 + 짧은 챙
+    faceBall();
+    part(R, 0, Math.PI * 2, 0, Math.PI * 0.52, shell, shellList);
+    for (const sx of [-1, 1]) sph(0.065, sx * 0.165, 1.55, -0.17, shell, shellList, 0.45, 1.1, 1, 14);
+    { // 테두리 고무 트림
+      const t = new THREE.TorusGeometry(R * Math.sin(Math.PI * 0.52), 0.011, 6, 32);
+      t.rotateX(Math.PI / 2);
+      t.scale(SC[0], 1, SC[2]);
+      t.translate(HC.x, HC.y + R * Math.cos(Math.PI * 0.52), HC.z);
+      det.push(paint(t, 0x202326));
     }
-    const strap = new THREE.TorusGeometry(0.2, 0.012, 4, 24);
-    strap.rotateX(Math.PI / 2 - 0.25);
-    strap.scale(0.98, 1, 1.12);
-    strap.translate(HC.x, 1.66, HC.z);
-    det.push(paint(strap, 0x5a3e2b));
+    { // 이마 챙: 쉘에서 앞으로 살짝 내려오는 부채꼴 판
+      const g = new THREE.CylinderGeometry(R * 1.22, R * 1.22, 0.022, 20, 1, false, Math.PI - 0.62, 1.24);
+      g.rotateX(0.22);
+      g.scale(SC[0], 1, SC[2]);
+      g.translate(HC.x, HC.y + 0.01, HC.z);
+      shellList.push(paint(g, shell));
+    }
+  } else {
+    // 풀페이스: 쉘 + 턱 가드 + 곡면 바이저(광택) + 하이라이트 + 바이저 힌지 + 턱 통풍구 + 뒤 스포일러
+    part(R, 0, Math.PI * 2, 0, Math.PI * 0.8, shell, shellList);
+    sph(0.1, 0, 1.47, -0.31, shell, shellList, 1.3, 0.75, 0.9, 16);
+    part(R * 1.03, FRONT - 0.92, 1.84, Math.PI * 0.37, Math.PI * 0.16, hel.visor, gloss);
+    part(R * 1.036, FRONT - 0.55, 0.45, Math.PI * 0.395, Math.PI * 0.014, 0xffffff, glow, 8);
+    for (const s of [-1, 1]) {
+      const p = onShell(R * 1.01, FRONT + s * 0.92, Math.PI * 0.45);
+      const g = new THREE.CylinderGeometry(0.018, 0.018, 0.012, 14);
+      g.rotateZ(Math.PI / 2);
+      g.translate(p.x, p.y, p.z);
+      det.push(paint(g, 0x3a3d42));
+    }
+    for (const x of [-0.035, 0, 0.035]) det.push(box(0.018, 0.035, 0.03, x, 1.455, -0.395, 0x1d1f22));
+    { const p = onShell(R, BACK, Math.PI * 0.3); det.push(box(0.15, 0.03, 0.09, p.x, p.y, p.z, shell, 0.5)); }
+    { const p = onShell(R, BACK, Math.PI * 0.62); det.push(box(0.07, 0.025, 0.025, p.x, p.y, p.z, 0xff3b30)); }
   }
   if (hel.stripe) {
-    // 정수리를 가로지르는 레이싱 스트라이프 (앞→뒤 반원)
-    const g = new THREE.TorusGeometry(0.194, 0.022, 4, 24, Math.PI);
-    g.rotateY(Math.PI / 2);
-    g.scale(0.98, 1.03, 1.13);
-    g.translate(HC.x, HC.y, HC.z);
-    det.push(paint(g, hel.stripe));
+    lune(0.07, hel.stripe, det);
+    if (!hel.full) { lune(0.025, 0x1b1b1b, det, Math.PI * 0.36, Math.PI * 0.5, 0.075); lune(0.025, 0x1b1b1b, det, Math.PI * 0.36, Math.PI * 0.5, -0.075); }
   }
-  if (hel.shine || (paintOpt && paintOpt.finish === 'metallic')) {
-    const g = new THREE.TorusGeometry(0.19, 0.008, 3, 16, 0.9);
-    g.rotateY(Math.PI / 2);
-    g.rotateX(-0.5);
-    g.translate(HC.x + 0.07, HC.y + 0.02, HC.z);
-    glow.push(paint(g, 0xfffbe6));
+  if (hel.goggles) {
+    // 레트로 고글: 쉘 이마에 걸친 렌즈 2개 + 쉘에 밀착된 가죽 끈
+    const th = Math.PI * 0.36;
+    const t = new THREE.TorusGeometry(R * Math.sin(th) * 1.02, 0.012, 6, 32);
+    t.rotateX(Math.PI / 2);
+    t.scale(SC[0], 1, SC[2]);
+    t.translate(HC.x, HC.y + R * Math.cos(th), HC.z);
+    det.push(paint(t, 0x5a3e2b));
+    for (const s of [-1, 1]) {
+      const p = onShell(R * 1.0, FRONT + s * 0.38, th);
+      const n = p.clone().sub(HC).normalize();
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+      const g = new THREE.CylinderGeometry(0.04, 0.044, 0.04, 16);
+      g.applyQuaternion(q);
+      g.translate(p.x + n.x * 0.012, p.y + n.y * 0.012, p.z + n.z * 0.012);
+      det.push(paint(g, 0x8a6a3a));
+      const l = new THREE.CylinderGeometry(0.03, 0.03, 0.01, 16);
+      l.applyQuaternion(q);
+      l.translate(p.x + n.x * 0.034, p.y + n.y * 0.034, p.z + n.z * 0.034);
+      glow.push(paint(l, 0x9bd8ff));
+    }
   }
   if (hel.ears) {
     for (const sx of [-1, 1]) {
-      const ear = new THREE.ConeGeometry(0.07, 0.13, 3);
-      ear.rotateZ(-sx * 0.25);
-      ear.translate(sx * 0.11, 1.81, -0.17);
+      const ear = new THREE.ConeGeometry(0.07, 0.14, 4);
+      ear.rotateY(Math.PI / 4);
+      ear.scale(1, 1, 0.55);
+      ear.rotateZ(-sx * 0.3);
+      ear.translate(sx * 0.105, 1.8, -0.17);
       shellList.push(paint(ear, shell));
-      const inner = new THREE.ConeGeometry(0.04, 0.08, 3);
-      inner.rotateZ(-sx * 0.25);
-      inner.translate(sx * 0.11, 1.8, -0.215);
+      const inner = new THREE.ConeGeometry(0.042, 0.09, 4);
+      inner.rotateY(Math.PI / 4);
+      inner.scale(1, 1, 0.3);
+      inner.rotateZ(-sx * 0.3);
+      inner.translate(sx * 0.108, 1.795, -0.2);
       det.push(paint(inner, 0xff8fab));
     }
+    // 수염 (바이저 옆)
+    for (const sx of [-1, 1]) for (const dy of [-0.012, 0.012]) det.push(box(0.07, 0.006, 0.006, sx * 0.17, 1.5 + dy, -0.33, 0x3a2a4a));
   }
   if (hel.crown) {
-    const band = new THREE.CylinderGeometry(0.13, 0.13, 0.05, 16);
-    band.translate(0, 1.79, -0.19);
-    det.push(paint(band, 0xffd700));
+    const band = new THREE.CylinderGeometry(0.135, 0.14, 0.055, 20);
+    band.translate(0, 1.775, -0.19);
+    metal.push(paint(band, 0xffd700));
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * Math.PI * 2;
       const sp = new THREE.ConeGeometry(0.03, 0.1, 4);
-      sp.translate(Math.cos(a) * 0.11, 1.87, -0.19 + Math.sin(a) * 0.11);
-      glow.push(paint(sp, 0xffe066));
+      sp.translate(Math.cos(a) * 0.115, 1.85, -0.19 + Math.sin(a) * 0.115);
+      metal.push(paint(sp, 0xffd700));
+      sph(0.016, Math.cos(a) * 0.118, 1.905, -0.19 + Math.sin(a) * 0.118, [0xe63946, 0x2f7fe0, 0x2a9d8f][i % 3], glow);
     }
   }
 }
@@ -801,12 +881,41 @@ function nationalWrapTexture(code, accent) {
   return tex;
 }
 
-function deliveryBox(det, glow, style) {
+// 모서리가 둥근 상자 (세로 모서리 반경 r, 위아래 모서리는 살짝 깎음). 중심 (x, y, z)
+function roundBox(w, h, d, r, x, y, z, color, bev = 0.015) {
+  r = Math.min(r, w / 2 - bev - 0.001, d / 2 - bev - 0.001);
+  const W = w / 2 - bev, D = d / 2 - bev, rr = Math.max(0.002, r - bev);
+  const s = new THREE.Shape();
+  s.moveTo(-W + rr, -D);
+  s.lineTo(W - rr, -D);
+  s.quadraticCurveTo(W, -D, W, -D + rr);
+  s.lineTo(W, D - rr);
+  s.quadraticCurveTo(W, D, W - rr, D);
+  s.lineTo(-W + rr, D);
+  s.quadraticCurveTo(-W, D, -W, D - rr);
+  s.lineTo(-W, -D + rr);
+  s.quadraticCurveTo(-W, -D, -W + rr, -D);
+  const g = new THREE.ExtrudeGeometry(s, { depth: h - bev * 2, bevelEnabled: bev > 0, bevelThickness: bev, bevelSize: bev, bevelSegments: 2, curveSegments: 5 });
+  g.translate(0, 0, -(h - bev * 2) / 2);
+  g.rotateX(Math.PI / 2); // 모양 y → z, 돌출 방향 z → y (뒤집지 않아 면 방향 유지)
+  g.translate(x, y, z);
+  return color == null ? g : paint(g, color);
+}
+
+// 배달통 (뒷좌석 랙 위). 몸통 중심 (0, 1.31, 0.68) · 0.56 x 0.5 x 0.5
+// 모든 장식은 면에서 최소 8mm 이상 띄워 겹친 면이 지직거리지 않게 함 (layer 마다 +8mm)
+function deliveryBox(det, glow, style, mats = {}) {
   const st = BOX_STYLES[style] || BOX_STYLES.basic;
-  det.push(box(0.34, 0.05, 0.4, 0, 1.03, 0.66, 0x333333));
-  det.push(box(0.56, 0.5, 0.5, 0, 1.31, 0.68, st.base));
+  const gloss = mats.gloss || det;
+  const metal = mats.metal || gloss;
+  const CX = 0, CY = 1.31, CZ = 0.68, W = 0.56, H = 0.5, D = 0.5;
+  const TOP = CY + H / 2, BACKZ = CZ + D / 2;
+  // 랙 + 받침 브래킷
+  det.push(box(0.36, 0.04, 0.42, 0, 1.03, 0.66, 0x2b2d31));
+  for (const sx of [-1, 1]) det.push(box(0.03, 0.08, 0.36, sx * 0.15, 1.0, 0.66, 0x3a3d42));
   if (st.national) {
-    // 국가대표 배달통: 어떤 국기와도 어울리게 무채색(흑연색) 모서리 파이핑만. 면 전체는 국기로 감쌈
+    // 국가대표 배달통: 면 전체를 국기 텍스처로 감싸므로 평평한 몸통 + 흑연색 모서리 파이핑만
+    det.push(box(W, H, D, CX, CY, CZ, st.base));
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) det.push(box(0.022, 0.5, 0.022, sx * 0.28, 1.31, 0.68 + sz * 0.25, st.band));
     for (const sy of [-1, 1]) {
       for (const sz of [-1, 1]) det.push(box(0.58, 0.022, 0.022, 0, 1.31 + sy * 0.25, 0.68 + sz * 0.25, st.band));
@@ -814,39 +923,223 @@ function deliveryBox(det, glow, style) {
     }
     return;
   }
-  (st.glow ? glow : det).push(box(0.6, 0.06, 0.54, 0, 1.4, 0.68, st.band));
-  (st.glow ? glow : det).push(box(0.61, 0.05, 0.55, 0, 1.58, 0.68, st.lid));
-  if (st.glow) {
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) glow.push(box(0.035, 0.46, 0.035, sx * 0.285, 1.31, 0.68 + sz * 0.255, st.band));
-  }
-  if (st.lock) {
-    det.push(box(0.12, 0.14, 0.04, 0, 1.42, 0.95, 0xf5c518));
-    for (const sx of [-1, 1]) det.push(box(0.04, 0.54, 0.54, sx * 0.2, 1.31, 0.68, 0xf5c518));
-  }
-  if (style === 'styrofoam') det.push(box(0.1, 0.54, 0.54, 0, 1.31, 0.68, 0x2f7fe0));
-  if (st.stack) for (let i = 0; i < 3; i++) det.push(box(0.6, 0.04, 0.54, 0, 1.12 + i * 0.16, 0.68, 0xe63946));
-  if (st.planks) {
-    // 빈티지 나무 상자: 가로 판자 줄 + 모서리 철판
-    for (let i = 0; i < 4; i++) det.push(box(0.59, 0.025, 0.53, 0, 1.13 + i * 0.12, 0.68, 0x5a3e2b));
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) det.push(box(0.06, 0.46, 0.06, sx * 0.28, 1.31, 0.68 + sz * 0.25, 0x3d3d3d));
-  }
-  if (st.anime) {
-    // 서브컬처 박스: 뒷면에 커다란 눈 + 볼터치 + 별
-    for (const sx of [-1, 1]) {
-      det.push(box(0.13, 0.15, 0.02, sx * 0.12, 1.36, 0.935, 0xffffff));
-      det.push(box(0.08, 0.11, 0.02, sx * 0.12, 1.35, 0.945, 0x2b2d42));
-      det.push(box(0.03, 0.03, 0.02, sx * 0.1, 1.38, 0.955, 0xffffff));
-      det.push(box(0.08, 0.03, 0.02, sx * 0.17, 1.24, 0.935, 0xff6fae));
+  const L = (n) => 0.004 + n * 0.008; // 면에서 띄우는 거리
+  // 뒷면 장식 (w x h, 중심 x, y)
+  const backB = (w, h, x, y, c, n = 1, list = det, rz = 0) => {
+    const g = new THREE.BoxGeometry(w, h, 0.008);
+    if (rz) g.rotateZ(rz);
+    g.translate(x, y, BACKZ + L(n));
+    list.push(paint(g, c));
+  };
+  const backDisc = (r, x, y, c, n = 1, list = det, sx = 1, sy = 1, seg = 24) => {
+    const g = new THREE.CylinderGeometry(r, r, 0.008, seg);
+    g.rotateX(Math.PI / 2);
+    g.scale(sx, sy, 1);
+    g.translate(x, y, BACKZ + L(n));
+    list.push(paint(g, c));
+  };
+  // 옆면 장식 (양쪽). z 는 몸통 기준 상대값
+  const sideB = (h, dz, y, z, c, n = 1, list = det) => {
+    for (const sx of [-1, 1]) list.push(box(0.008, h, dz, sx * (W / 2 + L(n)), y, CZ + z, c));
+  };
+  // 몸통을 두르는 띠 (몸통보다 g 만큼 큰 둥근 상자)
+  const wrap = (h, y, c, r, g = 0.018, list = det) => list.push(roundBox(W + g, h, D + g, r + g / 2, CX, y, CZ, c, 0.004));
+  const body = (c, r, list = det) => list.push(roundBox(W, H, D, r, CX, CY, CZ, c, 0.02));
+  const lid = (c, r, list = det, h = 0.07) => list.push(roundBox(W + 0.03, h, D + 0.03, r + 0.015, CX, TOP + h / 2 - 0.012, CZ, c, 0.012));
+  const reflector = (y = 1.11) => { backB(0.2, 0.035, -0.12, y, 0xd62828, 1, glow); backB(0.2, 0.035, 0.12, y, 0xd62828, 1, glow); };
+  const handle = (c = 0x1d1f22, y = TOP + 0.058) => {
+    const t = new THREE.TorusGeometry(0.07, 0.014, 6, 14, Math.PI);
+    t.translate(0, y, CZ);
+    det.push(paint(t, c));
+  };
+
+  switch (style) {
+    case 'styrofoam': { // 쿨러: 흰 스티로폼 + 세로 리브 + 파란 테이프 + 눈꽃
+      body(0xf4f4ee, 0.04);
+      lid(0xe2e2da, 0.04);
+      for (const x of [-0.18, -0.06, 0.06, 0.18]) backB(0.03, 0.38, x, 1.3, 0xe6e6de, 1);
+      for (const z of [-0.15, 0, 0.15]) sideB(0.38, 0.03, 1.3, z, 0xe6e6de, 1);
+      wrap(0.06, 1.47, 0x2f7fe0, 0.04);
+      backB(0.06, 0.4, 0, 1.29, 0x2f7fe0, 2);
+      for (const a of [0, Math.PI / 3, -Math.PI / 3]) backB(0.17, 0.022, 0, 1.24, 0x2f7fe0, 3, det, a);
+      backDisc(0.03, 0, 1.24, 0xffffff, 4);
+      handle(0x2f7fe0);
+      reflector();
+      return;
     }
-    for (const sx of [-1, 1]) glow.push(box(0.02, 0.12, 0.12, sx * 0.29, 1.42, 0.62, 0xfff275));
-  }
-  if (st.grid) {
-    for (let i = 0; i < 3; i++) glow.push(box(0.6, 0.015, 0.54, 0, 1.16 + i * 0.12, 0.68, st.band));
-    for (const sz of [-0.12, 0.12]) glow.push(box(0.6, 0.46, 0.015, 0, 1.31, 0.68 + sz, st.band));
-  }
-  if (st.camo) {
-    for (const [sx, sy, sz, c] of [[0.29, 1.2, 0.6, 0x3b4422], [0.29, 1.42, 0.8, 0x8a7f4f], [-0.29, 1.3, 0.55, 0x8a7f4f], [-0.29, 1.45, 0.82, 0x3b4422]]) {
-      det.push(box(0.02, 0.14, 0.18, sx, sy, sz, c));
+    case 'pizza': { // 피자 보온 가방: 부드러운 빨간 가방 + 지퍼 + 피자 조각 엠블럼 + 손잡이 끈
+      body(0xd62828, 0.1);
+      lid(0xb71c1c, 0.1, det, 0.06);
+      wrap(0.02, 1.535, 0x222222, 0.1, 0.014);
+      for (const sx of [-1, 1]) det.push(box(0.03, 0.03, 0.05, sx * 0.2, 1.535, BACKZ + 0.01, 0xc0c4c8));
+      { // 피자 조각: 노란 삼각형 + 크러스트 + 페퍼로니
+        const g = new THREE.CylinderGeometry(0.15, 0.15, 0.008, 3);
+        g.rotateX(Math.PI / 2);
+        g.rotateZ(Math.PI);
+        g.translate(0, 1.29, BACKZ + L(1));
+        det.push(paint(g, 0xffd166));
+        backB(0.24, 0.035, 0, 1.36, 0xc77d3a, 2);
+        for (const [x, y] of [[-0.04, 1.31], [0.045, 1.3], [0, 1.24]]) backDisc(0.022, x, y, 0xb71c1c, 2);
+      }
+      for (const sx of [-1, 1]) det.push(box(0.04, 0.012, 0.42, sx * 0.12, TOP + 0.07, CZ, 0x1d1f22));
+      reflector();
+      return;
+    }
+    case 'neon': { // 네온: 어두운 몸통 + 발광 프레임 + 번개
+      body(0x161a2e, 0.03, gloss);
+      lid(0x0e1020, 0.03, gloss);
+      wrap(0.022, TOP - 0.01, st.band, 0.03, 0.02, glow);
+      wrap(0.022, CY - H / 2 + 0.03, st.lid, 0.03, 0.02, glow);
+      for (const sx of [-1, 1]) backB(0.018, 0.36, sx * 0.2, 1.3, st.band, 1, glow);
+      backB(0.06, 0.2, 0.025, 1.35, st.lid, 2, glow, -0.45);
+      backB(0.06, 0.2, -0.025, 1.22, st.lid, 2, glow, -0.45);
+      backB(0.1, 0.04, 0, 1.285, st.lid, 2, glow);
+      sideB(0.018, 0.36, 1.3, 0, st.band, 1, glow);
+      return;
+    }
+    case 'camo': { // 군용 크레이트: 위장 무늬 + 스텐실 + 측면 손잡이 + 걸쇠
+      body(0x5b6b3a, 0.025);
+      lid(0x3b4422, 0.025);
+      const patches = [[-0.14, 1.2, 0.16, 0.1, 0x3b4422], [0.1, 1.41, 0.2, 0.09, 0x8a7f4f], [0.17, 1.17, 0.12, 0.08, 0x2f3a1c], [-0.12, 1.43, 0.12, 0.07, 0x2f3a1c]];
+      for (const [x, y, w, h, c] of patches) backB(w, h, x, y, c, 1, det, x * 1.5);
+      for (const [z, y, w, h, c] of patches) sideB(h, w, y, z * 0.9, c, 1);
+      for (let i = 0; i < 3; i++) backB(0.035, 0.05, -0.05 + i * 0.05, 1.3, 0xe9e5cf, 2);
+      for (const sx of [-1, 1]) { // 손잡이
+        const t = new THREE.TorusGeometry(0.06, 0.012, 6, 12, Math.PI);
+        t.rotateY(Math.PI / 2);
+        t.rotateX(Math.PI);
+        t.translate(sx * (W / 2 + 0.02), 1.42, CZ);
+        det.push(paint(t, 0x1d1f22));
+      }
+      for (const sx of [-1, 1]) backB(0.05, 0.08, sx * 0.17, TOP - 0.03, 0x2b2d31, 3);
+      reflector();
+      return;
+    }
+    case 'treasure': { // 보물상자: 나무 + 둥근 뚜껑 + 금띠 + 자물쇠
+      body(0x7a4a22, 0.02);
+      { // 반원통 뚜껑
+        const g = new THREE.CylinderGeometry(D / 2 + 0.015, D / 2 + 0.015, W + 0.02, 20, 1, false, -Math.PI / 2, Math.PI);
+        g.rotateZ(Math.PI / 2);
+        g.scale(1, 0.55, 1);
+        g.translate(CX, TOP - 0.005, CZ);
+        det.push(paint(g, 0x5c3517));
+      }
+      for (const x of [-0.19, 0.19]) {
+        const g = new THREE.TorusGeometry(D / 2 + 0.025, 0.014, 6, 20, Math.PI);
+        g.rotateY(Math.PI / 2);
+        g.scale(1, 0.55, 1);
+        g.translate(x, TOP - 0.005, CZ);
+        metal.push(paint(g, 0xf5c518));
+        backB(0.04, H - 0.04, x, CY, 0xf5c518, 1, metal);
+        sideB(H - 0.04, 0.04, CY, 0, 0xf5c518, 1, metal);
+      }
+      wrap(0.035, 1.12, 0xf5c518, 0.02, 0.018, metal);
+      backB(0.1, 0.12, 0, TOP - 0.05, 0xf5c518, 2, metal);
+      backDisc(0.016, 0, TOP - 0.04, 0x1b1b1b, 3);
+      backB(0.012, 0.035, 0, TOP - 0.07, 0x1b1b1b, 3);
+      return;
+    }
+    case 'goldbox': { // 골드 VIP 금고: 금속 광택 몸통 + 다이얼 + 경첩 + 리벳
+      body(0xe6b422, 0.03, metal);
+      lid(0xc99a10, 0.03, metal);
+      wrap(0.03, 1.12, 0xfff3b0, 0.03, 0.018, metal);
+      backDisc(0.11, 0, 1.3, 0x2a2a2e, 1);
+      backDisc(0.085, 0, 1.3, 0xd9dde1, 2, metal);
+      backDisc(0.03, 0, 1.3, 0x2a2a2e, 3);
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        backB(0.008, 0.02, Math.cos(a) * 0.07, 1.3 + Math.sin(a) * 0.07, 0x2a2a2e, 3, det, a + Math.PI / 2);
+      }
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) backDisc(0.014, sx * 0.21, 1.3 + sy * 0.18, 0xfff3b0, 1, metal);
+      for (const sx of [-1, 1]) det.push(box(0.03, 0.12, 0.05, sx * 0.21, 1.42, BACKZ + 0.02, 0x3a3d42));
+      sideB(0.1, 0.3, 1.3, 0, 0xfff3b0, 1, metal);
+      handle(0xfff3b0);
+      return;
+    }
+    case 'vintage': { // 빈티지 나무 상자: 판자 + 틈 + 철 모서리 + 빨간 도장
+      body(0x3d2a1c, 0.012);
+      lid(0x6b4a2e, 0.012, det, 0.06);
+      const planks = [1.14, 1.255, 1.37, 1.485];
+      planks.forEach((y, i) => {
+        const c = [0x9c6b3c, 0x8d5f33, 0xa47543, 0x93653a][i];
+        backB(W - 0.04, 0.1, 0, y, c, 1);
+        sideB(0.1, D - 0.04, y, 0, c, 1);
+      });
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) { // L자 철 모서리
+        backB(0.08, 0.025, sx * (W / 2 - 0.06), CY + sy * (H / 2 - 0.035), 0x3d3d3d, 2);
+        backB(0.025, 0.08, sx * (W / 2 - 0.035), CY + sy * (H / 2 - 0.06), 0x3d3d3d, 2);
+        backDisc(0.008, sx * (W / 2 - 0.035), CY + sy * (H / 2 - 0.035), 0x9aa0a6, 3);
+      }
+      for (const [w, h, y] of [[0.22, 0.012, 1.34], [0.22, 0.012, 1.27], [0.012, 0.07, 1.305]]) {
+        backB(w, h, 0.0, y, 0xb02a2a, 2);
+        if (w > 0.1) continue;
+        backB(w, h, -0.105, y, 0xb02a2a, 2);
+        backB(w, h, 0.105, y, 0xb02a2a, 2);
+      }
+      return;
+    }
+    case 'anime': { // 카와이 박스: 둥근 핑크 + 고양이 귀 + 큰 눈 + 볼터치 + 반짝이
+      body(0xffc2e2, 0.12, gloss);
+      lid(0xff6fae, 0.12, gloss, 0.06);
+      for (const sx of [-1, 1]) {
+        const e = new THREE.ConeGeometry(0.08, 0.13, 4);
+        e.rotateY(Math.PI / 4);
+        e.scale(1, 1, 0.5);
+        e.translate(sx * 0.17, TOP + 0.1, CZ + 0.05);
+        det.push(paint(e, 0xff6fae));
+        const ie = new THREE.ConeGeometry(0.045, 0.08, 4);
+        ie.rotateY(Math.PI / 4);
+        ie.scale(1, 1, 0.3);
+        ie.translate(sx * 0.17, TOP + 0.09, CZ + 0.072);
+        det.push(paint(ie, 0xffe0f0));
+        backDisc(0.07, sx * 0.12, 1.33, 0xffffff, 1, det, 0.85, 1.1);
+        backDisc(0.05, sx * 0.115, 1.32, 0x2b2d42, 2, det, 0.85, 1.15);
+        backDisc(0.03, sx * 0.115, 1.3, 0x8e7cff, 3, det, 0.85, 1.1);
+        backDisc(0.017, sx * 0.1, 1.355, 0xffffff, 4, glow);
+        backDisc(0.008, sx * 0.13, 1.29, 0xffffff, 4, glow);
+        backDisc(0.04, sx * 0.19, 1.22, 0xff8fab, 1, det, 1.2, 0.6);
+      }
+      backB(0.03, 0.01, -0.015, 1.215, 0x2b2d42, 1, det, 0.5);
+      backB(0.03, 0.01, 0.015, 1.215, 0x2b2d42, 1, det, -0.5);
+      for (const [z, y] of [[-0.12, 1.42], [0.12, 1.2]]) { // 옆면 별
+        for (const a of [0, Math.PI / 2, Math.PI / 4, -Math.PI / 4]) {
+          for (const sx of [-1, 1]) {
+            const g = new THREE.BoxGeometry(0.008, a % (Math.PI / 2) ? 0.05 : 0.09, 0.016);
+            g.rotateX(a);
+            g.translate(sx * (W / 2 + L(1)), y, CZ + z);
+            glow.push(paint(g, 0xfff275));
+          }
+        }
+      }
+      return;
+    }
+    case 'cyber': { // 사이버 그리드: 검은 몸통 + 네온 격자 + 홀로 패널 + 발광 뚜껑 테두리
+      body(0x0b0f1e, 0.02, gloss);
+      lid(0x070a14, 0.02, gloss);
+      wrap(0.016, TOP + 0.03, st.lid, 0.02, 0.05, glow);
+      for (const y of [1.17, 1.29, 1.41]) backB(W - 0.08, 0.012, 0, y, st.band, 1, glow);
+      for (const x of [-0.12, 0, 0.12]) backB(0.012, H - 0.08, x, CY, st.band, 1, glow);
+      for (const y of [1.17, 1.29, 1.41]) sideB(0.012, D - 0.08, y, 0, st.band, 1, glow);
+      sideB(0.1, 0.22, 1.3, 0, 0x0e3a4a, 2);
+      sideB(0.012, 0.18, 1.32, 0, st.lid, 3, glow);
+      sideB(0.012, 0.12, 1.28, -0.03, st.lid, 3, glow);
+      return;
+    }
+    default: { // 클래식 그린: 초록 몸통 + 흰 띠 + 로고(원 + 속도선) + 반사판 + 손잡이
+      body(st.base, 0.05, gloss);
+      lid(st.lid, 0.05, gloss);
+      wrap(0.06, 1.42, st.band, 0.05);
+      backDisc(0.085, 0.06, 1.25, 0xffffff, 1);
+      backDisc(0.06, 0.06, 1.25, st.base, 2);
+      { // 로고 안쪽: 흰 오토바이 바퀴 + 짐
+        backDisc(0.018, 0.03, 1.23, 0xffffff, 3);
+        backDisc(0.018, 0.09, 1.23, 0xffffff, 3);
+        backB(0.06, 0.012, 0.06, 1.25, 0xffffff, 3);
+        backB(0.03, 0.03, 0.04, 1.275, 0xffffff, 3);
+      }
+      for (const [w, y] of [[0.1, 1.27], [0.07, 1.245], [0.05, 1.22]]) backB(w, 0.012, -0.03 - w / 2 - 0.02, y, 0xffffff, 1);
+      handle();
+      reflector();
     }
   }
 }
@@ -946,11 +1239,12 @@ export function createBike(color, opts = {}) {
   // 라이더 (의상 + 헤드기어)
   rider(det, glow, out);
   const helmetShell = [];
-  headgear(det, glow, hel, opts.helmetPaint, helmetShell);
+  const gloss = [], metal = []; // 광택(헬멧 쉘·바이저·일부 배달통) / 금속 반사(골드·크롬)
+  headgear(det, glow, hel, opts.helmetPaint, helmetShell, { gloss, metal });
 
   // 배달 박스 (뒷좌석 랙 위) — 외부 'box' 모델이 있으면 그것으로 교체
   const extBox = models.instantiate('box');
-  if (!extBox) deliveryBox(det, glow, opts.box);
+  if (!extBox) deliveryBox(det, glow, opts.box, { gloss, metal });
   const nationalBox = !extBox && opts.box === 'national' && opts.nationalCode;
 
   head.push(box(0.18, 0.12, 0.05, 0, 0.92, -0.7));
@@ -964,6 +1258,8 @@ export function createBike(color, opts = {}) {
     new THREE.Mesh(merge(tail), bikeTail),
   );
   if (glow.length) lean.add(new THREE.Mesh(merge(glow), new THREE.MeshBasicMaterial({ vertexColors: true })));
+  if (gloss.length) lean.add(new THREE.Mesh(merge(gloss), glossMat()));
+  if (metal.length) lean.add(new THREE.Mesh(merge(metal), metalMat()));
   // 네온 바이크: 차체 후광
   if (opts.paint && opts.paint.finish === 'neon' && !opts.national) lean.add(neonHalo(bodyGeo, opts.paint.hex, new THREE.Vector3(0, 0.88, -0.15), 1.1));
   // 메탈릭·네온 헤드기어 쉘
