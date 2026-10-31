@@ -1077,7 +1077,13 @@ function spawnLandmark(theme, z = -440) {
     obj.userData.half = { x: (bb.max.x - bb.min.x) / 2, z: (bb.max.z - bb.min.z) / 2 };
   }
   const { half } = obj.userData;
-  landmarks.push({ obj, z: z - half.z, x: (Math.random() < 0.5 ? -1 : 1) * (half.x + rand(70, 100)), halfZ: half.z });
+  // 좌우·거리는 판 시드로 정해 메뉴에서 보던 자리와 출발 후 자리가 같게
+  const h = ((G.seed ?? 0) ^ (theme.code.charCodeAt(0) * 2654435761) ^ (theme.code.charCodeAt(1) * 40503)) >>> 0;
+  const side = h & 1 ? 1 : -1, off = 70 + ((h >>> 1) % 31);
+  const l = { obj, z: z - half.z, x: side * (half.x + off), halfZ: half.z };
+  landmarks.push(l);
+  // 바로 제자리에 놓음: 새로 만든 모델은 원점(카메라 바로 위)에 있으므로, 카운트다운 동안 화면을 덮거나 출발 순간 튀지 않게
+  obj.position.set(l.x, 0, l.z);
 }
 
 function resetThemes() {
@@ -1089,9 +1095,11 @@ function resetThemes() {
   themeTintAmt = t.tintAmt;
   for (const g of Object.values(gateCache)) g.visible = false;
   gates.length = 0;
-  for (const l of landmarks) l.obj.visible = false;
-  landmarks = [];
-  spawnLandmark(t, -330);
+  // 메뉴에서 이미 보이던 같은 나라 랜드마크는 그 자리 그대로 이어서 사용 (출발할 때 위치가 바뀌지 않게)
+  const keep = landmarks.find((l) => l.obj === landmarkCache[t.landmark] && l.z < -300);
+  for (const l of landmarks) if (l !== keep) l.obj.visible = false;
+  landmarks = keep ? [keep] : [];
+  if (!keep) spawnLandmark(t, -330);
 }
 
 function updateThemes(dz, rdt) {
