@@ -1600,7 +1600,8 @@ function refreshHeld() {
   for (const k of Object.keys(held)) held[k] = false;
   for (const v of holdPointers.values()) held[v] = true;
   for (const [k, el] of Object.entries(holdButtons)) el.classList.toggle('active', held[k]);
-  $('steerKnob').style.transform = `translate(${pad.value * STEER_RANGE}px, ${pad.knobY || 0}px)`;
+  // 조이스틱 손잡이: 손가락 위치를 원 안(반경 JOY_R)으로 제한해 그대로 따라감
+  $('steerKnob').style.transform = `translate(${pad.knobX || 0}px, ${pad.knobY || 0}px)`;
   const dot = $('steerDot');
   dot.classList.toggle('on', pad.id !== null);
   dot.classList.toggle('gas', pad.throttle);
@@ -1629,7 +1630,8 @@ for (const [k, el] of Object.entries(holdButtons)) bindHold(el, k);
 // 한 손 조작(설정 ONE-HAND SLIDE): 기준점에서 위로 밀면 스로틀, 아래로 밀면 브레이크
 const STEER_RANGE = 80; // 기준점에서 이만큼(px) 밀면 최대 조향
 const STEER_DEAD = 6;   // 손떨림 무시 구간(px)
-const PEDAL_DEAD = 28;  // 위/아래로 이만큼(px) 넘게 밀어야 스로틀/브레이크
+const PEDAL_DEAD = 24;  // 위/아래로 이만큼(px) 넘게 밀어야 스로틀/브레이크
+const JOY_R = 46;      // 조이스틱 손잡이가 움직이는 반경(px)
 function padFromPointer(e) {
   const dx = e.clientX - pad.originX, dy = pad.originY - e.clientY;
   const ax = Math.max(0, Math.abs(dx) - STEER_DEAD);
@@ -1639,7 +1641,9 @@ function padFromPointer(e) {
   const oneHand = (save.settings.controls || 'onehand') === 'onehand';
   pad.throttle = oneHand && dy > PEDAL_DEAD;
   pad.brake = oneHand && dy < -PEDAL_DEAD;
-  pad.knobY = oneHand ? clamp(-dy, -40, 40) : 0;
+  const m = Math.hypot(dx, dy), k = m > JOY_R ? JOY_R / m : 1;
+  pad.knobX = dx * k;
+  pad.knobY = oneHand ? -dy * k : 0;
   // 공중 묘기용 아날로그 방향 (데드존 밖에서만)
   pad.rawX = clamp(dx / STEER_RANGE, -1, 1);
   pad.rawUp = Math.abs(dy) > 12 ? clamp(dy / STEER_RANGE, -1, 1) : 0;
@@ -1658,7 +1662,7 @@ steerZone.addEventListener('pointerdown', (e) => {
   pad.value = 0;
   pad.throttle = pad.brake = false;
   pad.rawX = pad.rawUp = 0;
-  pad.knobY = 0;
+  pad.knobX = pad.knobY = 0;
   steerDot.style.left = `${e.clientX - r.left}px`;
   steerDot.style.top = `${e.clientY - r.top}px`;
   refreshHeld();
@@ -1674,8 +1678,8 @@ for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     pad.id = null;
     pad.value = 0;
     pad.throttle = pad.brake = false;
-  pad.rawX = pad.rawUp = 0;
-    pad.knobY = 0;
+    pad.rawX = pad.rawUp = 0;
+    pad.knobX = pad.knobY = 0;
     refreshHeld();
   });
 }

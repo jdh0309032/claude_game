@@ -175,16 +175,6 @@ export const BILLBOARD_POSTERS = {
     { title: 'MANGO STICKY', sub: 'Dessert first, always', bg: '#ffbe0b', fg: '#3a0ca3' },
     { title: 'TUK TUK TURBO', sub: 'Ride in 2 min', bg: '#06d6a0', fg: '#073b4c' },
   ],
-  KR: [
-    { title: 'KIMCHI FIZZ', sub: 'Fermented soda (yes, really)', bg: '#e63946', fg: '#ffffff' },
-    { title: 'BANCHAN BAR', sub: 'Unlimited side dishes', bg: '#2a9d8f', fg: '#e9f5db' },
-    { title: 'K-STAR LIVE', sub: 'Lightsticks up tonight', bg: '#7209b7', fg: '#4cc9f0' },
-  ],
-  JP: [
-    { title: 'RAMEN RUSH 24H', sub: 'Slurp loudly. It\'s polite.', bg: '#ffbe0b', fg: '#d00000' },
-    { title: 'NEKO PHONE', sub: 'Purrfect signal', bg: '#ff70a6', fg: '#ffffff' },
-    { title: 'CONVEYOR SUSHI', sub: 'Plates at light speed', bg: '#0077b6', fg: '#caf0f8' },
-  ],
   MY: [
     { title: 'TEH TARIK TOWER', sub: 'Pulled high, poured proud', bg: '#7f4f24', fg: '#ffe8d6' },
     { title: 'NASI LEMAK NATION', sub: 'Sambal sampai pagi', bg: '#2d6a4f', fg: '#ffd60a' },
@@ -209,16 +199,6 @@ export const BILLBOARD_POSTERS = {
     { title: 'LION CITY AIR', sub: 'Fly the little red dot', bg: '#d90429', fg: '#ffffff' },
     { title: 'KAYA KAYA TOAST', sub: 'Breakfast of legends', bg: '#80b918', fg: '#ffffff' },
     { title: 'HAWKER HEAVEN', sub: 'Chilli crab, zero queue*', bg: '#ff9f1c', fg: '#2b2d42' },
-  ],
-  US: [
-    { title: 'BURGER BARN', sub: 'Double stack, no regrets', bg: '#f77f00', fg: '#3d0c02' },
-    { title: 'BEAN THERE', sub: 'Coffee, but bigger', bg: '#1b4332', fg: '#d8f3dc' },
-    { title: 'FIZZY POP', sub: 'Bubbles for breakfast', bg: '#3a86ff', fg: '#ffffff' },
-  ],
-  FR: [
-    { title: 'CROISSANT & CO', sub: 'Beurre. Toujours.', bg: '#fefae0', fg: '#bc6c25' },
-    { title: 'MUSEE NIGHT PASS', sub: 'Art after dark', bg: '#14213d', fg: '#fca311' },
-    { title: 'VELO VELO', sub: 'Pedal the boulevards', bg: '#e63946', fg: '#f1faee' },
   ],
 };
 

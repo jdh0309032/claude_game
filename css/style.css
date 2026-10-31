@@ -1017,7 +1017,6 @@ body:not(.one-hand) #steerDot b { display: none; }
 /* 한 손 조작(기본): 페달 없음, 화면 전체가 조향 영역, GAS/BRAKE 표시 없음 */
 body.one-hand .thumb.right, body.one-hand .thumb.left { display: none; }
 body.one-hand .steer-zone { left: 0; right: 0; width: 100%; }
-#steerDot b { display: none !important; }
 .setting-hint { font-size: 12px; margin: -4px 0 6px; line-height: 1.4; }
 
 /* ======================================================================
@@ -1066,3 +1065,17 @@ body.one-hand .steer-zone { left: 0; right: 0; width: 100%; }
 /* 아이템 타이머: 오른쪽 열(코인 아래)에 세로로 → 왼쪽 상태 태그(WRONG WAY 등)와 절대 겹치지 않음 */
 #hud .hud-powers { flex-direction: column; align-items: flex-end; max-width: none; margin-top: 2px; gap: 6px; }
 #hud .pw { padding-bottom: 5px; }
+
+/* ---------- 한 손 조이스틱: 좌우 = 조향, 위 = GAS, 아래 = BRAKE (버튼 없음) */
+#steerDot { width: 128px; height: 128px; margin: -64px 0 0 -64px; border: 2px solid rgba(255, 255, 255, 0.6); background: radial-gradient(circle, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 70%); }
+#steerKnob { width: 52px; height: 52px; margin: -26px 0 0 -26px; border: 3px solid #fff; }
+#steerDot b, #steerDot em { position: absolute; font-style: normal; font-family: var(--hud); font-weight: 700; font-size: 12px; letter-spacing: 1px; color: rgba(255, 255, 255, 0.85); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); pointer-events: none; }
+#steerDot b { left: 0; right: 0; text-align: center; }
+#steerDot b.up { top: 6px; } #steerDot b.down { bottom: 6px; top: auto; }
+#steerDot em { top: 50%; transform: translateY(-50%); font-size: 13px; }
+#steerDot em.l { left: 8px; } #steerDot em.r { right: 8px; }
+#steerDot.gas b.up { color: #39ff88; } #steerDot.brk b.down { color: #ff5a5a; }
+body:not(.one-hand) #steerDot b { display: none; }
+body:not(.one-hand) #steerDot em { display: none; }
+/* 손을 떼고 있을 땐 화면 아래 가운데에 반투명 조이스틱 (어디를 눌러도 그 자리로 옮겨와 조작) */
+body.one-hand #steerDot:not(.on) { display: block; left: auto !important; right: max(18px, env(safe-area-inset-right)); top: auto !important; bottom: max(36px, env(safe-area-inset-bottom)); margin: 0; opacity: 0.45; }
