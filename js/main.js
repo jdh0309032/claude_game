@@ -2424,7 +2424,7 @@ $('btnClearChallenge').addEventListener('click', () => {
   refreshMenu();
 });
 $('btnGarage').addEventListener('click', () => { renderGarage(); openScreen('garage'); });
-$('btnRanking').addEventListener('click', () => { rankCountry = save.country; openScreen('ranking'); renderRanking(); });
+$('btnRanking').addEventListener('click', () => { openScreen('ranking'); renderRanking(); });
 $('btnMissions').addEventListener('click', () => { renderMissions(); openScreen('missions'); });
 $('btnSettings').addEventListener('click', () => { renderSettings(); openScreen('settings'); });
 $('btnAccount').addEventListener('click', () => { renderAuth(); openScreen('auth'); });
@@ -2694,8 +2694,8 @@ $('btnAdCoins').addEventListener('click', async () => {
   renderGarage();
 });
 
-// ---------- 국가 랭킹 (행을 누르면 그 라이더의 3D 바이크/라이더 조합을 미리보기)
-let rankCountry = null;
+// ---------- 랭킹: 국가 리그 / 세계 리그 (행을 누르면 그 라이더의 3D 바이크/라이더 조합을 미리보기)
+let rankTab = 'country';
 let rankRows = [];
 let rankSel = -1;
 
@@ -2704,13 +2704,18 @@ function countryOptions(extra) {
   return codes.map((c) => `<option value="${c}">${escapeHtml(countryName(c))}</option>`).join('');
 }
 
-function rankTable(rows) {
+// 세계 리그는 모든 행에 국기 + 국가 코드, 국가 리그는 1위에만 국기
+function rankTable(rows, world) {
   return `<table class="rank-table selectable"><thead><tr><th>#</th><th>RIDER</th><th class="num">BEST</th><th>BIKE</th></tr></thead><tbody>${
-    rows.map((r, i) => `<tr class="${r.isMe ? 'me' : ''} ${i === rankSel ? 'sel' : ''}" data-row="${i}">
+    rows.map((r, i) => {
+      const flag = world ? `${flagBadge(r.country, 'flag')}` : i === 0 && r.country ? flagBadge(r.country, 'flag big') : '';
+      const cc = world && r.country ? `<span class="cc">${escapeHtml(r.country)}</span>` : '';
+      return `<tr class="${r.isMe ? 'me' : ''} ${i === rankSel ? 'sel' : ''}" data-row="${i}">
       <td>${i < 3 ? `<b class="medal m${i + 1}">${i + 1}</b>` : i + 1}</td>
-      <td>${i === 0 && r.country ? flagBadge(r.country, 'flag big') : ''}${escapeHtml(r.nickname)}${r.dist ? `<br><small class="muted">${fmt(r.dist)} m</small>` : ''}</td>
+      <td><span class="rider-cell">${flag}${cc}<span class="nick">${escapeHtml(r.nickname)}</span></span>${r.dist ? `<small class="muted">${fmt(r.dist)} m</small>` : ''}</td>
       <td class="num"><b>${fmt(r.score)}</b></td>
-      <td><small>${escapeHtml(getBike(r.bike).name)}</small></td></tr>`).join('')
+      <td><small>${escapeHtml(getBike(r.bike).name)}</small></td></tr>`;
+    }).join('')
   }</tbody></table>`;
 }
 
@@ -2733,36 +2738,38 @@ function selectRankRow(i) {
 
 async function renderRanking() {
   const list = $('rankList'), me = $('rankMe'), mode = $('rankMode');
-  const sel = $('rankCountry');
-  rankCountry = rankCountry || save.country;
-  sel.innerHTML = countryOptions(rankCountry);
-  sel.value = rankCountry;
-  mode.textContent = ONLINE ? 'ONLINE' : 'LOCAL MODE';
-  mode.className = ONLINE ? 'badge' : 'badge local';
+  const world = rankTab === 'world';
+  for (const b of $('rankTabs').children) b.classList.toggle('on', b.dataset.rtab === rankTab);
+  $('rankTabs').querySelector('[data-rtab="country"]').innerHTML = `${flagBadge(save.country)}${escapeHtml(countryName(save.country).toUpperCase())}`;
+  mode.textContent = world ? 'WORLD' : save.country;
+  mode.className = 'badge';
   list.innerHTML = '<div class="empty">Loading...</div>';
   me.innerHTML = '';
   rankRows = [];
   selectRankRow(-1);
-  const country = rankCountry;
-  const res = await leaderboard.fetchTop({ country });
-  if (rankCountry !== country || currentScreen !== 'ranking') return;
+  const tab = rankTab;
+  const country = save.country;
+  const res = await leaderboard.fetchTop({ country, world });
+  if (rankTab !== tab || currentScreen !== 'ranking') return;
   if (!res.ok) {
     list.innerHTML = `<div class="empty">Could not load the ranking<br><small>${escapeHtml(res.error)}</small></div>`;
     return;
   }
-  regionTops[country] = res.top;
-  if (country === save.country && res.me) applyNationalStatus(res.me.rank === 1, res.me.country);
+  if (!world) {
+    regionTops[country] = res.top;
+    if (res.me) applyNationalStatus(res.me.rank === 1, res.me.country);
+  }
   rankRows = res.top;
   rankSel = rankRows.length ? 0 : -1;
   list.innerHTML = rankRows.length
-    ? rankTable(rankRows)
-    : `<div class="empty">No records in ${escapeHtml(countryName(country))} yet.<br>Be the first rider on the board!</div>`;
+    ? rankTable(rankRows, world)
+    : `<div class="empty">No records ${world ? 'yet' : `in ${escapeHtml(countryName(country))} yet`}.<br>Be the first rider on the board!</div>`;
   selectRankRow(rankSel);
   const s = getSession();
+  const where = world ? 'THE WORLD' : escapeHtml(countryName(country).toUpperCase());
   if (!s) me.innerHTML = 'Sign in to see your rank <button class="btn primary" id="rankLogin">SIGN IN</button>';
-  else if (res.me) me.innerHTML = `YOUR RANK IN ${escapeHtml(countryName(country).toUpperCase())} <b>#${res.me.rank}</b> · <b>${fmt(res.me.score)}</b> <button class="btn small" id="rankMine">MY RIDE</button>`;
-  else me.innerHTML = `${escapeHtml(s.nickname)} has no record in ${escapeHtml(countryName(country))} <button class="btn small" id="rankMine">MY RIDE</button>`;
-  if (!ONLINE) me.innerHTML += '<br><small class="muted">No server configured: ranking is shared only between accounts on this device (js/config.js)</small>';
+  else if (res.me) me.innerHTML = `YOUR RANK IN ${where} <b>#${res.me.rank}</b> · <b>${fmt(res.me.score)}</b> <button class="btn small" id="rankMine">MY RIDE</button>`;
+  else me.innerHTML = `${escapeHtml(s.nickname)} has no record yet <button class="btn small" id="rankMine">MY RIDE</button>`;
   $('rankLogin')?.addEventListener('click', () => { renderAuth(); openScreen('auth', 'menu'); });
   $('rankMine')?.addEventListener('click', () => { sfx.click(); selectRankRow(-1); });
 }
@@ -2773,8 +2780,11 @@ $('rankList').addEventListener('click', (e) => {
   sfx.click();
   selectRankRow(Number(tr.dataset.row));
 });
-$('rankCountry').addEventListener('change', (e) => {
-  rankCountry = e.target.value;
+$('rankTabs').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-rtab]');
+  if (!b || b.dataset.rtab === rankTab) return;
+  rankTab = b.dataset.rtab;
+  sfx.click();
   renderRanking();
 });
 

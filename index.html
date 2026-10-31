@@ -197,9 +197,12 @@
     <!-- Ranking -->
     <section id="ranking" class="screen hidden">
       <div class="panel">
-        <div class="panel-head"><h2>COUNTRY TOP 10</h2><span id="rankMode" class="badge"></span></div>
+        <div class="panel-head"><h2>LEADERBOARD</h2><span id="rankMode" class="badge"></span></div>
         <div id="rankStage" class="stage flex"><span id="flexLabel" class="flex-label"></span><small class="stage-hint">TAP A RIDER TO VIEW</small></div>
-        <select id="rankCountry" class="select" aria-label="Country"></select>
+        <div class="tabs" id="rankTabs">
+          <button data-rtab="country" class="on">COUNTRY</button>
+          <button data-rtab="world">WORLD LEAGUE</button>
+        </div>
         <div id="rankList"></div>
         <div id="rankMe" class="rank-me"></div>
         <button class="btn back" data-back data-icon="back"><span>BACK</span></button>

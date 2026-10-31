@@ -892,3 +892,13 @@ body:not(.one-hand) #steerDot b { display: none; }
 .menu-v3 .s-settings i { background: #e6efff; color: #2a6fdb; }
 .menu-v3 .svc i .ic { color: inherit; }
 .menu-v3 .svc span { color: var(--text); }
+
+/* 랭킹 리그 탭 + 세계 리그 국가 표시 */
+#rankTabs { margin: 10px 0 4px; }
+#rankTabs button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#rankTabs .flag { margin: 0; width: 20px; height: 14px; }
+.rider-cell { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.rider-cell .flag { margin: 0; flex-shrink: 0; }
+.rider-cell .nick { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rider-cell .cc { font-size: 10px; font-weight: 800; color: var(--muted); background: #f1f3f4; border-radius: 5px; padding: 1px 4px; flex-shrink: 0; }
+.rank-table td small.muted { display: block; }

@@ -402,6 +402,16 @@ export async function adminSetCountry(code) {
   }
 }
 
+// 전 세계에서 나보다 점수가 높은 기록 수 (PostgREST count)
+async function countAbove(score) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/leaderboard?select=user_id&score=gt.${Math.floor(score)}`, {
+    method: 'HEAD', headers: { apikey: SUPABASE_ANON_KEY, Prefer: 'count=exact', Range: '0-0' },
+  });
+  const range = res.headers.get('content-range') || '';
+  const n = Number(range.split('/')[1]);
+  return Number.isFinite(n) ? n : 0;
+}
+
 const COLS_V4 = 'user_id,nickname,score,bike,dist,country_code,box,outfit,helmet,flag';
 const COLS = `${COLS_V4},look`;
 let lookColumn = true;
@@ -430,10 +440,11 @@ export const leaderboard = {
     }
   },
 
-  // 국가별 TOP 10 + 내 순위
-  async fetchTop({ country } = {}) {
+  // TOP 10 + 내 순위. world: true 면 전 세계(국가 구분 없이), 아니면 country 국가 리그
+  async fetchTop({ country, world = false } = {}) {
     try {
-      const q = (cols) => `/rest/v1/leaderboard?select=${cols}&country_code=eq.${encodeURIComponent(country)}&score=gt.0&order=score.desc,best_at.asc&limit=10`;
+      const where = world ? '' : `&country_code=eq.${encodeURIComponent(country)}`;
+      const q = (cols) => `/rest/v1/leaderboard?select=${cols}${where}&score=gt.0&order=score.desc,best_at.asc&limit=10`;
       let top;
       try {
         top = await sb(q(lookColumn ? COLS : COLS_V4));
@@ -444,9 +455,12 @@ export const leaderboard = {
         top = await sb(q(COLS_V4));
       }
       let me = null;
-      if (session && country === save.country) {
-        const r = await this.myRank();
-        if (r) me = { ...r, nickname: session.nickname };
+      if (session && (world || country === save.country)) {
+        try {
+          const r = await this.myRank();
+          if (r) me = world ? { rank: (await countAbove(r.score)) + 1, score: r.score, country: r.country, world: true, countryRank: r.rank } : r;
+          if (me) me.nickname = session.nickname;
+        } catch (e) { /* 내 순위만 생략 */ }
       }
       return {
         ok: true, online: true,
