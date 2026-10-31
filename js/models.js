@@ -1295,7 +1295,7 @@ function facetKit(F, G, opt = {}) {
     g.translate(p[0], p[1], p[2]);
     return g;
   };
-  // ---- 머리 표면에 붙는 디테일 (눈·코·줄무늬): 머리 조각을 다 만든 뒤 flush() 에서 앞쪽으로 광선을 쏴
+  // ---- 머리 표면에 붙는 디테일 (코·줄무늬): 머리 조각을 다 만든 뒤 flush() 에서 앞쪽으로 광선을 쏴
   //      실제 표면 위치·기울기를 찾아 그 면에 맞춰 붙임 → 공중에 뜨지 않음
   const pending = [];
   const toWorldXY = (x, y) => [HA.x + (x - HA.x) * HEAD_K, HA.y + (y - HA.y) * HEAD_K + HDY];
@@ -1326,14 +1326,7 @@ function facetKit(F, G, opt = {}) {
     for (const d of pending.splice(0)) {
       const h = surfaceHit(d.x, d.y);
       if (!h) continue;
-      if (d.kind === 'eye') {
-        const W = d.w * HEAD_K * 1.15;
-        // 움푹한 눈두덩(어두운 소켓) + 빛나는 아몬드 눈 + 세로 동공 + 눈썹
-        raw(placeOn(new THREE.OctahedronGeometry(1, 0).scale(W * 0.72, W * 0.4, W * 0.16), h, d.rz, 0.002), 0x14161a, F);
-        raw(placeOn(new THREE.OctahedronGeometry(1, 0).scale(W * 0.52, W * 0.24, W * 0.08), h, d.rz, W * 0.1), d.c, G);
-        raw(placeOn(new THREE.BoxGeometry(W * 0.07, W * 0.36, W * 0.04), h, d.rz * 0.3, W * 0.16), 0x0d0d0d, F);
-        raw(placeOn(new THREE.BoxGeometry(W * 0.95, W * 0.13, W * 0.16).translate(0, W * 0.34, 0), h, d.rz, W * 0.05), d.brow, F);
-      } else if (d.kind === 'mark') {
+      if (d.kind === 'mark') {
         raw(placeOn(new THREE.BoxGeometry(d.w * HEAD_K, d.h * HEAD_K, 0.012), h, d.rz, 0.004), d.c, F);
       } else if (d.kind === 'knob') {
         const g = new THREE.OctahedronGeometry(d.r * HEAD_K, 0).scale(d.s[0], d.s[1], d.s[2]);
@@ -1343,8 +1336,6 @@ function facetKit(F, G, opt = {}) {
   };
   return {
     flush,
-    // 눈: (x, y) 는 머리 기준 좌표, 실제 위치는 표면에 맞춤. brow = 눈썹 색
-    eye: (w, p, c, rz = 0, brow = 0x2b2d31) => pending.push({ kind: 'eye', w, x: p[0], y: p[1], c, rz, brow }),
     mark: (w, h, p, c, rz = 0) => pending.push({ kind: 'mark', w, h, x: p[0], y: p[1], c, rz }),
     knob: (r, p, c, s = [1, 1, 1]) => pending.push({ kind: 'knob', r, x: p[0], y: p[1], c, s }),
     ico: (r, p, c, s, rot) => put(xf(new THREE.IcosahedronGeometry(r, 0), p, s, rot), c),
@@ -1372,7 +1363,7 @@ const ACCENTS = {
     A.blk(0.12, 0.07, 0.1, [0, 0.93, -1.23], 0xdfe3e8, [0.2, 0, 0]);
     A.blk(0.1, 0.035, 0.08, [0, 0.875, -1.2], 0x9aa0a6);
     for (let i = 0; i < 9; i++) { const a = -1.9 + (i / 8) * 3.8; A.cone(0.045, 0.17, [Math.sin(a) * 0.12, 0.97 + Math.cos(a) * 0.11, -1.0], i % 2 ? 0xc1121f : 0xef3340, [Math.PI / 2 - 0.5, 0, -a]); }
-    for (const s of [-1, 1]) { A.cone(0.03, 0.07, [s * 0.07, 1.07, -1.08], 0xe9ecef, [0, 0, s * 0.3], 3); A.eye(0.045, [s * 0.05, 1.0, -1.235], led, s * 0.3); }
+    for (const s of [-1, 1]) { A.cone(0.03, 0.07, [s * 0.07, 1.07, -1.08], 0xe9ecef, [0, 0, s * 0.3], 3); }
     for (const s of [-1, 1]) A.cone(0.09, 0.32, [s * 0.07, 1.02, 1.1], 0xc1121f, [-0.9, 0, s * 0.55], 4, [0.25, 1, 1]);
     A.cone(0.05, 0.12, [0, 1.0, 0.96], 0xef3340, [-0.6, 0, 0], 4, [0.25, 1, 1]);
   },
@@ -1385,7 +1376,6 @@ const ACCENTS = {
       A.cone(0.022, 0.05, [s * 0.08, 1.065, -1.09], 0x1b1b1b, [0, 0, s * 0.35], 3);
       A.cone(0.012, 0.05, [s * 0.03, 0.86, -1.25], 0xffffff, [Math.PI, 0, 0], 4);
       for (let k = 0; k < 3; k++) A.mark(0.012, 0.055, [s * (0.085 + k * 0.014), 0.99 - k * 0.03], 0x1b1b1b, s * 0.5);
-      A.eye(0.04, [s * 0.055, 1.0, -1.225], 0xffcc00, s * 0.35);
     }
     for (let k = 0; k < 3; k++) A.mark(0.045, 0.01, [0, 1.05 - k * 0.018], 0x1b1b1b);
     const tail = [];
@@ -1397,7 +1387,6 @@ const ACCENTS = {
     A.cone(0.045, 0.16, [0, 0.96, -1.25], 0xff9f1c, [-Math.PI / 2 - 0.45, 0, 0], 4);
     A.cone(0.02, 0.06, [0, 0.9, -1.3], 0xff9f1c, [Math.PI, 0, 0], 4);
     for (let i = 0; i < 4; i++) A.cone(0.025, 0.2 - i * 0.025, [0, 1.09 + i * 0.01, -1.04 + i * 0.05], i % 2 ? 0xffd34d : 0xe6b422, [0.9 + i * 0.15, 0, 0], 3, [0.5, 1, 1]);
-    for (const s of [-1, 1]) A.eye(0.035, [s * 0.05, 1.03, -1.19], led, s * 0.35);
     for (let i = -2; i <= 2; i++) A.cone(0.04, 0.34, [i * 0.05, 1.02, 1.08], i % 2 ? 0xce1126 : 0xe6b422, [-1.1, 0, i * 0.3], 4, [1, 1, 0.25]);
   },
   TH(A, led) { // 왕실 흰 코끼리: 각진 머리 + 큰 귀 + 코 + 상아 + 금빛 관(차다) + 금빛 초파 꼬리
@@ -1406,7 +1395,6 @@ const ACCENTS = {
       A.blk(0.02, 0.17, 0.15, [s * 0.14, 0.98, -1.03], 0xc9c2b8, [0, s * 0.5, 0]);
       A.blk(0.022, 0.03, 0.15, [s * 0.145, 1.07, -1.03], 0xe8b923, [0, s * 0.5, 0]);
       A.cone(0.015, 0.15, [s * 0.05, 0.88, -1.21], 0xfff8e7, [-Math.PI / 2 + 0.35, 0, 0], 5);
-      A.eye(0.03, [s * 0.055, 1.02, -1.17], led, s * 0.2);
     }
     A.seg([[0, 0.94, -1.17], [0, 0.88, -1.25], [0, 0.81, -1.28], [0, 0.75, -1.27], [0, 0.71, -1.22]], 0.04, 0.02, 0xd9d4cc);
     A.cone(0.055, 0.13, [0, 1.12, -1.07], 0xe8b923, [0, 0, 0], 6);
@@ -1422,7 +1410,6 @@ const ACCENTS = {
     for (const s of [-1, 1]) {
       A.seg([[s * 0.05, 1.05, -1.06], [s * 0.08, 1.12, -0.98], [s * 0.1, 1.15, -0.88]], 0.016, 0.006, 0xffcd00);
       A.seg([[s * 0.05, 0.96, -1.28], [s * 0.14, 0.94, -1.25], [s * 0.2, 0.9, -1.15]], 0.006, 0.003, 0xffcd00);
-      A.eye(0.045, [s * 0.04, 1.0, -1.17], 0xffcd00, s * 0.25);
     }
     A.gem(0.024, [0, 0.93, -1.26], 0xfff3b0); // 벌린 턱 사이에 문 여의주
     for (let i = 0; i < 4; i++) A.cone(0.025, 0.09, [0, 0.99 + i * 0.005, 0.66 + i * 0.1], 0xffcd00, [-0.5, 0, 0], 3, [0.4, 1, 1]);
@@ -1435,7 +1422,6 @@ const ACCENTS = {
     for (const s of [-1, 1]) A.knob(0.012, [s * 0.025, 0.89], 0x1b1b1b, [1, 0.7, 0.6]);
     for (const s of [-1, 1]) {
       A.seg([[s * 0.08, 1.04, -1.08], [s * 0.15, 1.07, -1.07], [s * 0.2, 1.1, -1.03], [s * 0.21, 1.15, -0.98]], 0.028, 0.008, 0xbfb59a); // 머리와 함께 커지므로 짧게 (뒤에서 배달통 옆으로 튀어나오지 않게)
-      A.eye(0.035, [s * 0.06, 1.0, -1.2], 0xfcd116, s * 0.3);
     }
     A.oct(0.035, [0, 0.98, 1.04], 0xfcd116);
     for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; A.cone(0.022, 0.1, [Math.sin(a) * 0.08, 0.98 + Math.cos(a) * 0.08, 1.05], i % 2 ? 0xfcd116 : 0xffe066, [Math.PI / 2, 0, -a], 3, [1, 1, 0.3]); }
@@ -1444,7 +1430,7 @@ const ACCENTS = {
     A.oct(0.16, [0, 1.0, -1.0], 0xcdb68a, [1.4, 1.1, 0.35]);
     for (let i = 0; i < 3; i++) A.blk(0.02, 0.08, 0.01, [-0.06 + i * 0.06, 1.0, -1.06], 0xe8b923, [0, 0, (i - 1) * 0.4]);
     A.oct(0.07, [0, 0.98, -1.14], 0xb59f74, [1, 0.8, 1.5]);
-    for (const s of [-1, 1]) { A.cone(0.008, 0.04, [s * 0.025, 0.93, -1.22], 0xffffff, [Math.PI, 0, 0], 4); A.eye(0.03, [s * 0.035, 1.0, -1.2], 0xe00025, s * 0.3); }
+    for (const s of [-1, 1]) { A.cone(0.008, 0.04, [s * 0.025, 0.93, -1.22], 0xffffff, [Math.PI, 0, 0], 4); }
     const tail = [];
     for (let i = 0; i <= 6; i++) { const t = i / 6; tail.push([Math.sin(t * Math.PI * 1.5) * 0.06, 0.93 + t * 0.35, 1.0 + t * 0.12]); }
     A.seg(tail, 0.035, 0.01, 0xcdb68a, 0xb59f74);
@@ -1455,7 +1441,6 @@ const ACCENTS = {
     A.oct(0.06, [0, 1.06, -1.12], 0x1b998b, [0.9, 1, 1.4]);
     A.cone(0.018, 0.07, [0, 1.05, -1.2], 0x9aa0a6, [-Math.PI / 2, 0, 0], 4);
     for (let i = -1.5; i <= 1.5; i += 1) { A.seg([[i * 0.015, 1.1, -1.11], [i * 0.025, 1.19, -1.1]], 0.004, 0.004, 0x1b998b); A.gem(0.012, [i * 0.025, 1.2, -1.1], 0xffd34d); }
-    for (const s of [-1, 1]) A.eye(0.02, [s * 0.035, 1.07, -1.15], led, s * 0.2);
     for (let i = -3; i <= 3; i++) {
       const a = i * 0.32;
       A.oct(0.12, [Math.sin(a) * 0.15, 1.0 + Math.cos(a) * 0.15, 1.08], [0x1b998b, 0x2a9df4, 0x34b233][(i + 3) % 3], [0.35, 1, 0.12], [0, 0, -a]);
@@ -1484,7 +1469,7 @@ function animalMachine(K, code, led) {
   const A = facetKit(K.facet, K.glow, { k: 2.3, dz: 0.35, dy: 0.0 });
   // 1) 큰 동물 머리 = 프런트 페어링 (기존 머리 디자인을 2.3배로 앞바퀴 위에) + 꼬리 장식
   ACCENTS[code](A, led);
-  A.flush(); // 눈·코·줄무늬를 머리 표면에 붙임
+  A.flush(); // 코·줄무늬를 머리 표면에 붙임
   // 머리 뒤를 감싸는 페어링 칼라(목) — 머리와 탱크를 잇는 무게감 있는 덩어리
   A.ico(0.24, [0, 0.98, -0.62], P.main, [1.0, 0.95, 0.9]);
   A.ico(0.2, [0, 0.82, -0.66], P.second, [1.05, 0.7, 0.85]);
