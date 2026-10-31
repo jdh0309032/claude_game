@@ -580,8 +580,9 @@ function headgear(det, glow, hel, paintOpt, shellOut = det) {
       sph(0.022, 0, 1.76, -0.19, hel.brim);
       return;
     }
-    case 'straw': { // 밀짚모자: 넓은 챙 + 크라운 + 붉은 띠
-      sph(0.16, 0, 1.56, -0.2, face);
+    case 'straw': { // 밀짚모자: 얼굴(눈) + 넓은 챙 + 크라운 + 붉은 띠
+      sph(0.15, 0, 1.56, -0.2, face, det, 0.95, 1.05, 1);
+      for (const sx of [-1, 1]) sph(0.018, sx * 0.05, 1.57, -0.34, 0x1b1b1b);
       const brim = new THREE.CylinderGeometry(0.36, 0.36, 0.02, 20);
       brim.translate(0, 1.66, -0.2);
       shellList.push(paint(brim, shell));
@@ -820,7 +821,7 @@ function bikeShape(style, body, det, glow, accent) {
     lamp.translate(0, 0.92, -0.72);
     det.push(paint(lamp, 0xd9dde1));
     for (const z of [-0.72, 0.7]) det.push(box(0.16, 0.04, 0.5, 0, 0.74, z, 0xd9dde1));
-    det.push(box(0.32, 0.06, 0.46, 0, 1.01, 0.2, 0x7a4a22));
+    det.push(box(0.34, 0.07, 0.48, 0, 1.03, 0.21, 0x7a4a22)); // 가죽 안장: 기본 시트를 완전히 덮도록 크고 높게
   } else if (style === 'express') {
     for (const sx of [-1, 1]) det.push(box(0.16, 0.36, 0.5, sx * 0.34, 0.78, 0.55, 0x2b2f33));
     det.push(box(0.5, 0.04, 0.5, 0, 1.04, 0.66, 0x55595e));

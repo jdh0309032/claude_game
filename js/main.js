@@ -137,7 +137,8 @@ const tmpColor = new THREE.Color();
 // 소품 슬롯: always = 항상 보이는 메시, variants = 슬롯마다 하나만 보이는 변형 그룹 (국가 테마별 스타일)
 const ZERO_MATRIX = new THREE.Matrix4().makeScale(0, 0, 0);
 class PropStrip {
-  constructor({ always = [], variants = [], block = null }, count, spacing, respawn) {
+  // jitter: 슬롯 간격에 섞는 무작위 오프셋 비율 (건물처럼 붙어 있는 소품은 0 → 서로 겹치지 않음)
+  constructor({ always = [], variants = [], block = null, jitter = 0.3 }, count, spacing, respawn) {
     this.always = always;
     this.block = block; // (it) => true 면 이번 프레임에 숨김 (빌보드 아래 가로수/가로등 등)
     this.variants = variants;
@@ -145,7 +146,7 @@ class PropStrip {
     this.respawn = respawn;
     this.items = [];
     for (let i = 0; i < count; i++) {
-      const it = { i, x: 0, z: 25 - i * spacing - Math.random() * spacing * 0.3, sx: 1, sy: 1, sz: 1, ry: 0, hidden: false, variant: 0 };
+      const it = { i, x: 0, z: 25 - i * spacing - Math.random() * spacing * jitter, sx: 1, sy: 1, sz: 1, ry: 0, hidden: false, variant: 0 };
       respawn(it, i);
       this.items.push(it);
     }
@@ -211,7 +212,8 @@ function buildingSide(side) {
   });
   const rukoBase = groups[0][0];
   rukoBase.userData.tinted = true;
-  const strip = new PropStrip({ variants: groups }, 42, 10.2, (it, k) => {
+  // 건물 길이(z) 10m + 간격 0.4m, 무작위 오프셋 없음 → 옆 건물과 겹치지 않음
+  const strip = new PropStrip({ variants: groups, jitter: 0 }, 42, 10.4, (it, k) => {
     const theme = slotTheme(it);
     const st = pickWeighted(theme.building);
     it.variant = BUILDING_STYLES.indexOf(st);
@@ -251,7 +253,7 @@ const strips = [
   new PropStrip({ variants: treeMeshes.map((m) => [m]), block: underBoard }, 56, 7.5, (it) => {
     it.variant = TREE_KINDS.indexOf(slotTheme(it).tree);
     const side = Math.random() < 0.5 ? -1 : 1;
-    it.x = side * (Math.random() < 0.7 ? rand(9.6, 10.2) : rand(26, 44));
+    it.x = side * (Math.random() < 0.7 ? rand(9.6, 10.2) : rand(22, 27)); // 먼 나무는 앞 건물(≤19.6m)과 뒤 건물(≥30m) 사이
     it.sx = it.sy = it.sz = rand(0.85, 1.3);
     it.ry = rand(0, Math.PI * 2);
   }),
@@ -275,7 +277,7 @@ const strips = [
   }),
   new PropStrip({ always: [bldgMesh] }, 30, 14, (it, k) => {
     const side = it.i % 2 ? 1 : -1;
-    it.x = side * rand(30, 80);
+    it.x = side * rand(38, 80); // 폭 최대 16m → 가장 가까운 면도 30m 밖
     it.sx = rand(8, 16);
     it.sy = rand(12, 50);
     it.sz = rand(8, 14);
@@ -1478,9 +1480,8 @@ function updateCamera(rdt) {
     // 화면 위쪽(헤더)·아래쪽(시트) 사이 창에 라이더가 오도록 투영을 아래로 늘려 위쪽으로 올려 그림
     const W = window.innerWidth, H = window.innerHeight;
     const extra = lerp(0.2, 0.45, p);
-    if (!camera.view || !camera.view.enabled || camera.view.fullHeight !== H * (1 + extra) || camera.view.fullWidth !== W) {
-      camera.setViewOffset(W, H * (1 + extra), 0, H * extra, W, H);
-    }
+    // 매 프레임 적용: 로그인 후 설정 반영(applyQuality → resize) 등이 aspect 를 W/H 로 되돌려 세로로 늘어나 보이는 것 방지
+    camera.setViewOffset(W, H * (1 + extra), 0, H * extra, W, H);
     const mfov = lerp(60, 84, p);
     if (Math.abs(camera.fov - mfov) > 0.05) camera.fov = lerp(camera.fov, mfov, Math.min(1, rdt * 4));
     camera.updateProjectionMatrix();
