@@ -343,7 +343,7 @@ export const BOX_STYLES = {
   vintage:   { base: 0x9c6b3c, band: 0x5a3e2b, lid: 0x7a5230, planks: true },
   anime:     { base: 0xffc2e2, band: 0x8e7cff, lid: 0xff6fae, anime: true },
   cyber:     { base: 0x0b0f1e, band: 0x39ff88, lid: 0x00e5ff, glow: true, grid: true },
-  national:  { base: 0xffffff, band: 0xffd700, lid: 0x1b1d26, glow: true }, // 국기는 createBike 에서 텍스처로
+  national:  { base: 0x1b1d26, band: 0xffd700, lid: 0x111111, national: true }, // 국기는 createBike 에서 텍스처로
 };
 export const OUTFIT_STYLES = {
   jacket:     { top: 0x00b14f, trim: 0xffffff, pants: 0x23272b },
@@ -371,11 +371,48 @@ export const HELMET_STYLES = {
   cyberneon: { kind: 'cyber', shell: 0x14141c, visor: 0x00e5ff, neon: 0xff2fd6 },
 };
 
-// 페인트 마감: solid(기본 램버트) / metallic(광택) / neon(발광)
+// 메탈릭 반사용 환경맵: 하늘 → 밝은 수평선 → 어두운 지면 + 소프트박스 하이라이트 (등장방형)
+let _envTex = null;
+function envTexture() {
+  if (_envTex) return _envTex;
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 256;
+  const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 0, 256);
+  g.addColorStop(0, '#6fa8dc');
+  g.addColorStop(0.42, '#e8f3ff');
+  g.addColorStop(0.5, '#ffffff');
+  g.addColorStop(0.56, '#a9b1bb');
+  g.addColorStop(1, '#4a525e');
+  x.fillStyle = g;
+  x.fillRect(0, 0, 512, 256);
+  x.fillStyle = 'rgba(255,255,255,0.95)';
+  for (const [px, py, w, h] of [[40, 40, 120, 26], [300, 30, 80, 40], [200, 90, 160, 12], [430, 70, 60, 20]]) x.fillRect(px, py, w, h);
+  _envTex = new THREE.CanvasTexture(c);
+  _envTex.mapping = THREE.EquirectangularReflectionMapping;
+  _envTex.colorSpace = THREE.SRGBColorSpace;
+  return _envTex;
+}
+
+// 페인트 마감: solid(무광 단색) / metallic(금속 반사 + 하이라이트) / neon(완전 발광 + 후광)
 export function paintMaterial(hex, finish) {
-  if (finish === 'metallic') return new THREE.MeshPhongMaterial({ color: hex, shininess: 120, specular: 0xbbbbbb });
-  if (finish === 'neon') return new THREE.MeshLambertMaterial({ color: hex, emissive: hex, emissiveIntensity: 0.65 });
+  if (finish === 'metallic') {
+    return new THREE.MeshStandardMaterial({ color: hex, metalness: 0.85, roughness: 0.18, envMap: envTexture(), envMapIntensity: 2.0 });
+  }
+  if (finish === 'neon') return new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).multiplyScalar(1.15) });
   return new THREE.MeshLambertMaterial({ color: hex });
+}
+
+// 네온 후광: 같은 모양을 살짝 키운 뒷면 반투명 가산 블렌딩 껍데기
+function neonHalo(geo, hex, center, scale = 1.12) {
+  const g = geo.clone();
+  g.translate(-center.x, -center.y, -center.z);
+  g.scale(scale, scale, scale);
+  g.translate(center.x, center.y, center.z);
+  return new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+    color: hex, transparent: true, opacity: 0.35, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
 }
 
 // ---------- 라이더 몸 (캡슐 관절 모델)
@@ -454,9 +491,10 @@ function rider(det, glow, out) {
 }
 
 // 헤드기어 (머리 중심 0, 1.58, -0.2 / 앞쪽 -z). paintOpt: { hex, finish } 로 껍데기 색 변경
-function headgear(det, glow, hel, paintOpt) {
+function headgear(det, glow, hel, paintOpt, shellOut = det) {
   const shell = paintOpt ? paintOpt.hex : hel.shell;
-  const shellList = paintOpt && paintOpt.finish === 'neon' ? glow : det; // 네온 컬러는 발광
+  // 메탈릭·네온 페인트는 쉘을 따로 모아 전용 재질(금속 반사 / 발광 + 후광)로 그림
+  const shellList = paintOpt && paintOpt.finish !== 'solid' ? shellOut : det;
   const sph = (r, x, y, z, c, list = det, sx = 1, sy = 1, sz = 1) => {
     const g = new THREE.SphereGeometry(r, 12, 10);
     g.scale(sx, sy, sz);
@@ -665,6 +703,14 @@ function deliveryBox(det, glow, style) {
   const st = BOX_STYLES[style] || BOX_STYLES.basic;
   det.push(box(0.34, 0.05, 0.4, 0, 1.03, 0.66, 0x333333));
   det.push(box(0.56, 0.5, 0.5, 0, 1.31, 0.68, st.base));
+  if (st.national) {
+    // 국가대표 배달통: 면을 가로지르는 띠 없이 국기가 잘 보이게. 금색 모서리 기둥 + 위 테두리만
+    det.push(box(0.58, 0.03, 0.52, 0, 1.575, 0.68, st.lid));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) glow.push(box(0.03, 0.52, 0.03, sx * 0.282, 1.31, 0.68 + sz * 0.252, st.band));
+    for (const sz of [-1, 1]) glow.push(box(0.6, 0.025, 0.025, 0, 1.595, 0.68 + sz * 0.262, st.band));
+    for (const sx of [-1, 1]) glow.push(box(0.025, 0.025, 0.54, sx * 0.292, 1.595, 0.68, st.band));
+    return;
+  }
   (st.glow ? glow : det).push(box(0.6, 0.06, 0.54, 0, 1.4, 0.68, st.band));
   (st.glow ? glow : det).push(box(0.61, 0.05, 0.55, 0, 1.58, 0.68, st.lid));
   if (st.glow) {
@@ -796,7 +842,8 @@ export function createBike(color, opts = {}) {
 
   // 라이더 (의상 + 헤드기어)
   rider(det, glow, out);
-  headgear(det, glow, hel, opts.helmetPaint);
+  const helmetShell = [];
+  headgear(det, glow, hel, opts.helmetPaint, helmetShell);
 
   // 배달 박스 (뒷좌석 랙 위) — 외부 'box' 모델이 있으면 그것으로 교체
   const extBox = models.instantiate('box');
@@ -806,13 +853,22 @@ export function createBike(color, opts = {}) {
   head.push(box(0.18, 0.12, 0.05, 0, 0.92, -0.7));
   tail.push(box(0.16, 0.06, 0.04, 0, 1.0, 0.78));
 
+  const bodyGeo = merge(body);
   lean.add(
-    new THREE.Mesh(merge(body), bodyMat),
+    new THREE.Mesh(bodyGeo, bodyMat),
     new THREE.Mesh(merge(det), vcMat),
     new THREE.Mesh(merge(head), headMat),
     new THREE.Mesh(merge(tail), bikeTail),
   );
   if (glow.length) lean.add(new THREE.Mesh(merge(glow), new THREE.MeshBasicMaterial({ vertexColors: true })));
+  // 네온 바이크: 차체 후광
+  if (opts.paint && opts.paint.finish === 'neon' && !opts.national) lean.add(neonHalo(bodyGeo, opts.paint.hex, new THREE.Vector3(0, 0.88, -0.15), 1.1));
+  // 메탈릭·네온 헤드기어 쉘
+  if (helmetShell.length && opts.helmetPaint) {
+    const hg = merge(helmetShell);
+    lean.add(new THREE.Mesh(hg, paintMaterial(opts.helmetPaint.hex, opts.helmetPaint.finish)));
+    if (opts.helmetPaint.finish === 'neon') lean.add(neonHalo(hg, opts.helmetPaint.hex, new THREE.Vector3(0, 1.6, -0.19), 1.14));
+  }
   if (extBox) {
     extBox.position.set(0, 1.05, 0.68);
     lean.add(extBox);
@@ -824,10 +880,14 @@ export function createBike(color, opts = {}) {
   if (nationalBox) {
     // 국가대표 전용 배달통: 양옆·뒷면에 국기
     const fm = new THREE.MeshBasicMaterial({ map: flagTexture(opts.nationalCode), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-    for (const [x, z, ry] of [[0.282, 0.68, Math.PI / 2], [-0.282, 0.68, -Math.PI / 2], [0, 0.932, 0]]) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 0.3), fm);
-      m.position.set(x, 1.29, z);
-      m.rotation.y = ry;
+    // 양옆·뒷면 꽉 차게 + 뚜껑 위 (모서리 기둥·테두리 안쪽에 들어가서 가리는 선 없음)
+    for (const [x, y, z, ry, rx, w, h] of [
+      [0.284, 1.31, 0.68, Math.PI / 2, 0, 0.45, 0.3], [-0.284, 1.31, 0.68, -Math.PI / 2, 0, 0.45, 0.3],
+      [0, 1.31, 0.934, 0, 0, 0.5, 0.333], [0, 1.594, 0.68, 0, -Math.PI / 2, 0.48, 0.32],
+    ]) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), fm);
+      m.position.set(x, y, z);
+      m.rotation.set(rx, ry, 0, 'YXZ');
       lean.add(m);
     }
   }

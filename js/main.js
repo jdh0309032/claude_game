@@ -1461,9 +1461,18 @@ function updateCamera(rdt) {
   const baseY = lerp(3.0, 5.4, p), camZ = lerp(6.2, 8.4, p);
   let lookZ = lerp(-14, -24, p), lookY = lerp(1.2, 0.6, p);
   if (G.state === 'menu') {
-    // 메뉴에서는 하단 시트에 가리지 않도록 라이더가 화면 가운데 오게
-    lookZ = lerp(-7, -6, p);
-    lookY = lerp(-1.9, -2.6, p);
+    // 시작 화면: 라이더 앞쪽 3/4 방향에서 천천히 도는 시네마틱 카메라 (하단 시트 위쪽에 라이더가 오게)
+    const t = G.time || 0;
+    const ang = 2.4 + Math.sin(t * 0.18) * 0.45;
+    const rad = lerp(8, 12.5, p);
+    camera.position.set(G.x + Math.sin(ang) * rad, lerp(1.8, 2.6, p), Math.cos(ang) * rad);
+    camera.lookAt(G.x, lerp(0.5, -1.6, p), 0);
+    camera.rotateY(lerp(0.1, 0.1, p)); // 라이더를 화면 오른쪽에 (왼쪽은 타이틀)
+    if (Math.abs(camera.fov - 50) > 0.05) {
+      camera.fov = lerp(camera.fov, 50, Math.min(1, rdt * 4));
+      camera.updateProjectionMatrix();
+    }
+    return;
   }
   const sf = clamp((G.speed * 3.6 - 60) / 220, 0, 1);
   const fov = lerp(62, 72, p) + sf * 12 + (G.air ? 6 : 0) + (G.feverT > 0 ? 10 : 0);
@@ -1485,7 +1494,7 @@ function updateCamera(rdt) {
 const keys = {};
 const held = { left: false, right: false, throttle: false, brake: false };
 const holdPointers = new Map(); // pointerId → 'left' | 'right' | 'throttle' | 'brake'
-const pad = { id: null, originX: 0, value: 0 };
+const pad = { id: null, originX: 0, originY: 0, value: 0, throttle: false, brake: false };
 const isTouchDevice = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 const holdButtons = { left: $('btnLeft'), right: $('btnRight'), throttle: $('btnThrottle'), brake: $('btnBrake') };
 
@@ -1514,6 +1523,7 @@ function releaseAllInput() {
   holdPointers.clear();
   pad.id = null;
   pad.value = 0;
+  pad.throttle = pad.brake = false;
   refreshHeld();
 }
 
@@ -1521,8 +1531,11 @@ function refreshHeld() {
   for (const k of Object.keys(held)) held[k] = false;
   for (const v of holdPointers.values()) held[v] = true;
   for (const [k, el] of Object.entries(holdButtons)) el.classList.toggle('active', held[k]);
-  $('steerKnob').style.transform = `translateX(${pad.value * STEER_RANGE}px)`;
-  $('steerDot').classList.toggle('on', pad.id !== null);
+  $('steerKnob').style.transform = `translate(${pad.value * STEER_RANGE}px, ${pad.knobY || 0}px)`;
+  const dot = $('steerDot');
+  dot.classList.toggle('on', pad.id !== null);
+  dot.classList.toggle('gas', pad.throttle);
+  dot.classList.toggle('brk', pad.brake);
 }
 
 // 버튼마다 포인터 ID 를 따로 추적 → 조향·가속·브레이크·니트로 동시 입력
@@ -1544,7 +1557,20 @@ function bindHold(el, key) {
 for (const [k, el] of Object.entries(holdButtons)) bindHold(el, k);
 
 // 터치 조향: 화면의 조향 쪽 영역 아무 데나 누른 지점이 기준점. 거기서 좌우로 민 만큼 조향 (패드 없음)
-const STEER_RANGE = 55; // 기준점에서 이만큼(px) 밀면 최대 조향
+// 한 손 조작(설정 ONE-HAND SLIDE): 기준점에서 위로 밀면 스로틀, 아래로 밀면 브레이크
+const STEER_RANGE = 80; // 기준점에서 이만큼(px) 밀면 최대 조향
+const STEER_DEAD = 6;   // 손떨림 무시 구간(px)
+const PEDAL_DEAD = 28;  // 위/아래로 이만큼(px) 넘게 밀어야 스로틀/브레이크
+function padFromPointer(e) {
+  const dx = e.clientX - pad.originX, dy = pad.originY - e.clientY;
+  const ax = Math.max(0, Math.abs(dx) - STEER_DEAD);
+  const t = clamp(ax / (STEER_RANGE - STEER_DEAD), 0, 1);
+  pad.value = Math.sign(dx) * t * (0.6 + 0.4 * t); // 가운데는 부드럽게, 끝으로 갈수록 크게
+  const oneHand = save.settings.oneHand !== false;
+  pad.throttle = oneHand && dy > PEDAL_DEAD;
+  pad.brake = oneHand && dy < -PEDAL_DEAD;
+  pad.knobY = oneHand ? clamp(-dy, -40, 40) : 0;
+}
 const steerZone = $('steerZone');
 const steerDot = $('steerDot');
 steerZone.addEventListener('pointerdown', (e) => {
@@ -1555,14 +1581,17 @@ steerZone.addEventListener('pointerdown', (e) => {
   const r = steerZone.getBoundingClientRect();
   pad.id = e.pointerId;
   pad.originX = e.clientX;
+  pad.originY = e.clientY;
   pad.value = 0;
+  pad.throttle = pad.brake = false;
+  pad.knobY = 0;
   steerDot.style.left = `${e.clientX - r.left}px`;
   steerDot.style.top = `${e.clientY - r.top}px`;
   refreshHeld();
 });
 steerZone.addEventListener('pointermove', (e) => {
   if (e.pointerId !== pad.id) return;
-  pad.value = clamp((e.clientX - pad.originX) / STEER_RANGE, -1, 1);
+  padFromPointer(e);
   refreshHeld();
 });
 for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) {
@@ -1570,6 +1599,8 @@ for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     if (e.pointerId !== pad.id) return;
     pad.id = null;
     pad.value = 0;
+    pad.throttle = pad.brake = false;
+    pad.knobY = 0;
     refreshHeld();
   });
 }
@@ -1809,8 +1840,9 @@ function updatePlaying(rdt) {
   // 속도: 자동 가속(기본) / 수동 가속(THROTTLE 을 눌러야 가속)
   const bk = getBike(save.bike);
   const maxSpd = bk.maxKmh / 3.6;
-  const throttle = keys.ArrowUp || keys.KeyW || held.throttle;
-  const brake = keys.ArrowDown || keys.KeyS || held.brake;
+  // 한 손 조작: 터치 영역에서 위로 밀면 스로틀, 아래로 밀면 브레이크
+  const throttle = keys.ArrowUp || keys.KeyW || held.throttle || pad.throttle;
+  const brake = keys.ArrowDown || keys.KeyS || held.brake || pad.brake;
   const manual = save.settings.throttle === 'manual';
   const cruise = Math.min(maxSpd * 0.85, (75 + G.distance / 45) / 3.6);
   let target = manual ? 40 / 3.6 : cruise;
@@ -2339,6 +2371,9 @@ function refreshMenu() {
   $('menuName').textContent = s ? s.nickname : save.lastName || 'Rider';
   $('accountLabel').textContent = s ? s.nickname.toUpperCase() : 'SIGN IN';
   $('menuBest').textContent = fmt(save.best);
+  $('menuDist').textContent = `${fmt(save.bestDist || 0)} m`;
+  $('menuCountry').innerHTML = `${flagBadge(save.country)}${escapeHtml(save.country)}`;
+  $('menuFlag').innerHTML = `${flagBadge(save.country)}<span>${escapeHtml(countryName(save.country).toUpperCase())}</span>`;
   $('menuCoins').textContent = fmtCoins(save.coins);
   $('adminBadge').classList.toggle('hidden', !isAdminMode());
   $('guestNote').classList.toggle('hidden', Boolean(s) && isServerReady());
@@ -2913,6 +2948,7 @@ const SETTING_LABELS = {
   quality: (v) => (v === 'high' ? 'HIGH' : 'LOW (FAST)'),
   throttle: (v) => (v === 'auto' ? 'AUTO' : 'MANUAL'),
   touchMode: (v) => (v === 'buttons' ? 'BUTTONS' : 'TOUCH & SLIDE'),
+  oneHand: (v) => (v === false ? 'OFF' : 'ON'),
   flipControls: onOff,
 };
 function renderSettings() {
@@ -2964,6 +3000,9 @@ $('btnAdmin').addEventListener('click', () => {
 function applyControlSettings() {
   document.body.classList.toggle('drag-mode', save.settings.touchMode === 'drag');
   document.body.classList.toggle('flip-controls', Boolean(save.settings.flipControls));
+  document.body.classList.toggle('one-hand', save.settings.oneHand !== false);
+  const hint = document.querySelector('.steer-hint');
+  if (hint) hint.textContent = save.settings.oneHand !== false ? 'SLIDE ← → STEER  ·  ↑ GAS  ·  ↓ BRAKE' : 'TOUCH & SLIDE TO STEER';
   document.body.classList.toggle('auto-throttle', save.settings.throttle === 'auto');
 }
 applyControlSettings();
@@ -2980,6 +3019,7 @@ for (const b of document.querySelectorAll('[data-setting]')) {
     if (k === 'throttle') s.throttle = s.throttle === 'auto' ? 'manual' : 'auto';
     if (k === 'touchMode') s.touchMode = s.touchMode === 'buttons' ? 'drag' : 'buttons';
     if (k === 'flipControls') s.flipControls = !s.flipControls;
+    if (k === 'oneHand') s.oneHand = s.oneHand === false;
     applyControlSettings();
     sfx.click();
     persist();

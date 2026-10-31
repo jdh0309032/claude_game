@@ -37,7 +37,7 @@
       <!-- Touch controls: steering (drag pad by default) / throttle + brake cluster. FLIP CONTROLS swaps the sides -->
       <div id="touchControls" class="touch-layer hidden">
         <!-- 터치 조향 영역: 누른 지점 기준으로 좌우 슬라이드 -->
-        <div id="steerZone" class="steer-zone"><span id="steerDot"><i id="steerKnob"></i></span><small class="steer-hint">TOUCH &amp; SLIDE TO STEER</small></div>
+        <div id="steerZone" class="steer-zone"><span id="steerDot"><b class="up">GAS</b><b class="down">BRAKE</b><i id="steerKnob"></i></span><small class="steer-hint">SLIDE ← → STEER · ↑ GAS · ↓ BRAKE</small></div>
         <div class="thumb left">
           <div id="steerBtns" class="steer-btns">
             <button id="btnLeft" class="tbtn steer" aria-label="Steer left" data-icon="left"></button>
@@ -86,37 +86,38 @@
     <div id="toast"></div>
 
     <!-- Main menu (app home) -->
-    <section id="menu" class="screen app">
-      <header class="app-header">
-        <div class="app-top">
-          <span class="brand">Grab<b>Rider</b></span>
-          <div class="app-top-right">
-            <span class="stat-pill coin light"><i data-icon="coin"></i><b id="menuCoins">0</b></span>
-            <button id="btnAccount" class="account-chip" data-icon="user"><span id="accountLabel">SIGN IN</span></button>
-          </div>
+    <section id="menu" class="screen app menu-v2">
+      <header class="menu-top">
+        <span id="menuFlag" class="glass-chip flag-chip"></span>
+        <div class="app-top-right">
+          <span class="stat-pill coin glass"><i data-icon="coin"></i><b id="menuCoins">0</b></span>
+          <button id="btnAccount" class="account-chip glass" data-icon="user"><span id="accountLabel">SIGN IN</span></button>
         </div>
+      </header>
+      <div class="title-block">
+        <h1 class="game-title"><span>GRAB</span><b>RIDER</b></h1>
+        <p class="tagline">DELIVER &middot; DODGE &middot; FLIP</p>
         <p class="greet">Hi, <b id="menuName">Rider</b>. Ready to deliver?</p>
         <div class="menu-chips"><span id="adminBadge" class="admin-badge hidden">ADMIN MODE</span><span id="guestNote" class="guest-note hidden"></span></div>
         <div id="challengeChip" class="challenge-chip hidden"><span data-icon="flag"></span><span id="challengeText">CHALLENGE ROAD</span><button id="btnClearChallenge" aria-label="Clear challenge">&times;</button></div>
-      </header>
-      <div class="app-sheet">
-        <div class="app-card hero">
-          <div class="hero-info">
-            <small>BEST SCORE</small>
-            <div id="menuBest" class="hero-score">0</div>
-          </div>
-          <button id="btnPlay" class="btn primary big" data-icon="play"><span>START</span></button>
+      </div>
+      <div class="app-sheet menu-sheet">
+        <div class="menu-stats">
+          <div><small>BEST SCORE</small><b id="menuBest" class="hero-score">0</b></div>
+          <div><small>BEST DISTANCE</small><b id="menuDist">0 m</b></div>
+          <div><small>COUNTRY</small><b id="menuCountry">-</b></div>
         </div>
+        <button id="btnPlay" class="btn play-btn" data-icon="play"><span>START RIDE</span></button>
         <button id="btnMulti" class="btn multi" data-icon="users"><span>1V1 MULTIPLAYER</span><small>Race a friend on the same road</small></button>
         <div class="service-grid">
-          <button id="btnGarage" class="svc"><i data-icon="bike"></i><span>GARAGE</span></button>
-          <button id="btnRanking" class="svc"><i data-icon="trophy"></i><span>RANKING</span></button>
-          <button id="btnMissions" class="svc"><i data-icon="box"></i><span>MISSIONS</span></button>
-          <button id="btnSettings" class="svc"><i data-icon="gear"></i><span>SETTINGS</span></button>
+          <button id="btnGarage" class="svc s-garage"><i data-icon="bike"></i><span>GARAGE</span></button>
+          <button id="btnRanking" class="svc s-rank"><i data-icon="trophy"></i><span>RANKING</span></button>
+          <button id="btnMissions" class="svc s-mission"><i data-icon="box"></i><span>MISSIONS</span></button>
+          <button id="btnSettings" class="svc s-settings"><i data-icon="gear"></i><span>SETTINGS</span></button>
         </div>
         <div class="help" id="menuHelp">
           <span class="kbd-only">ARROWS / A D steer &middot; UP throttle &middot; DOWN brake &middot; P pause</span>
-          <span class="touch-only">TOUCH &amp; SLIDE to steer &middot; other thumb throttle and brake</span>
+          <span class="touch-only">SLIDE to steer &middot; slide up / down for gas and brake</span>
         </div>
       </div>
     </section>
@@ -227,6 +228,7 @@
         <div class="setting"><span><i data-icon="gauge"></i>THROTTLE</span><button class="btn toggle" data-setting="throttle"></button></div>
         <div class="setting"><span><i data-icon="hand"></i>TOUCH STEERING</span><button class="btn toggle" data-setting="touchMode"></button></div>
         <div class="setting"><span><i data-icon="retry"></i>FLIP CONTROL LAYOUT</span><button class="btn toggle" data-setting="flipControls"></button></div>
+        <div class="setting"><span><i data-icon="hand"></i>ONE-HAND SLIDE</span><button class="btn toggle" data-setting="oneHand"></button></div>
         <div class="setting"><span><i data-icon="globe"></i>MY COUNTRY</span><span id="countryLabel" class="country-label"></span><select id="adminCountry" class="select small hidden" aria-label="Country (admin)"></select></div>
         <div id="adminRow" class="setting hidden"><span><i data-icon="gear"></i>ADMIN MODE</span><button id="btnAdmin" class="btn toggle">OFF</button></div>
         <h3>HOW TO PLAY</h3>

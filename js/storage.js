@@ -62,7 +62,7 @@ function defaults() {
     missions: [],
     missionLevels: {},
     // touchMode 기본값: 드래그 패드 / flipControls: 조향·스로틀 좌우 반전 / ctrlVer: 조작 기본값 이전용 버전
-    settings: { sound: true, music: true, vibrate: true, quality: 'high', touchMode: 'drag', flipControls: false, throttle: 'auto', wetFx: true, ctrlVer: 2 },
+    settings: { sound: true, music: true, vibrate: true, quality: 'high', touchMode: 'drag', flipControls: false, oneHand: true, throttle: 'auto', wetFx: true, ctrlVer: 2 },
     stats: { runs: 0, totalDist: 0, totalNear: 0 },
     // ---- 아래는 서버 data 에 저장하지 않는 런타임 상태
     country: guessRegion(), // 랭킹 국가 (IP 판별 → 로그인 시 서버에 고정된 값)
