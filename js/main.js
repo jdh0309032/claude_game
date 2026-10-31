@@ -1524,6 +1524,7 @@ function releaseAllInput() {
   pad.id = null;
   pad.value = 0;
   pad.throttle = pad.brake = false;
+  pad.rawX = pad.rawUp = 0;
   refreshHeld();
 }
 
@@ -1570,6 +1571,9 @@ function padFromPointer(e) {
   pad.throttle = oneHand && dy > PEDAL_DEAD;
   pad.brake = oneHand && dy < -PEDAL_DEAD;
   pad.knobY = oneHand ? clamp(-dy, -40, 40) : 0;
+  // 공중 묘기용 아날로그 방향 (데드존 밖에서만)
+  pad.rawX = clamp(dx / STEER_RANGE, -1, 1);
+  pad.rawUp = Math.abs(dy) > 12 ? clamp(dy / STEER_RANGE, -1, 1) : 0;
 }
 const steerZone = $('steerZone');
 const steerDot = $('steerDot');
@@ -1584,6 +1588,7 @@ steerZone.addEventListener('pointerdown', (e) => {
   pad.originY = e.clientY;
   pad.value = 0;
   pad.throttle = pad.brake = false;
+  pad.rawX = pad.rawUp = 0;
   pad.knobY = 0;
   steerDot.style.left = `${e.clientX - r.left}px`;
   steerDot.style.top = `${e.clientY - r.top}px`;
@@ -1600,6 +1605,7 @@ for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     pad.id = null;
     pad.value = 0;
     pad.throttle = pad.brake = false;
+  pad.rawX = pad.rawUp = 0;
     pad.knobY = 0;
     refreshHeld();
   });
@@ -1649,7 +1655,7 @@ function resetRun(seed) {
     speed: 21, x: 3.5 * driveSign(0), vx: 0, lean: 0, distance: 0, score: 0, mult: 1, time: 0,
     coinsRun: 0, nearMiss: 0, combo: 0, comboTimer: 0, maxCombo: 0,
     shield: false, magnetTime: 0, x2Time: 0, slowTime: 0, giantT: 0, invuln: 0, oncomingDist: 0,
-    rotPitch: 0, rotSpin: 0, rotationCount: 0, rotShown: 0, tricks: 0, landInv: 0,
+    rotAngle: 0, rotPitchAmt: 0, rotSpinAmt: 0, rotationCount: 0, rotShown: 0, tricks: 0, landInv: 0,
     maxKmh: 0, smashed: 0, jumps: 0, continued: false, finalized: false,
     nextSpawn: 25, nextCoins: 60, nextPower: wrand('power', 120, 180), nextCones: wrand('cone', 350, 600),
     nextStall: wrand('stall', 300, 500), nextHazard: wrand('hazard', 350, 500), nextDrop: wrand('hazard', 400, 600), nextRamp: wrand('ramp', 250, 400), nextPuddle: wrand('puddle', 400, 700), nextSquall: wrand('weather', 1200, 2000),
@@ -1929,8 +1935,8 @@ function startJump(c) {
   G.isAirborne = true;
   G.airY = 0.4;
   G.airVy = 9 + G.speed * 0.12; // 공중 묘기를 할 수 있도록 체공 시간 확보
-  G.rotPitch = 0;
-  G.rotSpin = 0;
+  airQ.identity();
+  G.rotAngle = G.rotPitchAmt = G.rotSpinAmt = 0;
   G.rotationCount = 0;
   G.rotShown = 0;
   G.jumps++;
@@ -1940,42 +1946,62 @@ function startJump(c) {
   popup('AIRBORNE', 'big', isTouchDevice ? 'STEER = 360 SPIN · THROTTLE / BRAKE = FLIP' : 'LEFT/RIGHT = SPIN · UP/DOWN = FLIP · BOTH = DIAGONAL');
 }
 
-// 가장 가까운 한 바퀴(2π 배수)까지 남은 각도 / 완료한 회전 수
+// 공중 자세는 쿼터니언 하나로 관리: 입력 방향(위·아래 = 플립, 좌·우 = 스핀, 사선 = 그 사이 축)을
+// 회전축으로 삼아 돌리므로 사선으로 계속 누르면 그 대각선 축으로 정확히 360° 돈다
 const TAU = Math.PI * 2;
-const offLevel = (a) => Math.abs(a - Math.round(a / TAU) * TAU);
-const turns = (a) => Math.floor(Math.abs(a) / TAU + 0.08);
+const airQ = new THREE.Quaternion();
+const airDq = new THREE.Quaternion();
+const airAxis = new THREE.Vector3();
+const levelQ = new THREE.Quaternion();
+const offLevelAngle = () => 2 * Math.acos(Math.min(1, Math.abs(airQ.w))); // 수평 자세와의 각도 차
 
-// 공중 묘기: 스로틀/브레이크 = 앞뒤 플립(Pitch), 좌우 = 옆으로 도는 360 스핀(Yaw), 동시 입력 = 대각선 다축 회전
+// 공중 묘기 입력 벡터: 터치 한 손 조작 중이면 손가락 방향 그대로(아날로그), 아니면 키/버튼
+function trickInput(steer, throttle, brake) {
+  if (pad.id !== null && save.settings.oneHand !== false) return [pad.rawUp || 0, pad.rawX || 0];
+  return [(throttle ? 1 : 0) - (brake ? 1 : 0), steer];
+}
+
 function updateAirTricks(rdt, steer, throttle, brake) {
-  const flip = (throttle ? 1 : 0) - (brake ? 1 : 0);
-  G.rotPitch += flip * AIR_FLIP * rdt;
-  G.rotSpin += steer * AIR_SPIN * rdt;
-  // 입력이 없으면 가까운 수평 자세로 살짝 맞춰 줌 (착지 보조)
-  const snap = (a) => {
-    const t = Math.round(a / TAU) * TAU;
-    return Math.abs(t - a) < 0.6 ? approach(a, t, 3 * rdt) : a;
-  };
-  if (!steer) G.rotSpin = snap(G.rotSpin);
-  if (!flip) G.rotPitch = snap(G.rotPitch);
-  G.rotationCount = turns(G.rotPitch) + turns(G.rotSpin);
+  const [ix, iy] = trickInput(steer, throttle, brake); // ix: 플립(위 +), iy: 스핀(오른쪽 +)
+  const mag = Math.min(1, Math.hypot(ix, iy));
+  if (mag > 0.15) {
+    airAxis.set(ix, iy, 0).normalize();
+    const ang = AIR_SPIN * mag * rdt;
+    airDq.setFromAxisAngle(airAxis, ang);
+    airQ.premultiply(airDq);
+    G.rotAngle += ang;
+    G.rotPitchAmt += ang * Math.abs(airAxis.x);
+    G.rotSpinAmt += ang * Math.abs(airAxis.y);
+  } else if (offLevelAngle() < 0.6) {
+    // 입력을 놓으면 가까운 수평 자세로 살짝 맞춰 줌 (착지 보조)
+    airQ.slerp(levelQ, Math.min(1, 4 * rdt));
+  }
+  G.rotationCount = Math.floor(G.rotAngle / TAU + 0.08);
   if (G.rotationCount > G.rotShown) {
     G.rotShown = G.rotationCount;
-    popup(trickName(turns(G.rotPitch), turns(G.rotSpin)), 'combo', `${G.rotationCount * 360}°`);
+    popup(trickName(trickKind(), G.rotationCount), 'combo', `${G.rotationCount * 360}°`);
     sfx.near(true);
   }
 }
 
-function trickName(p, r) {
-  if (p && r) return 'DIAGONAL MEGA FLIP';
-  if (r) return r > 1 ? `${r * 360} SPIN` : '360 SPIN';
-  if (p) return p > 1 ? `${p}x FLIP` : 'FLIP';
-  return 'AIR JUMP';
+// 어느 축 위주로 돌았는지: 두 성분이 비슷하면 대각선
+function trickKind() {
+  const tot = G.rotPitchAmt + G.rotSpinAmt || 1;
+  const pr = G.rotPitchAmt / tot;
+  if (pr > 0.3 && pr < 0.7) return 'diagonal';
+  return pr >= 0.7 ? 'flip' : 'spin';
 }
 
-// 회전 축별 차등 점수: 앞뒤 플립 < 옆으로 도는 스핀 < 대각선 다축 회전
-function trickPoints(p, r) {
-  if (p && r) return TRICK_POINTS.diagonal * Math.max(p, r);
-  return TRICK_POINTS.flip * p + TRICK_POINTS.spin * r || TRICK_POINTS.jump;
+function trickName(kind, n) {
+  if (!n) return 'AIR JUMP';
+  if (kind === 'diagonal') return n > 1 ? `${n}x DIAGONAL MEGA FLIP` : 'DIAGONAL MEGA FLIP';
+  if (kind === 'spin') return `${n * 360} SPIN`;
+  return n > 1 ? `${n}x FLIP` : 'FLIP';
+}
+
+// 회전 종류별 차등 점수 (1바퀴당): 앞뒤 플립 < 옆으로 도는 스핀 < 대각선 다축 회전
+function trickPoints(kind, n) {
+  return n ? TRICK_POINTS[kind] * n : TRICK_POINTS.jump;
 }
 
 function land() {
@@ -1983,23 +2009,22 @@ function land() {
   G.isAirborne = false;
   G.airY = 0;
   G.airVy = 0;
-  // 착지 판정: 차체가 수평(한 바퀴 단위)에 가까워야 성공, 아니면 크래시
-  const clean = offLevel(G.rotPitch) < LAND_TOL && offLevel(G.rotSpin) < LAND_TOL;
-  const p = turns(G.rotPitch), r = turns(G.rotSpin);
+  // 착지 판정: 차체가 수평 자세에 가까워야 성공, 아니면 크래시
+  const clean = offLevelAngle() < LAND_TOL;
+  const n = G.rotationCount, kind = trickKind();
   if (!clean) {
     popup('CRASH LANDING!', 'big');
     crash({ x: G.x - 0.5 });
     return;
   }
-  G.rotPitch = 0;
-  G.rotSpin = 0;
+  airQ.identity();
   // 착지 무적: 1.8초 동안 차·장애물과 부딪혀도 통과 (보호막처럼 은은하게 점멸)
   G.invuln = Math.max(G.invuln, LAND_IFRAMES);
   G.landInv = LAND_IFRAMES;
-  const pts = Math.round(trickPoints(p, r) * (G.x2Time > 0 ? 2 : 1));
+  const pts = Math.round(trickPoints(kind, n) * (G.x2Time > 0 ? 2 : 1));
   G.score += pts;
-  if (p + r > 0) G.tricks += p + r;
-  popup(p + r ? trickName(p, r) : 'AIR JUMP!', 'perfect', `CLEAN LANDING · +${fmt(pts)}`);
+  if (n > 0) G.tricks += n;
+  popup(n ? trickName(kind, n) : 'AIR JUMP!', 'perfect', `CLEAN LANDING · +${fmt(pts)}`);
   G.shake = 0.5;
   sfx.land();
   vibrate(40);
@@ -2017,9 +2042,9 @@ function hitPuddle() {
 const pivotTmp = new THREE.Vector3();
 const AIR_PIVOT = 0.9; // 공중 회전 중심 높이 (차체 가운데)
 function poseBike() {
-  if (G.air && (G.rotPitch || G.rotSpin)) {
-    bike.root.rotation.set(G.rotPitch, G.rotSpin, 0, 'YXZ');
-    pivotTmp.set(0, AIR_PIVOT, 0).applyEuler(bike.root.rotation);
+  if (G.air && G.rotAngle > 0) {
+    bike.root.quaternion.copy(airQ);
+    pivotTmp.set(0, AIR_PIVOT, 0).applyQuaternion(airQ);
     bike.root.position.set(G.x - pivotTmp.x, (G.airY || 0) + AIR_PIVOT - pivotTmp.y, -pivotTmp.z);
   } else {
     bike.root.rotation.set(0, 0, 0);
