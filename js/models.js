@@ -5,7 +5,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MODEL_CONFIG } from './config.js';
 import { icon as svgIcon } from './icons.js';
-import { drawFlag } from './themes.js';
+import { drawFlag, countryName } from './themes.js';
 
 // ======================================================================
 // 외부 모델 관리자
@@ -343,7 +343,7 @@ export const BOX_STYLES = {
   vintage:   { base: 0x9c6b3c, band: 0x5a3e2b, lid: 0x7a5230, planks: true },
   anime:     { base: 0xffc2e2, band: 0x8e7cff, lid: 0xff6fae, anime: true },
   cyber:     { base: 0x0b0f1e, band: 0x39ff88, lid: 0x00e5ff, glow: true, grid: true },
-  national:  { base: 0x1b1d26, band: 0xffd700, lid: 0x111111, national: true }, // 국기는 createBike 에서 텍스처로
+  national:  { base: 0x24262d, band: 0x101114, lid: 0x24262d, national: true }, // 면은 createBike 에서 국기 텍스처로 감쌈
 };
 export const OUTFIT_STYLES = {
   jacket:     { top: 0x00b14f, trim: 0xffffff, pants: 0x23272b },
@@ -413,6 +413,69 @@ function neonHalo(geo, hex, center, scale = 1.12) {
   return new THREE.Mesh(g, new THREE.MeshBasicMaterial({
     color: hex, transparent: true, opacity: 0.35, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false,
   }));
+}
+
+// 국가대표 배달통 면 텍스처: 국기를 면에 꽉 차게(가운데 기준 잘라 맞춤) + 은은한 광택 + 비네팅
+// kind: 'side' (#1 배지) | 'back' (TEAM 국가명 엠블럼) | 'top'
+const nboxCache = new Map();
+function nationalBoxTexture(code, kind) {
+  const key = code + kind;
+  if (nboxCache.has(key)) return nboxCache.get(key);
+  const W = kind === 'side' ? 256 : 288, H = 256;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const x = c.getContext('2d');
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const draw = () => {
+    // 3:2 국기를 면 높이에 맞추고 가운데를 기준으로 좌우를 잘라 꽉 채움
+    const fw = H * 1.5;
+    drawFlag(x, code, fw, H, (W - fw) / 2, 0, () => { draw(); tex.needsUpdate = true; });
+    const gloss = x.createLinearGradient(0, 0, W * 0.6, H);
+    gloss.addColorStop(0, 'rgba(255,255,255,0.28)');
+    gloss.addColorStop(0.45, 'rgba(255,255,255,0)');
+    x.fillStyle = gloss;
+    x.fillRect(0, 0, W, H);
+    const vig = x.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.78);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.28)');
+    x.fillStyle = vig;
+    x.fillRect(0, 0, W, H);
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    if (kind === 'back') {
+      const band = x.createLinearGradient(0, H * 0.58, 0, H);
+      band.addColorStop(0, 'rgba(10,12,16,0)');
+      band.addColorStop(1, 'rgba(10,12,16,0.78)');
+      x.fillStyle = band;
+      x.fillRect(0, H * 0.58, W, H * 0.42);
+      x.fillStyle = 'rgba(255,255,255,0.8)';
+      x.font = 'bold 18px "Rajdhani", "Arial", sans-serif';
+      x.fillText('N A T I O N A L   T E A M', W / 2, H * 0.76, W - 24);
+      x.fillStyle = '#ffffff';
+      x.font = 'bold 40px "Russo One", "Arial Black", sans-serif';
+      x.shadowColor = 'rgba(0,0,0,0.6)';
+      x.shadowBlur = 8;
+      x.fillText(countryName(code).toUpperCase(), W / 2, H * 0.89, W - 24);
+      x.shadowBlur = 0;
+    } else if (kind === 'side') {
+      // #1 배지: 흰 원 + 검은 글자 (어떤 국기 위에서도 잘 보이는 무채색)
+      x.shadowColor = 'rgba(0,0,0,0.45)';
+      x.shadowBlur = 10;
+      x.fillStyle = '#ffffff';
+      x.beginPath();
+      x.arc(W - 44, H - 44, 28, 0, Math.PI * 2);
+      x.fill();
+      x.shadowBlur = 0;
+      x.fillStyle = '#111111';
+      x.font = 'bold 28px "Russo One", "Arial Black", sans-serif';
+      x.fillText('#1', W - 44, H - 42);
+    }
+  };
+  draw();
+  nboxCache.set(key, tex);
+  return tex;
 }
 
 // ---------- 라이더 몸 (캡슐 관절 모델)
@@ -704,11 +767,12 @@ function deliveryBox(det, glow, style) {
   det.push(box(0.34, 0.05, 0.4, 0, 1.03, 0.66, 0x333333));
   det.push(box(0.56, 0.5, 0.5, 0, 1.31, 0.68, st.base));
   if (st.national) {
-    // 국가대표 배달통: 면을 가로지르는 띠 없이 국기가 잘 보이게. 금색 모서리 기둥 + 위 테두리만
-    det.push(box(0.58, 0.03, 0.52, 0, 1.575, 0.68, st.lid));
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) glow.push(box(0.03, 0.52, 0.03, sx * 0.282, 1.31, 0.68 + sz * 0.252, st.band));
-    for (const sz of [-1, 1]) glow.push(box(0.6, 0.025, 0.025, 0, 1.595, 0.68 + sz * 0.262, st.band));
-    for (const sx of [-1, 1]) glow.push(box(0.025, 0.025, 0.54, sx * 0.292, 1.595, 0.68, st.band));
+    // 국가대표 배달통: 어떤 국기와도 어울리게 무채색(흑연색) 모서리 파이핑만. 면 전체는 국기로 감쌈
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) det.push(box(0.022, 0.5, 0.022, sx * 0.28, 1.31, 0.68 + sz * 0.25, st.band));
+    for (const sy of [-1, 1]) {
+      for (const sz of [-1, 1]) det.push(box(0.58, 0.022, 0.022, 0, 1.31 + sy * 0.25, 0.68 + sz * 0.25, st.band));
+      for (const sx of [-1, 1]) det.push(box(0.022, 0.022, 0.52, sx * 0.28, 1.31 + sy * 0.25, 0.68, st.band));
+    }
     return;
   }
   (st.glow ? glow : det).push(box(0.6, 0.06, 0.54, 0, 1.4, 0.68, st.band));
@@ -878,17 +942,20 @@ export function createBike(color, opts = {}) {
   // 브레이크 시 후미등(스톱램프) 글로우
   if (opts.flag) lean.add(flagDecals(opts.flag, Boolean(extBox)));
   if (nationalBox) {
-    // 국가대표 전용 배달통: 양옆·뒷면에 국기
-    const fm = new THREE.MeshBasicMaterial({ map: flagTexture(opts.nationalCode), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-    // 양옆·뒷면 꽉 차게 + 뚜껑 위 (모서리 기둥·테두리 안쪽에 들어가서 가리는 선 없음)
-    for (const [x, y, z, ry, rx, w, h] of [
-      [0.284, 1.31, 0.68, Math.PI / 2, 0, 0.45, 0.3], [-0.284, 1.31, 0.68, -Math.PI / 2, 0, 0.45, 0.3],
-      [0, 1.31, 0.934, 0, 0, 0.5, 0.333], [0, 1.594, 0.68, 0, -Math.PI / 2, 0.48, 0.32],
+    // 국가대표 전용 배달통: 다섯 면을 국기로 꽉 채워 감쌈 (광택 + 뒷면 TEAM 엠블럼 + 옆면 #1 배지)
+    const mat = (kind) => new THREE.MeshLambertMaterial({
+      map: nationalBoxTexture(opts.nationalCode, kind), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    });
+    const side = mat('side'), back = mat('back'), top = mat('top');
+    for (const [m, x, y, z, ry, rx, w, h] of [
+      [side, 0.281, 1.31, 0.68, Math.PI / 2, 0, 0.5, 0.5], [side, -0.281, 1.31, 0.68, -Math.PI / 2, 0, 0.5, 0.5],
+      [back, 0, 1.31, 0.931, 0, 0, 0.56, 0.5], [top, 0, 1.561, 0.68, 0, -Math.PI / 2, 0.56, 0.5],
+      [top, 0, 1.31, 0.429, Math.PI, 0, 0.56, 0.5],
     ]) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), fm);
-      m.position.set(x, y, z);
-      m.rotation.set(rx, ry, 0, 'YXZ');
-      lean.add(m);
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m);
+      p.position.set(x, y, z);
+      p.rotation.set(rx, ry, 0, 'YXZ');
+      lean.add(p);
     }
   }
   const brakeGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xff2a2a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));

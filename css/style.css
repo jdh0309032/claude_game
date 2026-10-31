@@ -904,3 +904,45 @@ body:not(.one-hand) #steerDot b { display: none; }
 .rank-table td small.muted { display: block; }
 
 .steer-hint { white-space: nowrap; }
+
+/* ======================================================================
+   차고 v2: 미리보기 액션 바 + 타일 격자
+   ====================================================================== */
+.garage-action { display: flex; align-items: center; gap: 10px; background: #f6f8f7; border-radius: 16px; padding: 10px 12px; margin: 10px 0; min-height: 60px; }
+.ga-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ga-info small { font-size: 10px; font-weight: 800; letter-spacing: 1px; color: var(--green-dark); }
+.ga-info b { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ga-info span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.garage-action .btn { flex-shrink: 0; padding: 10px 16px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.garage-action .btn .ic { width: 16px; height: 16px; }
+.tile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 6px; }
+.tile-grid.compact { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.tile {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 4px 8px;
+  border: 2px solid transparent; border-radius: 14px; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  font: inherit; cursor: pointer; min-width: 0; color: var(--text);
+}
+.tile-grid.compact .tile { padding: 8px 2px 6px; gap: 3px; }
+.tile.sel { border-color: var(--green); box-shadow: 0 0 0 3px rgba(0, 177, 79, 0.18); }
+.tile.equipped { background: #effaf3; }
+.tile.locked .tv { filter: grayscale(0.7) brightness(0.8); }
+.tile .tn { font-size: 11px; font-weight: 800; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; }
+.tile-grid.compact .tn { font-size: 10px; }
+.tile em { font-style: normal; font-size: 10px; font-weight: 800; display: inline-flex; align-items: center; gap: 2px; }
+.tile em .ic { width: 11px; height: 11px; }
+.tile em.price { color: #b07800; }
+.tile em.ok { position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%; background: var(--green); color: #fff; justify-content: center; }
+.tile em.lock { color: var(--muted); }
+.tv { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.1); overflow: hidden; }
+.tv.round { border-radius: 50%; }
+.tv .ic { width: 24px; height: 24px; }
+.tv .flag { margin: 0; width: 32px; height: 21px; }
+.tv.flagtv { background: #f1f3f4; }
+.tv.none { background: #f1f3f4; color: var(--muted); font-weight: 800; }
+.tile-grid.compact .tv { width: 34px; height: 34px; }
+.tile-grid.compact .tv .flag { width: 30px; height: 20px; }
+.tv.dot { border-radius: 50%; background: var(--c, #ccc); }
+.tv.dot.metallic { background: radial-gradient(circle at 30% 25%, #fff 0, var(--c) 40%, #222 95%); }
+.tv.dot.neon { background: var(--c); box-shadow: 0 0 10px var(--c), inset 0 0 6px rgba(255, 255, 255, 0.7); }
+.tv.dot.factory { background: repeating-linear-gradient(45deg, #e9ecef 0 5px, #fff 5px 10px); box-shadow: inset 0 0 0 1px #d0d5da; }
+#garage .garage-actions { margin-top: 6px; }

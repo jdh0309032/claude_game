@@ -37,7 +37,7 @@
       <!-- Touch controls: steering (drag pad by default) / throttle + brake cluster. FLIP CONTROLS swaps the sides -->
       <div id="touchControls" class="touch-layer hidden">
         <!-- 터치 조향 영역: 누른 지점 기준으로 좌우 슬라이드 -->
-        <div id="steerZone" class="steer-zone"><span id="steerDot"><b class="up">GAS</b><b class="down">BRAKE</b><i id="steerKnob"></i></span><small class="steer-hint">SLIDE ← → STEER · ↑ GAS · ↓ BRAKE</small></div>
+        <div id="steerZone" class="steer-zone"><span id="steerDot"><i id="steerKnob"></i></span></div>
         <div class="thumb left">
           <div id="steerBtns" class="steer-btns">
             <button id="btnLeft" class="tbtn steer" aria-label="Steer left" data-icon="left"></button>
@@ -177,19 +177,18 @@
       <div class="panel">
         <div class="panel-head"><h2>GARAGE</h2><span class="stat-pill coin"><i data-icon="coin"></i><span id="garageCoins">0</span></span></div>
         <div id="garageStage" class="stage"><small class="stage-hint">DRAG TO ROTATE</small></div>
+        <div id="garageAction" class="garage-action"></div>
+        <div class="tabs" id="garageTabs">
+          <button data-tab="bike" class="on">BIKE</button>
+          <button data-tab="rider">RIDER</button>
+          <button data-tab="box">BOX</button>
+          <button data-tab="flag">FLAG</button>
+        </div>
+        <div id="shopList" class="shop-list"></div>
         <div class="row garage-actions">
           <button id="btnGacha" class="btn gold" data-icon="box"><span>MYSTERY BOX · 1,000</span></button>
           <button id="btnAdCoins" class="btn ad-btn" data-icon="play"><span id="adCoinsLabel">WATCH AD FOR 300 COINS</span></button>
         </div>
-        <div class="tabs" id="garageTabs">
-          <button data-tab="bike" class="on">BIKES</button>
-          <button data-tab="box">BOXES</button>
-          <button data-tab="rider">RIDER</button>
-          <button data-tab="flag">FLAGS</button>
-          <button data-tab="paint">PAINT</button>
-        </div>
-        <p id="garageHint" class="muted"></p>
-        <div id="shopList" class="shop-list"></div>
         <button class="btn back" data-back data-icon="back"><span>BACK</span></button>
       </div>
     </section>

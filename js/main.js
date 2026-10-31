@@ -42,8 +42,10 @@ const POWER_TYPES = ['shield', 'magnet', 'giant', 'x2', 'slow'];
 const POWER_WEIGHTS = [0.3, 0.3, 0.22, 0.1, 0.08];
 const POWER_LABEL = { shield: 'SHIELD', magnet: 'MAGNET', giant: 'GIANT MODE', x2: 'x2 SCORE', slow: 'SLOW-MO' };
 const GIANT_TIME = 6;
+// NPC 차선 변경: 깜빡이 시간 / 옆 차선까지 이동 시간 (s)
+const LANE_BLINK = 1.0, LANE_MOVE = 1.5;
 // 공중 묘기: 회전 속도(rad/s), 착지 허용 각도(rad), 착지 무적 시간(s), 회전 종류별 점수(1바퀴당)
-const AIR_FLIP = 9.5, AIR_SPIN = 9.5, LAND_TOL = 0.5, LAND_IFRAMES = 1.8;
+const AIR_FLIP = 9.5, AIR_SPIN = 9.5, LAND_TOL = 0.68, LAND_IFRAMES = 1.8;
 const TRICK_POINTS = { jump: 200, flip: 500, spin: 1200, diagonal: 3000 };
 
 // ---------- 시드 기반 월드 난수 (PRNG: mulberry32)
@@ -567,16 +569,21 @@ function updateCars(dt, collide) {
       c.changeT += dt;
       const on = Math.floor(c.changeT * 6) % 2 === 0;
       setBlink(c, Math.sign(LANES[c.targetLane] - c.baseX) * c.dir, on);
-      // 깜빡이 1초 → 급차선 변경 (약 0.5초 만에 옆 차선으로)
-      if (c.changeT > 1.0) {
+      // 깜빡이 1초 → 부드러운 S자 차선 변경 (가감속 곡선 + 진행 방향으로 차체가 살짝 틀어짐)
+      if (c.changeT > LANE_BLINK) {
         const tx = LANES[c.targetLane];
-        const step = 7 * dt;
-        c.baseX += clamp(tx - c.baseX, -step, step);
-        if (Math.abs(tx - c.baseX) < 0.01) {
+        const u = clamp((c.changeT - LANE_BLINK) / LANE_MOVE, 0, 1);
+        const ease = u * u * (3 - 2 * u);
+        c.baseX = c.fromX + (tx - c.fromX) * ease;
+        const vx = ((tx - c.fromX) * 6 * u * (1 - u)) / LANE_MOVE; // 횡속도 (m/s)
+        const yaw = clamp(Math.atan2(vx, Math.max(c.speed, 6)), -0.22, 0.22);
+        c.group.rotation.y = c.dir < 0 ? Math.PI + yaw : -yaw;
+        if (u >= 1) {
           c.baseX = tx;
           c.lane = c.targetLane;
           c.changing = false;
           c.canChange = false;
+          c.group.rotation.y = c.dir < 0 ? Math.PI : 0;
           c.blinkMatL.emissiveIntensity = 0;
           c.blinkMatR.emissiveIntensity = 0;
         }
@@ -587,6 +594,7 @@ function updateCars(dt, collide) {
         c.targetLane = ol;
         c.changing = true;
         c.changeT = 0;
+        c.fromX = c.baseX;
       }
     }
 
@@ -1720,7 +1728,6 @@ function startRun(opts = {}) {
   G.cdShown = 0;
   $('countdown').classList.remove('hidden');
   if (save.stats.runs === 0) {
-    toast(isTouchDevice ? 'TOUCH & SLIDE LEFT / RIGHT TO STEER  ·  OTHER THUMB: THROTTLE / BRAKE' : 'ARROWS STEER  ·  UP THROTTLE  ·  DOWN BRAKE');
     toast('Brush past cars for NEAR MISS bonuses');
   }
 }
@@ -1952,7 +1959,7 @@ function startJump(c) {
   c.passed = true;
   sfx.jump();
   vibrate(30);
-  popup('AIRBORNE', 'big', isTouchDevice ? 'STEER = 360 SPIN · THROTTLE / BRAKE = FLIP' : 'LEFT/RIGHT = SPIN · UP/DOWN = FLIP · BOTH = DIAGONAL');
+  popup('AIRBORNE', 'big');
 }
 
 // 공중 자세는 쿼터니언 하나로 관리: 입력 방향(위·아래 = 플립, 좌·우 = 스핀, 사선 = 그 사이 축)을
@@ -2424,7 +2431,7 @@ $('btnClearChallenge').addEventListener('click', () => {
   history.replaceState(null, '', location.pathname);
   refreshMenu();
 });
-$('btnGarage').addEventListener('click', () => { renderGarage(); openScreen('garage'); });
+$('btnGarage').addEventListener('click', () => { garageSel = null; renderGarage(); openScreen('garage'); });
 $('btnRanking').addEventListener('click', () => { openScreen('ranking'); renderRanking(); });
 $('btnMissions').addEventListener('click', () => { renderMissions(); openScreen('missions'); });
 $('btnSettings').addEventListener('click', () => { renderSettings(); openScreen('settings'); });
@@ -2444,176 +2451,165 @@ for (const b of document.querySelectorAll('[data-back]')) {
   });
 }
 
-// ---------- 차고 (바이크 / 배달 상자 / 라이더 의상·헬멧 / 국기)
+// ---------- 차고: 탭 4개(바이크 / 라이더 / 배달통 / 국기) + 타일 격자
+// 타일을 누르면 3D 쇼룸에서 먼저 미리보고, 아래 버튼으로 장착하거나 구매
 let garageTab = 'bike';
+let garageSel = null; // { kind, id } — 미리보기 중인 아이템
 const SHOP = {
   box: { list: BOXES, owned: 'ownedBoxes', cur: 'box' },
   outfit: { list: OUTFITS, owned: 'ownedOutfits', cur: 'outfit' },
   helmet: { list: HELMETS, owned: 'ownedHelmets', cur: 'helmet' },
   flag: { list: FLAGS, owned: 'ownedFlags', cur: 'flag' },
 };
+// 종류별 정보: 저장 키(장착), 보유 목록, 카탈로그, 이름
+const KINDS = {
+  bike: { cur: 'bike', owned: 'ownedBikes', list: () => BIKES, label: 'BIKE' },
+  box: { cur: 'box', owned: 'ownedBoxes', list: () => BOXES, label: 'DELIVERY BOX' },
+  outfit: { cur: 'outfit', owned: 'ownedOutfits', list: () => OUTFITS, label: 'OUTFIT' },
+  helmet: { cur: 'helmet', owned: 'ownedHelmets', list: () => HELMETS, label: 'HEADGEAR' },
+  flag: { cur: 'flag', owned: 'ownedFlags', list: () => [{ id: '', name: 'No Flag', price: 0, desc: 'Ride without a flag' }, ...FLAGS], label: 'FLAG' },
+  bikePaint: { cur: 'bikePaint', owned: 'ownedPaints', list: () => [{ id: '', name: 'Factory Color', price: 0, desc: 'Original color' }, ...PAINTS], label: 'BIKE PAINT' },
+  helmetPaint: { cur: 'helmetPaint', owned: 'ownedPaints', list: () => [{ id: '', name: 'Factory Color', price: 0, desc: 'Original color' }, ...PAINTS], label: 'HEADGEAR COLOR' },
+};
+const TAB_SECTIONS = {
+  bike: ['bike', 'bikePaint'],
+  rider: ['helmet', 'helmetPaint', 'outfit'],
+  box: ['box'],
+  flag: ['flag'],
+};
+const itemOf = (kind, id) => KINDS[kind].list().find((x) => x.id === id) || null;
 
-function shopButton(kind, item, owned, sel) {
-  if (sel) return '<button class="btn" disabled>EQUIPPED</button>';
-  if (item.special === 'national' && save.nationalUnlocked) owned = true;
-  // 관리자 모드: 구매 없이 모든 아이템 장착
-  if (owned || isAdminMode()) return `<button class="btn primary" data-kind="${kind}" data-id="${item.id}" data-act="select">EQUIP</button>`;
-  if (item.special === 'national') return '<button class="btn" disabled>#1 ONLY</button>';
-  if (item.special) return '<button class="btn" disabled>7-DAY STREAK</button>';
-  return `<button class="btn gold" data-kind="${kind}" data-id="${item.id}" data-act="buy" data-icon="coin" ${save.coins < item.price ? 'disabled' : ''}>${icon('coin')}${fmtCoins(item.price)}</button>`;
+// 아이템 상태: equipped / owned / buy / locked
+function itemState(kind, it) {
+  const k = KINDS[kind];
+  if (save[k.cur] === it.id) return 'equipped';
+  if (it.id === '' || it.price === 0) return 'owned';
+  if (it.special === 'national') return save.nationalUnlocked || isAdminMode() ? 'owned' : 'locked';
+  if (save[k.owned].includes(it.id) || isAdminMode()) return 'owned';
+  if (it.special) return 'locked';
+  return 'buy';
 }
 
-function renderShopItems(kind) {
-  const { list, owned, cur } = SHOP[kind];
-  return list.map((it) => {
-    const o = save[owned].includes(it.id), sel = save[cur] === it.id;
-    const sw = kind === 'flag'
-      ? `<div class="swatch flag-swatch">${flagBadge(it.code, 'flag big')}</div>`
-      : `<div class="swatch" style="background:${it.swatch}"></div>`;
-    return `<div class="bike-card ${sel ? 'selected' : ''}">${sw}
-      <div><h4>${escapeHtml(it.name)}</h4><p>${escapeHtml(it.desc)}</p></div>${shopButton(kind, it, o, sel)}</div>`;
-  }).join('');
-}
-
-// ---------- 컬러 팔레트 (바이크 / 헤드기어)
-const PAINT_SLOTS = [['bike', 'bikePaint', 'BIKE PAINT'], ['helmet', 'helmetPaint', 'HEADGEAR COLOR']];
-function paintSwatch(p) {
-  if (!p) return '<div class="swatch paint-swatch factory"></div>';
-  const hex = '#' + p.hex.toString(16).padStart(6, '0');
-  return `<div class="swatch paint-swatch ${p.finish}" style="--c:${hex}"></div>`;
-}
-function renderPaints() {
-  return PAINT_SLOTS.map(([slot, key, title]) => {
-    const factory = `<div class="bike-card ${save[key] ? '' : 'selected'}">${paintSwatch(null)}
-      <div><h4>Factory Color</h4><p>Original color</p></div>${save[key] ? `<button class="btn primary" data-kind="paint" data-slot="${slot}" data-id="" data-act="select">EQUIP</button>` : '<button class="btn" disabled>EQUIPPED</button>'}</div>`;
-    const items = PAINTS.map((p) => {
-      const owned = save.ownedPaints.includes(p.id) || isAdminMode();
-      const sel = save[key] === p.id;
-      const btn = sel ? '<button class="btn" disabled>EQUIPPED</button>'
-        : owned ? `<button class="btn primary" data-kind="paint" data-slot="${slot}" data-id="${p.id}" data-act="select">EQUIP</button>`
-          : `<button class="btn gold" data-kind="paint" data-slot="${slot}" data-id="${p.id}" data-act="buy" ${save.coins < p.price ? 'disabled' : ''}>${icon('coin')}${fmtCoins(p.price)}</button>`;
-      return `<div class="bike-card ${sel ? 'selected' : ''}">${paintSwatch(p)}
-        <div><h4>${escapeHtml(p.name)}</h4><p>${p.finish.toUpperCase()}</p></div>${btn}</div>`;
-    }).join('');
-    return `<div class="shop-section">${title}</div>${factory}${items}`;
-  }).join('');
-}
-function onPaintAction(id, act, slot) {
-  const key = slot === 'helmet' ? 'helmetPaint' : 'bikePaint';
-  const p = paintOf(id);
-  if (act === 'buy') {
-    if (!p || isAdminMode() || save.coins < p.price || save.ownedPaints.includes(id)) return;
-    save.coins -= p.price;
-    save.ownedPaints.push(id);
-    sfx.power();
-    toast(`UNLOCKED  ·  ${p.name}`);
-  } else {
-    if (id && !save.ownedPaints.includes(id) && !isAdminMode()) return;
-    sfx.click();
+function tileVisual(kind, it) {
+  if (kind === 'bike') {
+    if (it.special === 'national') {
+      const [c1, c2] = nationalLivery(myNationalCode()).map((c) => '#' + c.toString(16).padStart(6, '0'));
+      return `<span class="tv round" style="background:linear-gradient(135deg, ${c1} 50%, ${c2} 50%)">${flagBadge(myNationalCode(), 'flag')}</span>`;
+    }
+    const hex = '#' + it.color.toString(16).padStart(6, '0');
+    return `<span class="tv round" style="background:${hex}26;color:${hex === '#f2f2f2' ? '#5b6470' : hex};box-shadow:inset 0 0 0 2px ${hex}">${icon('bike')}</span>`;
   }
-  save[key] = id;
-  persist();
-  syncMyLook();
-  buildBike();
-  resetBikePose();
-  renderGarage();
+  if (kind === 'flag') return it.id ? `<span class="tv flagtv">${flagBadge(it.id, 'flag')}</span>` : '<span class="tv none">—</span>';
+  if (kind === 'bikePaint' || kind === 'helmetPaint') {
+    if (!it.id) return '<span class="tv dot factory"></span>';
+    const hex = '#' + it.hex.toString(16).padStart(6, '0');
+    return `<span class="tv dot ${it.finish}" style="--c:${hex}"></span>`;
+  }
+  if (kind === 'box' && it.special === 'national') return `<span class="tv">${flagBadge(myNationalCode(), 'flag')}</span>`;
+  return `<span class="tv" style="background:${it.swatch}"></span>`;
 }
 
-// 국가대표 바이크 카드 (국가 1위만 / 관리자)
-function nationalCard() {
-  const b = getBike('national');
-  const here = countryName(save.country);
-  const can = save.nationalUnlocked || isAdminMode();
-  const sel = save.bike === 'national';
-  const [c1, c2] = nationalLivery(myNationalCode()).map((c) => '#' + c.toString(16).padStart(6, '0'));
-  const lock = can ? '' : 'locked';
-  const desc = can
-    ? `${save.nationalUnlocked ? `You are #1 in ${escapeHtml(here)}.` : 'Admin mode.'} Painted in national colors · TOP ${b.maxKmh} KM/H`
-    : `Locked. Reach #1 in the ${escapeHtml(here)} ranking to ride it. Lose #1 and it is taken back.`;
-  return `<div class="bike-card national-item ${lock} ${sel ? 'selected' : ''}">
-    <div class="bike-icon ${can ? '' : 'mystery'}" style="${can ? `background:linear-gradient(135deg, ${c1} 50%, ${c2} 50%)` : ''}">${can ? flagBadge(myNationalCode(), 'flag big') : '?'}</div>
-    <div><h4>${escapeHtml(b.name)} · ${escapeHtml(here)}</h4><p>${desc}</p>
-      <div class="stat">SPEED<i><b style="width:${(b.maxKmh / 320) * 100}%"></b></i></div></div>
-    ${sel ? '<button class="btn" disabled>EQUIPPED</button>' : can ? '<button class="btn primary" data-kind="bike" data-id="national" data-act="select">EQUIP</button>' : '<button class="btn" disabled>#1 ONLY</button>'}</div>`;
+function tileSub(kind, it, st) {
+  if (st === 'equipped') return `<em class="ok">${icon('check')}</em>`;
+  if (st === 'locked') return `<em class="lock">${it.special === 'national' ? '#1' : '7-DAY'}</em>`;
+  if (st === 'buy') return `<em class="price">${icon('coin')}${fmtCoins(it.price)}</em>`;
+  return '';
+}
+
+function renderTiles(kind) {
+  const k = KINDS[kind];
+  const items = k.list().filter((it) => kind !== 'bike' || !it.special || it.special === 'national');
+  const compact = kind === 'flag' || kind === 'bikePaint' || kind === 'helmetPaint';
+  return `<div class="shop-section">${k.label}</div><div class="tile-grid ${compact ? 'compact' : ''}">${items.map((it) => {
+    const st = itemState(kind, it);
+    const sel = garageSel && garageSel.kind === kind && garageSel.id === it.id;
+    const name = kind === 'flag' && it.id ? it.id : it.name;
+    return `<button class="tile ${st} ${sel ? 'sel' : ''}" data-kind="${kind}" data-id="${it.id}" title="${escapeHtml(it.name)}">
+      ${tileVisual(kind, it)}<span class="tn">${escapeHtml(name)}</span>${tileSub(kind, it, st)}</button>`;
+  }).join('')}</div>`;
+}
+
+// 미리보기: 지금 장착 상태에서 선택한 아이템 하나만 바꿔 쇼룸에 표시
+function previewLook() {
+  if (!garageSel) return myLook();
+  const eq = { ...save, [KINDS[garageSel.kind].cur]: garageSel.id };
+  return composeLook(eq.bike, myNationalCode(), eq);
+}
+
+function renderActionBar() {
+  const bar = $('garageAction');
+  const sel = garageSel;
+  const it = sel && itemOf(sel.kind, sel.id);
+  if (!it) {
+    bar.innerHTML = '<div class="ga-info"><b>Tap an item to preview</b><small>Your current ride is shown above</small></div>';
+    return;
+  }
+  const st = itemState(sel.kind, it);
+  let desc = it.desc || '';
+  if (sel.kind === 'bike' && !it.special) desc = `${desc} · TOP ${it.maxKmh} KM/H`;
+  if (it.special === 'national') desc = save.nationalUnlocked || isAdminMode() ? `Painted in ${countryName(myNationalCode())} colors` : `Be #1 in ${countryName(save.country)} to unlock`;
+  if (it.finish) desc = `${it.finish.toUpperCase()} finish · bike and headgear`;
+  let btn;
+  if (st === 'equipped') btn = '<button class="btn" disabled>EQUIPPED</button>';
+  else if (st === 'owned') btn = '<button class="btn primary" data-act="equip">EQUIP</button>';
+  else if (st === 'buy') btn = `<button class="btn gold" data-act="buy" ${save.coins < it.price ? 'disabled' : ''}>${icon('coin')}${fmtCoins(it.price)}</button>`;
+  else btn = `<button class="btn" disabled>${it.special === 'national' ? '#1 ONLY' : '7-DAY STREAK'}</button>`;
+  bar.innerHTML = `<div class="ga-info"><small>${KINDS[sel.kind].label}</small><b>${escapeHtml(it.name)}</b><span>${escapeHtml(desc)}</span></div>${btn}`;
 }
 
 function renderGarage() {
   $('garageCoins').textContent = fmtCoins(save.coins);
   if (stage) {
-    const look = myLook();
+    const look = previewLook();
     stage.setRider(look.opts, look.color);
   }
   $('btnGacha').disabled = save.coins < GACHA_PRICE;
   $('btnAdCoins').classList.toggle('hidden', !adsEnabled());
   updateAdCoinsLabel();
   for (const b of $('garageTabs').children) b.classList.toggle('on', b.dataset.tab === garageTab);
-  const list = $('shopList');
   const adminNote = isAdminMode() ? '<div class="admin-note">ADMIN MODE · every item unlocked · scores are not recorded</div>' : '';
-  if (garageTab === 'bike') {
-    $('garageHint').textContent = 'Faster bikes rack up distance points faster.';
-    list.innerHTML = adminNote + nationalCard() + BIKES.filter((b) => !b.special).map((b) => {
-      const owned = save.ownedBikes.includes(b.id);
-      const sel = save.bike === b.id;
-      const hex = '#' + b.color.toString(16).padStart(6, '0');
-      return `<div class="bike-card ${sel ? 'selected' : ''}">
-        <div class="bike-icon" style="background:${hex}33;border:2px solid ${hex};color:${hex === '#f2f2f2' ? '#5b6470' : hex}">${icon('bike')}</div>
-        <div><h4>${escapeHtml(b.name)}</h4><p>${escapeHtml(b.desc)} · TOP ${b.maxKmh} KM/H</p>
-          <div class="stat">SPEED<i><b style="width:${(b.maxKmh / 320) * 100}%"></b></i></div>
-          <div class="stat">HANDLING<i><b style="width:${(b.handling / 1.6) * 100}%"></b></i></div>
-          <div class="stat">ACCEL<i><b style="width:${(b.accel / 1.7) * 100}%"></b></i></div>
-        </div>${shopButton('bike', b, owned, sel)}</div>`;
-    }).join('');
-  } else if (garageTab === 'box') {
-    $('garageHint').textContent = 'Delivery box skins (cosmetic only).';
-    list.innerHTML = adminNote + renderShopItems('box');
-  } else if (garageTab === 'flag') {
-    $('garageHint').textContent = 'World flags for your helmet, bike and delivery box.';
-    const none = `<div class="bike-card ${save.flag ? '' : 'selected'}"><div class="swatch mystery">-</div>
-      <div><h4>No Flag</h4><p>Ride without a flag</p></div>${save.flag ? '<button class="btn primary" data-kind="flag" data-id="" data-act="select">EQUIP</button>' : '<button class="btn" disabled>EQUIPPED</button>'}</div>`;
-    list.innerHTML = adminNote + none + renderShopItems('flag');
-  } else if (garageTab === 'paint') {
-    $('garageHint').textContent = 'Buy a color once, then use it on your bike and your headgear. The National Team bike keeps its flag wrap.';
-    list.innerHTML = adminNote + renderPaints();
-  } else {
-    $('garageHint').textContent = 'Customize your rider outfit and headgear.';
-    list.innerHTML = `${adminNote}<div class="shop-section">OUTFIT</div>${renderShopItems('outfit')}<div class="shop-section">HEADGEAR</div>${renderShopItems('helmet')}`;
-  }
+  $('shopList').innerHTML = adminNote + TAB_SECTIONS[garageTab].map(renderTiles).join('');
+  renderActionBar();
 }
 
 $('garageTabs').addEventListener('click', (e) => {
   const b = e.target.closest('[data-tab]');
   if (!b) return;
   garageTab = b.dataset.tab;
+  garageSel = null;
   sfx.click();
   renderGarage();
 });
 
 $('shopList').addEventListener('click', (e) => {
+  const t = e.target.closest('.tile');
+  if (!t) return;
+  garageSel = { kind: t.dataset.kind, id: t.dataset.id };
+  sfx.click();
+  renderGarage();
+});
+
+$('garageAction').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-act]');
-  if (!btn) return;
-  const { kind, id, act } = btn.dataset;
-  if (kind === 'paint') {
-    onPaintAction(id, act, btn.dataset.slot);
-    return;
-  }
-  const isBike = kind === 'bike';
-  const item = isBike ? getBike(id) : SHOP[kind].list.find((x) => x.id === id);
-  const ownedKey = isBike ? 'ownedBikes' : SHOP[kind].owned;
-  const curKey = isBike ? 'bike' : SHOP[kind].cur;
-  if (act === 'buy') {
-    if (!item || item.price <= 0 || save.coins < item.price || isAdminMode()) return;
-    save.coins -= item.price;
-    save[ownedKey].push(id);
+  if (!btn || !garageSel) return;
+  const { kind, id } = garageSel;
+  const k = KINDS[kind];
+  const it = itemOf(kind, id);
+  if (!it) return;
+  const st = itemState(kind, it);
+  if (btn.dataset.act === 'buy') {
+    if (st !== 'buy' || save.coins < it.price) return;
+    save.coins -= it.price;
+    save[k.owned].push(id);
     sfx.power();
-    toast(`UNLOCKED  ·  ${item.name}`);
+    toast(`UNLOCKED  ·  ${it.name}`);
   } else {
-    const allowed = isAdminMode() || id === '' || (id === 'national' ? save.nationalUnlocked : save[ownedKey].includes(id));
-    if (!allowed) return;
+    if (st !== 'owned') return;
     sfx.click();
   }
-  if (isBike && id === 'national' && save.bike !== 'national') save.prevBike = save.bike;
+  if (kind === 'bike' && id === 'national' && save.bike !== 'national') save.prevBike = save.bike;
   if (kind === 'box' && id === 'national' && save.box !== 'national') save.prevBox = save.box;
-  save[curKey] = id;
+  save[k.cur] = id;
   persist();
   syncMyLook();
   buildBike();
@@ -3042,8 +3038,7 @@ function applyControlSettings() {
   document.body.classList.toggle('drag-mode', save.settings.touchMode === 'drag');
   document.body.classList.toggle('flip-controls', Boolean(save.settings.flipControls));
   document.body.classList.toggle('one-hand', save.settings.oneHand !== false);
-  const hint = document.querySelector('.steer-hint');
-  if (hint) hint.textContent = save.settings.oneHand !== false ? '↔ STEER · ↑ GAS · ↓ BRAKE' : 'SLIDE TO STEER';
+
   document.body.classList.toggle('auto-throttle', save.settings.throttle === 'auto');
 }
 applyControlSettings();

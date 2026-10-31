@@ -25,7 +25,7 @@ export const MISSION_DEFS = {
   combo:    { label: (n) => `Reach a x${n} near-miss combo`,          targets: [3, 5, 8, 12, 16, 20] },
   speed:    { label: (n) => `Hit ${n} KM/H`,            targets: [120, 150, 180, 210, 240, 280] },
   smash:    { label: (n) => `Smash ${n} cars in Giant Mode`,     targets: [1, 3, 5, 10, 15, 25] },
-  jump:     { label: (n) => `Air jump off ${n} ramp trucks`,         targets: [1, 2, 3, 5, 8, 12] },
+  jump:     { label: (n) => `Get airborne ${n} times off ramps`,      targets: [1, 2, 3, 5, 8, 12] },
 };
 
 // 서버(player_data.data)에 저장하는 키
