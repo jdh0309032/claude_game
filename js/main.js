@@ -118,7 +118,7 @@ clips.audio = () => sfx.recordStream(); // 게임 소리도 함께 녹음
 clips.heroImage = () => { const look = myLook(); return renderRiderHero(620, 620, look.opts, look.color); };
 // 영상 글자: 링크·설치 유도 문구 (스토어 주소가 있으면 스토어 안내)
 function clipMeta() {
-  const url = challengeUrl().replace(/^https?:\/\//, '').replace(/\?.*$/, '');
+  const url = challengeUrl().replace(/^https?:\/\//, '').replace(/\?.*$/, '').replace(/index\.html$/, '').replace(/\/$/, '');
   return {
     url, scriptFont: SCRIPT_FONTS[getLang()], scoreLabel: t('SCORE'), cta: t('PLAY FREE NOW'),
     store: STORE_URL ? t('GET IT ON GOOGLE PLAY') : url,
@@ -126,7 +126,7 @@ function clipMeta() {
 }
 // 점프대가 곧 나오면 미리 녹화 시작 (점프 직전 장면까지)
 function armClip() {
-  if (clips.recording || save.settings.clips === false) return;
+  if ((clips.live && !clips.live.stopAt) || save.settings.clips === false) return;
   clips.enabled = true;
   clips.arm(clipMeta());
 }
@@ -2193,7 +2193,6 @@ function startJump(c) {
   G.rotShown = 0;
   G.jumps++;
   c.passed = true;
-  clips.enabled = save.settings.clips !== false;
   clips.enabled = save.settings.clips !== false;
   clips.start(clipMeta());
   sfx.jump();
@@ -4395,6 +4394,8 @@ if (DEBUG) {
   window.__camera = camera;
   window.__save = save;
   window.__clipsRec = () => clips.recording;
+  window.__clipsLog = [];
+  clips.onClip = (b) => window.__clipsLog.push(b.score);
   window.__clips = clips;
   window.__dbg = {
     show: (id) => show(id),

@@ -1397,3 +1397,6 @@ body.touch #menu .help { display: none; }
 .ss-card .btn { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .ss-card .btn.res-soft { background: #f3f5f4; border: none; }
 .ss-card .btn.res-soft .ic { color: #d62976; }
+/* 자랑하기 창은 게임 UI 층(터치 무시) 안에 있으므로 창 전체가 터치를 받도록 (X·바깥 눌러 닫기) */
+.share-sheet, .share-sheet * { pointer-events: auto; }
+.ss-x { display: grid; place-items: center; touch-action: manipulation; }
