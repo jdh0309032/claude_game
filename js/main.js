@@ -7,8 +7,9 @@ import {
   THEMES, ZONE_LENGTH, themeAt, themeIndexAt, driveSign, pickWeighted, COUNTRY_CODES, countryName, isCountryCode, flagBadge, nationalLivery, preloadFlags, setThemeOrder,
 } from './themes.js';
 import { PreviewStage, renderRiderSnapshot } from './preview.js';
+import { fillThumbs, thumbKey } from './thumbs.js';
 import { showRewarded, adsEnabled } from './ads.js';
-import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, ECON, GACHA_ODDS, TIERS, STREAK_REWARDS, STREAK_SPECIAL_HELMET, FLAG_CHECK_INTERVAL_SEC,
+import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, ECON, GACHA_ODDS, TIERS, DEFAULT_NOTICES, STREAK_REWARDS, STREAK_SPECIAL_HELMET, FLAG_CHECK_INTERVAL_SEC,
   FLAG_SHOP_CODES, FLAG_PRICE_THEME, FLAG_PRICE_OTHER, ADMIN_DEBUG_TOGGLE, APP_INFO, BOOSTS, BOOST_BUNDLE, BOOST_START_TIME, HEAD_START_TIME,
 } from './config.js';
 import { paymentsMode, initPayments, getPacks, buyPack } from './payments.js';
@@ -2407,7 +2408,7 @@ function checkMissions() {
 }
 
 // ---------- UI 헬퍼
-const SCREENS = ['menu', 'garage', 'ranking', 'missions', 'settings', 'pause', 'gameover', 'auth', 'daily', 'gacha', 'coinshop'];
+const SCREENS = ['menu', 'garage', 'ranking', 'missions', 'notices', 'settings', 'pause', 'gameover', 'auth', 'daily', 'gacha', 'coinshop'];
 let currentScreen = null;
 function show(id) {
   currentScreen = id;
@@ -2580,6 +2581,7 @@ function goMenu() {
 }
 
 function refreshMenu() {
+  updateNoticeDot();
   $('challengeChip').classList.toggle('hidden', challengeSeed == null);
   if (challengeSeed != null) $('challengeText').textContent = `CHALLENGE ROAD #${challengeSeed}`;
   const s = getSession();
@@ -2613,6 +2615,34 @@ $('btnClearChallenge').addEventListener('click', () => {
 $('btnGarage').addEventListener('click', () => { garageSel = null; renderGarage(); openScreen('garage'); });
 $('btnRanking').addEventListener('click', () => { openScreen('ranking'); renderRanking(); });
 $('btnMissions').addEventListener('click', () => { renderMissions(); openScreen('missions'); });
+// ---------- 공지 (서버 app_config 'notices' 우선, 없으면 기본 공지)
+let notices = DEFAULT_NOTICES;
+function setNotices(raw) {
+  const list = Array.isArray(raw) ? raw : Array.isArray(raw?.items) ? raw.items : null;
+  if (!list) return;
+  const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
+  notices = list.filter((n) => n && typeof n === 'object' && str(n.title, 80))
+    .map((n) => ({ id: str(n.id, 60) || str(n.title, 60), date: str(n.date, 20), tag: str(n.tag, 16).toUpperCase() || 'NOTICE', title: str(n.title, 80), body: str(n.body, 2000) }))
+    .slice(0, 30);
+}
+function updateNoticeDot() {
+  $('noticeDot').classList.toggle('hidden', !notices.length || save.noticeSeen === notices[0].id);
+}
+function renderNotices() {
+  $('noticeList').innerHTML = notices.length
+    ? notices.map((n) => `<article class="notice tag-${n.tag.toLowerCase()}"><div class="nt-head"><em>${escapeHtml(n.tag)}</em><small>${escapeHtml(n.date)}</small></div>
+      <h3>${escapeHtml(n.title)}</h3><p>${escapeHtml(n.body).replace(/\n/g, '<br>')}</p></article>`).join('')
+    : '<p class="muted">No notices yet.</p>';
+}
+$('btnNotices').addEventListener('click', () => {
+  renderNotices();
+  openScreen('notices');
+  if (notices.length && save.noticeSeen !== notices[0].id) {
+    save.noticeSeen = notices[0].id;
+    persist();
+  }
+  updateNoticeDot();
+});
 $('btnSettings').addEventListener('click', () => { renderSettings(); openScreen('settings'); });
 $('btnAccount').addEventListener('click', () => { renderAuth(); openScreen('auth'); });
 for (const b of document.querySelectorAll('[data-back]')) {
@@ -2668,7 +2698,12 @@ function itemState(kind, it) {
   return 'buy';
 }
 
+const THUMB_KINDS = new Set(['box', 'helmet', 'outfit', 'bike']);
 function tileVisual(kind, it) {
+  // 상자·헤드기어·의상·바이크: 3D 모델 썸네일 (배경 없음, 그려지기 전엔 색 점)
+  if (THUMB_KINDS.has(kind) && it.special !== 'national') {
+    return `<span class="tv thumb" style="--sw:${it.swatch || '#ccc'}"><img data-thumb="${thumbKey(kind, it.id)}" alt="">${it.tag ? flagBadge(it.tag, 'flag') : ''}</span>`;
+  }
   if (kind === 'bike') {
     if (it.special === 'national') {
       const [c1, c2] = nationalLivery(myNationalCode()).map((c) => '#' + c.toString(16).padStart(6, '0'));
@@ -2696,9 +2731,16 @@ function tileSub(kind, it, st) {
   return '';
 }
 
+// 등급순 정렬: 무료 기본템 → COMMON → RARE → EPIC → LEGENDARY (같은 등급은 가격순), 특별 아이템(국가대표·출석)은 맨 뒤
+const TIER_RANK = { common: 1, rare: 2, epic: 3, legendary: 4 };
+function sortByTier(items) {
+  const rank = (it) => (it.special ? 9 : !it.price ? 0 : TIER_RANK[it.tier] || 1);
+  return items.map((it, i) => [it, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || (a[0].price || 0) - (b[0].price || 0) || a[1] - b[1]).map((x) => x[0]);
+}
+
 function renderTiles(kind) {
   const k = KINDS[kind];
-  const items = k.list().filter((it) => kind !== 'bike' || !it.special || it.special === 'national');
+  const items = sortByTier(k.list().filter((it) => kind !== 'bike' || !it.special || it.special === 'national'));
   const compact = kind === 'flag' || kind === 'bikePaint' || kind === 'helmetPaint';
   return `<div class="shop-section">${k.label}</div><div class="tile-grid ${compact ? 'compact' : ''}">${items.map((it) => {
     const st = itemState(kind, it);
@@ -2753,6 +2795,7 @@ function renderGarage() {
   for (const b of $('garageTabs').children) b.classList.toggle('on', b.dataset.tab === garageTab);
   const adminNote = isAdminMode() ? '<div class="admin-note">ADMIN MODE · every item unlocked · scores are not recorded</div>' : '';
   $('shopList').innerHTML = adminNote + TAB_SECTIONS[garageTab].map(renderTiles).join('');
+  fillThumbs($('shopList'), (kind, id) => (kind === 'bike' ? BIKES.find((b) => b.id === id)?.color : undefined));
   renderActionBar();
 }
 
@@ -3873,6 +3916,7 @@ preloadFlags([...THEMES.map((t) => t.code), ...FLAG_SHOP_CODES]);
 // 운영 설정(가격·보상)은 다른 로딩과 병렬로 받고, 도착하면 보이는 화면만 다시 그림
 loadAppConfig().then((cfg) => {
   if (!cfg) return;
+  if (cfg.notices) { setNotices(cfg.notices); updateNoticeDot(); }
   if (G.state === 'menu') refreshMenu();
   if (!$('garage').classList.contains('hidden')) renderGarage();
 });

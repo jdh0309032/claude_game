@@ -2578,14 +2578,16 @@ export function createBike(color, opts = {}) {
   }
 
   // 라이더 (의상 + 헤드기어)
-  rider(det, glow, out);
   const helmetShell = [];
   const glass = [], batik = []; // 투명 유리(어항) / 바틱 텍스처 헬멧
-  headgear(det, glow, hel, opts.helmetPaint, helmetShell, { gloss, metal, batik });
+  if (!opts.bare) { // bare: 상점 썸네일용 바이크만 (라이더·헤드기어·배달통 없음)
+    rider(det, glow, out);
+    headgear(det, glow, hel, opts.helmetPaint, helmetShell, { gloss, metal, batik });
+  }
 
   // 배달 박스 (뒷좌석 랙 위) — 외부 'box' 모델이 있으면 그것으로 교체
-  const extBox = models.instantiate('box');
-  if (!extBox) deliveryBox(det, glow, opts.box, { gloss, metal, glass }, opts.box === 'national' ? opts.nationalCode : null);
+  const extBox = opts.bare ? null : models.instantiate('box');
+  if (!extBox && !opts.bare) deliveryBox(det, glow, opts.box, { gloss, metal, glass }, opts.box === 'national' ? opts.nationalCode : null);
   const nationalBox = !extBox && opts.box === 'national' && opts.nationalCode;
 
   head.push(box(0.18, 0.12, 0.05, 0, 0.92, -0.7));
@@ -4059,4 +4061,38 @@ function makeShadowTexture() {
   x.fillStyle = g;
   x.fillRect(0, 0, 64, 64);
   return new THREE.CanvasTexture(c);
+}
+
+// ---------- 상점 타일용 단독 모델 (배경 없이 썸네일로 렌더)
+// kind: 'box' | 'helmet' | 'outfit' | 'bike'. 바이크는 라이더째, 의상은 헬멧 쓴 라이더, 헤드기어는 머리만, 배달통은 통만
+export function createItemModel(kind, id, color = 0x8b1e2d) {
+  if (kind === 'bike') {
+    const b = createBike(color, { style: id, bare: true }).root;
+    b.traverse((o) => { if (o.isMesh && o.renderOrder === -1) o.visible = false; }); // 바닥 그림자 제외
+    return b;
+  }
+  const det = [], glow = [], gloss = [], metal = [], glass = [], batik = [];
+  if (kind === 'box') deliveryBox(det, glow, id, { gloss, metal, glass });
+  else if (kind === 'helmet') {
+    const hel = HELMET_STYLES[id] || HELMET_STYLES.basic;
+    if (!hel.kind) { // 헬멧만 있는 경우 머리를 넣어 쓴 모습으로
+      const h = new THREE.SphereGeometry(0.14, 16, 12);
+      h.scale(0.95, 1.05, 1);
+      h.translate(0, 1.55, -0.2);
+      det.push(paint(h, 0xf1c8a0));
+    }
+    headgear(det, glow, hel, null, det, { gloss, metal, batik });
+  } else if (kind === 'outfit') {
+    rider(det, glow, OUTFIT_STYLES[id] || OUTFIT_STYLES.jacket);
+    headgear(det, glow, HELMET_STYLES.basic, null, det, { gloss, metal });
+  }
+  const g = new THREE.Group();
+  const add = (list, mat) => { if (list.length) g.add(new THREE.Mesh(merge(list), mat)); };
+  add(det, vcMat);
+  add(glow, new THREE.MeshBasicMaterial({ vertexColors: true }));
+  add(gloss, glossMat());
+  add(metal, metalMat());
+  add(batik, batikMat());
+  if (glass.length) { const m = new THREE.Mesh(merge(glass), glassMat()); m.renderOrder = 2; g.add(m); }
+  return g;
 }

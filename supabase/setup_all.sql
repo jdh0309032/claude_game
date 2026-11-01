@@ -523,6 +523,13 @@ $$;
 --     "freeCoins": 200, "freeCoinsCooldownSec": 1200,
 --     "prices": { "box": { "aquarium": 40000 }, "helmet": { "merlion": 40000 }, "boost": { "shield": 350 } }
 --   }
+--
+-- notices 예시 (게임 메뉴 NEWS 탭. 최신 글을 맨 앞에, id 가 바뀌면 NEWS 버튼에 빨간 점):
+--   select admin_set_config('notices', '[
+--     {"id": "2026-12-01-xmas", "date": "2026-12-01", "tag": "EVENT", "title": "Christmas week: 2x coins",
+--      "body": "From Dec 20 to Dec 27 every coin is worth double.\nMerry Christmas, riders!"}
+--   ]');
+--   tag: UPDATE / EVENT / NOTICE / MAINTENANCE
 
 create table if not exists public.app_config (
   key        text primary key,

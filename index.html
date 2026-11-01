@@ -99,6 +99,7 @@
       </header>
       <div class="scene-window"></div>
       <nav class="side-dock" aria-label="Menu">
+        <button id="btnNotices" class="svc s-notice"><i data-icon="bell"></i><span>NEWS</span><b id="noticeDot" class="dot hidden"></b></button>
         <button id="btnGarage" class="svc s-garage"><i data-icon="bike"></i><span>GARAGE</span></button>
         <button id="btnRanking" class="svc s-rank"><i data-icon="trophy"></i><span>RANKING</span></button>
         <button id="btnMissions" class="svc s-mission"><i data-icon="box"></i><span>MISSIONS</span></button>
@@ -181,6 +182,14 @@
     </section>
 
     <!-- Missions -->
+    <section id="notices" class="screen hidden">
+      <div class="panel">
+        <div class="panel-head"><h2>NOTICES</h2></div>
+        <div id="noticeList" class="notice-list"></div>
+        <button class="btn back" data-back data-icon="back"><span>BACK</span></button>
+      </div>
+    </section>
+
     <section id="missions" class="screen hidden">
       <div class="panel">
         <div class="panel-head"><h2>MISSIONS</h2></div>

@@ -1176,3 +1176,34 @@ body.touch #menu .help { display: none; }
 .tile.tier-legendary .tier-dot { box-shadow: 0 0 8px rgba(224, 168, 0, 0.8); }
 .tile.tier-epic { background: linear-gradient(160deg, #f5edff, #fff 55%); }
 .tier-tag { font-style: normal; font-weight: 900; color: var(--tc); letter-spacing: 1px; }
+
+/* 상점 타일 3D 썸네일 (투명 배경). 그려지기 전엔 아이템 색 점 */
+.tv.thumb { position: relative; width: 64px; height: 64px; background: none; box-shadow: none; overflow: visible; border-radius: 0; }
+.tv.thumb::before { content: ''; position: absolute; inset: 22px; border-radius: 50%; background: var(--sw); opacity: 0.5; }
+.tv.thumb:has(img.on)::before { display: none; }
+.tv.thumb img { position: relative; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity 0.2s; filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.18)); }
+.tv.thumb img.on { opacity: 1; }
+.tv.thumb .flag { position: absolute; right: -6px; bottom: -2px; width: 22px; height: 15px; border-radius: 3px; box-shadow: 0 0 0 2px #fff; margin: 0; }
+.tile .tier-dot { z-index: 1; }
+
+/* 공지 (NEWS) */
+#menu .side-dock .svc { position: relative; }
+#menu .side-dock .s-notice i { color: #ff6b35; }
+#menu .side-dock .dot { position: absolute; top: 6px; right: 8px; width: 11px; height: 11px; border-radius: 50%; background: #ff3b30; box-shadow: 0 0 0 2px #fff; }
+.notice-list { display: flex; flex-direction: column; gap: 10px; }
+.notice { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; text-align: left; }
+.notice .nt-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.notice .nt-head em { font-style: normal; font-size: 10px; font-weight: 900; letter-spacing: 1px; color: #fff; background: var(--green); padding: 2px 8px; border-radius: 999px; }
+.notice.tag-event .nt-head em { background: #ff6b35; }
+.notice.tag-maintenance .nt-head em { background: #d62828; }
+.notice.tag-notice .nt-head em { background: #2a6fdb; }
+.notice .nt-head small { color: var(--muted); font-size: 11px; font-weight: 700; }
+.notice h3 { margin: 2px 0 6px; font-size: 16px; }
+.notice p { margin: 0; font-size: 13px; line-height: 1.5; color: #3d4450; }
+/* 도크 버튼 5개: 작은 화면에선 조금 작게 */
+@media (max-height: 760px) {
+  #menu .side-dock { gap: 7px; }
+  #menu .side-dock .svc { width: 54px; height: 54px; }
+  #menu .side-dock .svc i .ic { width: 20px; height: 20px; }
+  #menu .side-dock .svc span { font-size: 8px; }
+}

@@ -294,6 +294,15 @@ export const COIN_PACKS = [
   { id: 'grub_coins_xl', coins: 65000, bonus: 43, testPrice: '$14.99', tag: 'BEST VALUE' },
 ];
 
+// 공지 기본값: 서버 app_config('notices') 가 있으면 그것으로 대체. 최신이 위. id 가 바뀌면 NEWS 버튼에 새 글 점 표시
+// tag: UPDATE / EVENT / NOTICE / MAINTENANCE
+export const DEFAULT_NOTICES = [
+  {
+    id: '2026-11-01-update', date: '2026-11-01', tag: 'UPDATE', title: 'New items, tiers & fairer rewards',
+    body: 'Every item now has a tier: Common, Rare, Epic and Legendary.\n26 new boxes and helmets from all over Southeast Asia - Merlion, Petronas Twin Towers, Golden Pagoda, a cat box, an aquarium and more.\nRuns pay more: coins are worth 2, drop zones +50, and every km gives +50.\nNew HEAD START boost: blast off at 1.5x speed.',
+  },
+];
+
 // 앱 정보 (설정 화면 하단)
 export const APP_INFO = { name: 'Grub Rider', version: '1.0.0', contactEmail: '' };
 

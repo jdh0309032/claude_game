@@ -154,6 +154,14 @@ python3 -m http.server 8000
 - 수치 기본값은 `js/config.js` 의 `ECON`·각 아이템 `price/tier`. **앱 업데이트 없이 바꾸기**: [`008_app_config.sql`](supabase/migrations/008_app_config.sql) 실행 후
   관리자 계정으로 `select admin_set_config('economy', '{"hotReward": 250, "prices": {"box": {"aquarium": 40000}}}');` 처럼 넣으면 다음 실행부터 반영(넣은 항목만 덮어씀).
 
+## 공지 (NEWS) · 상점 썸네일 · 정렬
+
+- 메뉴 오른쪽 **NEWS** 버튼: 공지 목록. 새 공지(맨 앞 글의 id 가 마지막으로 본 것과 다름)가 있으면 빨간 점.
+  기본 공지는 `js/config.js` 의 `DEFAULT_NOTICES`, 운영 중에는 서버에서 `select admin_set_config('notices', '[{"id": ..., "date": ..., "tag": "EVENT", "title": ..., "body": ...}]');`
+  로 바꾸면 앱 업데이트 없이 다음 실행부터 보입니다(예시는 [`008_app_config.sql`](supabase/migrations/008_app_config.sql) 주석).
+- 차고 타일: 배달통·헤드기어·의상·바이크는 색 견본 대신 **3D 모델 썸네일**(배경 투명, `js/thumbs.js` 가 보이는 타일만 몇 개씩 나눠 렌더 후 캐시).
+- 정렬: 무료 기본템 → COMMON → RARE → EPIC → LEGENDARY (같은 등급은 가격순), 특별 아이템은 맨 뒤.
+
 ## 안드로이드 앱 (Capacitor)
 
 - 같은 웹 코드를 Capacitor 로 감싼 앱입니다(`android/` 폴더, 앱 ID `com.jdh0309032.grubrider` — 스토어 첫 업로드 후에는 바꿀 수 없음).
