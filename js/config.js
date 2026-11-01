@@ -259,6 +259,8 @@ export const BILLBOARD_POSTERS = {
 // ======================================================================
 // WhatsApp 챌린지 링크의 기본 주소. 비워두면 현재 게임 주소를 사용 (예: 'https://grabrider.app/')
 export const SHARE_BASE_URL = '';
+// 플레이 스토어 주소 (출시 후 넣으면 하이라이트 영상 마지막 화면에 'GET IT ON GOOGLE PLAY' 와 함께 표시. 비우면 게임 링크)
+export const STORE_URL = '';
 
 // 보상형 광고 (배너 광고는 사용하지 않음)
 //   provider: 'h5'   → Google H5 Games Ads (AdSense 계정 + H5 Games 승인 필요, adClient 입력)

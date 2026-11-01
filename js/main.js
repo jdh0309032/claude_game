@@ -9,7 +9,7 @@ import {
 import { PreviewStage, renderRiderSnapshot, renderRiderHero } from './preview.js';
 import { fillThumbs, thumbKey } from './thumbs.js';
 import { showRewarded, adsEnabled } from './ads.js';
-import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, ECON, GACHA_ODDS, TIERS, DEFAULT_NOTICES, STREAK_REWARDS, STREAK_SPECIAL_HELMET, FLAG_CHECK_INTERVAL_SEC,
+import { BILLBOARD_POSTERS, SHARE_BASE_URL, STORE_URL, ADS, ECON, GACHA_ODDS, TIERS, DEFAULT_NOTICES, STREAK_REWARDS, STREAK_SPECIAL_HELMET, FLAG_CHECK_INTERVAL_SEC,
   FLAG_SHOP_CODES, FLAG_PRICE_THEME, FLAG_PRICE_OTHER, ADMIN_DEBUG_TOGGLE, APP_INFO, BOOSTS, BOOST_BUNDLE, BOOST_START_TIME, HEAD_START_TIME,
 } from './config.js';
 import { paymentsMode, initPayments, getPacks, buyPack } from './payments.js';
@@ -114,6 +114,22 @@ clips.focus = () => {
   clipFocusV.set(bike.root.position.x, bike.root.position.y + 1.1, bike.root.position.z).project(camera);
   return { x: (clipFocusV.x + 1) / 2, y: (1 - clipFocusV.y) / 2 };
 };
+clips.audio = () => sfx.recordStream(); // 게임 소리도 함께 녹음
+clips.heroImage = () => { const look = myLook(); return renderRiderHero(620, 620, look.opts, look.color); };
+// 영상 글자: 링크·설치 유도 문구 (스토어 주소가 있으면 스토어 안내)
+function clipMeta() {
+  const url = challengeUrl().replace(/^https?:\/\//, '').replace(/\?.*$/, '');
+  return {
+    url, scriptFont: SCRIPT_FONTS[getLang()], scoreLabel: t('SCORE'), cta: t('PLAY FREE NOW'),
+    store: STORE_URL ? t('GET IT ON GOOGLE PLAY') : url,
+  };
+}
+// 점프대가 곧 나오면 미리 녹화 시작 (점프 직전 장면까지)
+function armClip() {
+  if (clips.recording || save.settings.clips === false) return;
+  clips.enabled = true;
+  clips.arm(clipMeta());
+}
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87c6ff);
 scene.fog = new THREE.Fog(0x87c6ff, 60, 240);
@@ -701,6 +717,11 @@ function updateCars(dt, collide) {
       const gap = -(c.z + c.len / 2) - BIKE_HL;
       if (gap > 0 && gap < DRAFT_GAP && dx < DRAFT_LANE) draftingNow = true;
     }
+    // 견인트럭 경사판이 약 1.6초 앞, 같은 차선이면 하이라이트 녹화를 미리 시작
+    if (c.type === 'ramp' && c.dir > 0) {
+      const ahead = -(c.z + c.len / 2);
+      if (ahead > 0 && ahead < G.speed * 1.6 && dx < c.w / 2 + 0.8) armClip();
+    }
     if (dx < c.w / 2 + BIKE_HW - 0.05 && dz < c.len / 2 + BIKE_HL - 0.15) {
       // 견인트럭: 뒤쪽 경사판으로 진입하면 점프
       const rearGap = c.z + c.len / 2 + BIKE_HL; // 트럭 뒷면이 바이크 앞을 지난 거리
@@ -799,6 +820,9 @@ function updateJumpRamps(dt, collide) {
     jr.z += G.speed * dt;
     jr.obj.position.set(jr.x, 0, jr.z);
     jr.obj.neon.color.setHSL(0.13, 1, 0.5 + Math.sin(G.time * 8) * 0.15);
+    // 점프대가 약 1.6초 앞, 같은 차선이면 하이라이트 녹화를 미리 시작
+    if (collide && !jr.used && !G.air && G.state === 'playing' && jr.z < -0.2 && jr.z > -G.speed * 1.6
+      && Math.abs(G.x - jr.x) < M.JUMP_RAMP.width / 2 + 1.6) armClip();
     // 낮은 쪽 끝이 바이크에 닿는 순간 점프
     if (collide && !jr.used && !G.air && G.state === 'playing' && jr.z > -0.2 && jr.z < 2.5
       && Math.abs(G.x - jr.x) < M.JUMP_RAMP.width / 2 + 0.1) {
@@ -1874,6 +1898,8 @@ function resetBikePose() {
 
 function startRun(opts = {}) {
   clips.reset();
+  // 영상 마지막 화면의 내 라이더 그림은 카운트다운 동안 미리 준비
+  if (clips.supported && save.settings.clips !== false) setTimeout(() => clips.prepare(), 120);
   sfx.init();
   sfx.click();
   if (bikeKey !== currentBikeKey()) buildBike();
@@ -2156,7 +2182,8 @@ function startJump(c) {
   G.jumps++;
   c.passed = true;
   clips.enabled = save.settings.clips !== false;
-  clips.start({ url: challengeUrl().replace(/^https?:\/\//, '').replace(/\?.*$/, ''), scriptFont: SCRIPT_FONTS[getLang()] });
+  clips.enabled = save.settings.clips !== false;
+  clips.start(clipMeta());
   sfx.jump();
   vibrate(30);
   popup(t('AIRBORNE'), 'big');
@@ -4355,6 +4382,8 @@ if (DEBUG) {
   window.__renderer = renderer;
   window.__camera = camera;
   window.__save = save;
+  window.__clipsRec = () => clips.recording;
+  window.__clips = clips;
   window.__dbg = {
     show: (id) => show(id),
     trickScore, trickDir, trickTitle,
@@ -4379,7 +4408,6 @@ if (DEBUG) {
     crash: () => crash({ x: G.x - 1 }),
     boards: activeBoards,
     board: spawnBillboard,
-    jump: () => startJump({}),
     hazard: (kind, x, z) => spawnInPool(HAZARDS.find((h) => h.kind === kind).pool, { x, z, rot: 0 }),
     ramp: (x, z) => { spawnJumpRamp(); const j = jumpRamps.find((k) => k.active && k.z === SPAWN_Z); if (j) Object.assign(j, { x, z }); },
     drop: (x, z) => { spawnDropZone(); const d = dropZones.find((k) => k.active && k.z === SPAWN_Z); if (d) Object.assign(d, { x, z }); },

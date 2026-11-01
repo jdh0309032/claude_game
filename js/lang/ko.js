@@ -372,6 +372,8 @@ export default {
 "SHARE IMAGE": "이미지 공유",
 "VIDEO SAVED  ·  POST IT TO YOUR STORY": "영상 저장됨  ·  스토리에 올려 보세요",
 "HIGHLIGHT CLIPS": "하이라이트 영상",
+"PLAY FREE NOW": "지금 무료로 플레이",
+"GET IT ON GOOGLE PLAY": "Google Play에서 다운로드",
 "Starter delivery scooter": "입문용 배달 스쿠터",
 "Nimble in tight traffic": "꽉 막힌 도로에서도 날렵하게",
 "Chrome and leather charm": "크롬과 가죽의 클래식한 멋",

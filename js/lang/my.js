@@ -372,6 +372,8 @@ export default {
 "SHARE IMAGE": "ပုံ မျှဝေ",
 "VIDEO SAVED  ·  POST IT TO YOUR STORY": "ဗီဒီယို သိမ်းပြီးပြီ  ·  Story တွင် တင်လိုက်ပါ",
 "HIGHLIGHT CLIPS": "ဟိုက်လိုက် ကလစ်များ",
+"PLAY FREE NOW": "အခုပဲ အခမဲ့ ကစားပါ",
+"GET IT ON GOOGLE PLAY": "Google Play တွင် ရယူပါ",
 "Starter delivery scooter": "စတင်သူအတွက် ပို့ဆောင်ရေးစကူတာ",
 "Nimble in tight traffic": "ကားကြပ်ထဲတွင် လျင်မြန်သွက်လက်",
 "Chrome and leather charm": "ခရုမ်းနှင့် သားရေ၏ ဆွဲဆောင်မှု",
