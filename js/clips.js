@@ -126,9 +126,11 @@ class Session {
     const f = this.o.focus?.() || { x: 0.5, y: 0.6 };
     const tx = Math.min(0, Math.max(CW - w, CW * 0.5 - f.x * w));
     const ty = Math.min(0, Math.max(CH - h, CH * 0.58 - f.y * h));
+    // 아주 부드럽게 따라감 (작은 움직임은 무시) → 영상이 흔들리지 않음
     if (this.fresh) { this.ox = tx; this.oy = ty; this.fresh = false; }
-    this.ox += (tx - this.ox) * 0.2;
-    this.oy += (ty - this.oy) * 0.2;
+    const dx = tx - this.ox, dy = ty - this.oy;
+    if (Math.abs(dx) > 6) this.ox += (dx - Math.sign(dx) * 6) * 0.06;
+    if (Math.abs(dy) > 10) this.oy += (dy - Math.sign(dy) * 10) * 0.06;
     ctx.globalAlpha = 1;
     ctx.imageSmoothingQuality = 'high';
     try { ctx.drawImage(src, this.ox, this.oy, w, h); } catch (e) { return; }
