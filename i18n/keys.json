@@ -53,7 +53,7 @@
  "<b>COMBO</b> — chain near misses within 3 s to raise your multiplier.",
  "<b>KEEP LEFT / KEEP RIGHT</b> — Singapore, Malaysia, Indonesia and Thailand drive on the left; Vietnam, the Philippines, Cambodia and Myanmar drive on the right. Check the sign at each border gate.",
  "<b>WRONG WAY</b> — riding in the oncoming lanes scores x2. Watch out for head-on traffic.",
- "<b>JUMPS</b> — ride up a ramp truck or a gold-striped jump ramp. In the air, throttle / brake = <b>FLIP</b> (+500), steer = <b>360 SPIN</b> (+1,200), both at once = <b>DIAGONAL MEGA FLIP</b> (+3,000) per rotation. Land level and you are invincible for a moment; land crooked and you crash.",
+ "<b>JUMPS</b> — ride up a ramp truck or a gold-striped jump ramp. In the air, slide to rotate. Points per rotation: up (gas) = <b>BACKFLIP</b> 1.0, up-diagonal 1.3, left / right = <b>SIDE FLIP</b> 1.6, down (brake) = <b>FRONT FLIP</b> 1.8, down-diagonal 2.2 (1.0 = 300 points). 2 rotations x2.5, 3+ rotations x5; mixing 2 moves = <b>COMBO</b> x1.5, 3+ moves x2.2. Land level and you are invincible for a moment; land crooked and you crash.",
  "<b>SQUALL</b> — 30 s of heavy rain (score x1.3). Puddles make you slide.",
  "Avoid roadside stalls, center-line cones and road signs, and cars drifting over the center line.",
  "<b>POWER-UPS</b> (every 100-150 m) — Shield, Magnet, <b>Giant Mode</b> (huge and unstoppable), x2 Score, Slow-Mo.",
@@ -341,5 +341,12 @@
  "GIANT START",
  "Start huge and unstoppable",
  "SECOND CHANCE",
- "Get back on the road once after a crash, free"
+ "Get back on the road once after a crash, free",
+ "BACKFLIP",
+ "DIAGONAL BACKFLIP",
+ "SIDE FLIP",
+ "FRONT FLIP",
+ "DIAGONAL FRONT FLIP",
+ "{n}-WAY COMBO",
+ "{n}x {trick}"
 ]
