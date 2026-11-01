@@ -1142,18 +1142,20 @@ function headgear(det, glow, hel, paintOpt, shellOut = det, mats = {}) {
       sph(0.06, 0, 2.03, -0.16, 0xf4f4f4, det);
       det.push(box(0.08, 0.02, 0.02, 0, 1.58, -0.47, 0xd62828));
       return;
-    case 'nonla': { // 베트남 농라: 얼굴 + 넓은 원뿔 삿갓(동심원 결 + 테두리) + 턱끈 리본
+    case 'nonla': { // 베트남 농라: 얼굴 + 이마까지 푹 눌러쓴 원뿔 삿갓(동심원 결 + 테두리) + 안쪽 머리받침 + 턱끈 리본
       faceBall();
-      const hat = new THREE.ConeGeometry(0.38, 0.16, 28, 1, true); // 낮고 넓은 삿갓
-      hat.translate(0, 1.765, -0.19);
+      const NR = 0.33, NH = 0.14, NB = 1.61; // 반지름 · 높이 · 테두리 높이 (눈썹 바로 위)
+      const hat = new THREE.ConeGeometry(NR, NH, 28, 1, true);
+      hat.translate(0, NB + NH / 2, -0.19);
       shellList.push(paint(hat, shell));
-      const inner = new THREE.ConeGeometry(0.375, 0.155, 28, 1, true);
+      const inner = new THREE.ConeGeometry(NR - 0.005, NH - 0.005, 28, 1, true);
       inner.scale(-1, 1, 1);
-      inner.translate(0, 1.762, -0.19);
+      inner.translate(0, NB + NH / 2 - 0.003, -0.19);
       det.push(paint(inner, 0xc9a961));
-      for (let k = 1; k <= 4; k++) { const t = new THREE.TorusGeometry(0.38 * (1 - k * 0.2), 0.004, 4, 28); t.rotateX(Math.PI / 2); t.translate(0, 1.69 + k * 0.16 * 0.2 + 0.002, -0.19); det.push(paint(t, 0xb08d48)); }
-      { const t = new THREE.TorusGeometry(0.38, 0.012, 5, 32); t.rotateX(Math.PI / 2); t.translate(0, 1.685, -0.19); det.push(paint(t, 0xb08d48)); }
-      for (const s of [-1, 1]) { const st = new THREE.CylinderGeometry(0.007, 0.007, 0.2, 4); st.rotateZ(s * 0.25); st.translate(s * 0.115, 1.52, -0.21); det.push(paint(st, 0xd62828)); }
+      sph(0.12, 0, 1.68, -0.19, 0xc9a961, det, 1, 0.55, 1, 16); // 안쪽 머리받침 (정수리와 삿갓 안쪽을 이어 줌)
+      for (let k = 1; k <= 4; k++) { const t = new THREE.TorusGeometry(NR * (1 - k * 0.2), 0.0035, 4, 28); t.rotateX(Math.PI / 2); t.translate(0, NB + k * NH * 0.2 + 0.002, -0.19); det.push(paint(t, 0xb08d48)); }
+      { const t = new THREE.TorusGeometry(NR, 0.011, 5, 32); t.rotateX(Math.PI / 2); t.translate(0, NB, -0.19); det.push(paint(t, 0xb08d48)); }
+      for (const s of [-1, 1]) { const st = new THREE.CylinderGeometry(0.007, 0.007, 0.19, 4); st.rotateZ(s * 0.25); st.translate(s * 0.115, 1.515, -0.21); det.push(paint(st, 0xd62828)); }
       det.push(box(0.1, 0.012, 0.012, 0, 1.43, -0.27, 0xd62828));
       return;
     }
@@ -1178,7 +1180,20 @@ function headgear(det, glow, hel, paintOpt, shellOut = det, mats = {}) {
     }
     case 'mongkol': { // 태국 무에타이 몽콘: 얼굴 + 머리띠 고리(흰·빨강 꼰 줄) + 뒤로 뻗은 꼬리 + 붉은 천 두건
       faceBall();
-      sph(0.152, 0, 1.6, -0.19, 0xc1121f, det, 0.98, 0.82, 1.04, 14); // 붉은 천 두건 (몽콘 아래)
+      { // 붉은 천 두건: 이마는 드러나게 앞이 들린 머리덮개 + 감아 올린 천 결 2겹 + 두꺼운 단 + 뒤통수 매듭과 늘어진 두 자락
+        const TILT = 0.3, CR = 0.156, CC = V(0, 1.6, -0.19);
+        const cap = new THREE.SphereGeometry(CR, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.5);
+        cap.rotateX(TILT); cap.translate(CC.x, CC.y, CC.z);
+        det.push(paint(cap, 0xc1121f));
+        for (const [phi, tube, col] of [[1.57, 0.02, 0x8f0b16], [1.2, 0.012, 0xa50f1c], [0.82, 0.011, 0xa50f1c]]) { // 단(맨 아래) → 위로 감긴 천 결
+          const t = new THREE.TorusGeometry(CR * Math.sin(phi) + tube * 0.3, tube, 6, 30);
+          t.rotateX(Math.PI / 2); t.translate(0, CR * Math.cos(phi), 0); t.rotateX(TILT); t.translate(CC.x, CC.y, CC.z);
+          det.push(paint(t, col));
+        }
+        const kz = CC.z + CR * Math.cos(TILT) + 0.005, ky = CC.y - CR * Math.sin(TILT) + 0.02; // 뒤통수 단 위
+        sph(0.038, 0, ky, kz, 0x8f0b16, det, 1.2, 0.9, 0.8, 12); // 매듭
+        for (const sx of [-1, 1]) { const g = new THREE.BoxGeometry(0.05, 0.16, 0.012); g.translate(0, -0.08, 0); g.rotateZ(sx * 0.28); g.rotateX(0.18); g.translate(sx * 0.02, ky - 0.01, kz + 0.01); det.push(paint(g, 0xc1121f)); } // 늘어진 두 자락
+      }
       for (let i = 0; i < 24; i++) {
         const a = (i / 24) * Math.PI * 2;
         const seg = new THREE.TorusGeometry(0.162, 0.024, 6, 6, (Math.PI * 2) / 24); // 조각끼리 딱 맞닿게 (겹침 없음)
@@ -2676,31 +2691,177 @@ function podShellStripe(x) {
 }
 
 // 바이크 차종별 외형 (config.js BIKES[].style)
-function bikeShape(style, body, det, glow, accent) {
-  if (style === 'classic') {
-    const lamp = new THREE.CylinderGeometry(0.11, 0.11, 0.06, 14);
-    lamp.rotateX(Math.PI / 2);
-    lamp.translate(0, 0.92, -0.72);
-    det.push(paint(lamp, 0xd9dde1));
-    for (const z of [-0.72, 0.7]) det.push(box(0.16, 0.04, 0.5, 0, 0.74, z, 0xd9dde1));
-    det.push(box(0.37, 0.07, 0.48, 0, 1.03, 0.21, 0x7a4a22)); // 가죽 안장: 차체(폭 0.34)보다 넓게 → 옆면이 차체 옆면과 겹치지 않음
-  } else if (style === 'express') {
-    for (const sx of [-1, 1]) { det.push(box(0.16, 0.36, 0.5, sx * 0.27, 0.78, 0.55, 0x2b2f33)); det.push(box(0.12, 0.03, 0.4, sx * 0.17, 0.92, 0.55, 0x3a3d42)); } // 사이드 박스 + 거치대
-    det.push(box(0.5, 0.04, 0.5, 0, 1.04, 0.66, 0x55595e));
-  } else if (style === 'sport') {
-    body.push(box(0.4, 0.3, 0.62, 0, 0.82, -0.3, null, -0.35));
-    det.push(box(0.26, 0.16, 0.04, 0, 1.08, -0.62, 0x1a2a3a, -1.1));
-  } else if (style === 'enduro') {
-    for (const z of [-0.78, 0.72]) body.push(box(0.14, 0.04, 0.42, 0, 0.82, z, null, z < 0 ? 0.25 : -0.25));
-    det.push(box(0.7, 0.05, 0.05, 0, 1.16, -0.5, 0x1a1a1a));
-    body.push(box(0.2, 0.2, 0.3, 0, 0.9, 0.62, null, -0.4));
-  } else if (style === 'cyber') {
-    const neon = accent ?? 0x00e5ff;
-    for (const sx of [-1, 1]) glow.push(box(0.025, 0.04, 0.9, sx * 0.235, 0.78, -0.1, neon));
-    glow.push(box(0.3, 0.03, 0.03, 0, 0.98, -0.68, neon));
-    for (const z of [-0.72, 0.7]) glow.push(cylX(0.2, 0.15, 0, 0.4, z, 0xff2fd6, 14));
-    body.push(box(0.42, 0.26, 0.9, 0, 0.84, -0.15, null, -0.2));
+// ---------- 바이크 차체 (스타일마다 완전히 다른 실루엣). 라이더 기준점은 공통:
+// 시트 (0, 1.0, 0.22) · 핸들 그립 (±0.3, 1.08, -0.48) · 발 (±0.16, 0.6, -0.13) · 바퀴 z -0.72 / 0.7, 반지름 0.4
+// 반환: 바퀴 종류, 펜더 종류, 번호판 위치, 공통 머플러 사용 여부. 전조등(head)·후미등(tail)은 각 스타일이 차체에 직접 붙임
+function rbox(w, h, d, r, x, y, z, color, rx = 0) {
+  const g = roundBox(w, h, d, r, 0, 0, 0, color);
+  if (rx) g.rotateX(rx);
+  g.translate(x, y, z);
+  return g;
+}
+function ell(sx, sy, sz, x, y, z, color, seg = 18) {
+  const g = new THREE.SphereGeometry(1, seg, Math.max(8, Math.round(seg * 0.6)));
+  g.scale(sx, sy, sz);
+  g.translate(x, y, z);
+  return color == null ? g : paint(g, color);
+}
+// z 방향을 보는 원통 (전조등 몸통·렌즈)
+function cylZ(r, len, x, y, z, color, seg = 18) {
+  const g = new THREE.CylinderGeometry(r, r, len, seg);
+  g.rotateX(Math.PI / 2);
+  g.translate(x, y, z);
+  return color == null ? g : paint(g, color);
+}
+// 옆모습 윤곽([z, y] 점들)을 좌우로 밀어낸 한 덩어리 차체. taper(z, y) → 그 위치의 폭 배율 (꼬리·노즈·윗면을 좁혀 조각된 느낌)
+function profileBody(pts, w, taper) {
+  const sh = new THREE.Shape(pts.map(([z, y]) => new THREE.Vector2(z, y)));
+  const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.03, bevelSegments: 2, curveSegments: 4 });
+  g.rotateY(-Math.PI / 2);
+  g.translate(w / 2, 0, 0);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) p.setX(i, p.getX(i) * taper(p.getZ(i), p.getY(i)));
+  g.computeVertexNormals();
+  return g;
+}
+const smooth01 = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+function bikeKit(st, L, accent) {
+  const { body, det, glow, head, tail } = L;
+  const CH = 0xd5d9dd, DARK = 0x1c1e22, BLACK = 0x111214;
+  const k = { wheel: 'alloy', front: 'hug', rear: 'hug', plate: [0.8, 0.93], exhaust: true, engine: true, fork: 0x8a8f96, pegs: true };
+  switch (st) {
+    case 'scooter': { // Rookie 125 — 베스파형 클래식 스쿠터
+      k.wheel = 'disc'; k.rear = 'none'; k.front = 'vespa'; k.plate = [0.74, 0.865]; k.engine = false;
+      det.push(rbox(0.08, 0.2, 0.44, 0.04, -0.14, 0.53, 0.48, 0x9aa0a6));      // 왼쪽 CVT 케이스
+      body.push(rbox(0.46, 0.44, 0.07, 0.06, 0, 0.8, -0.46, null, 0.12));   // 다리 가림판
+      body.push(rbox(0.36, 0.05, 0.46, 0.04, 0, 0.615, -0.13, null));       // 발판
+      det.push(box(0.3, 0.02, 0.38, 0, 0.645, -0.13, 0x2a2a2a));
+      body.push(ell(0.25, 0.21, 0.44, 0, 0.83, 0.43));                      // 볼록한 뒷 차체
+      body.push(rbox(0.16, 0.2, 0.36, 0.06, 0, 0.7, 0.06, null));          // 가운데 터널
+      body.push(ell(0.18, 0.09, 0.13, 0, 1.08, -0.52));                     // 핸들 헤드셋 커버
+      det.push(cylZ(0.085, 0.07, 0, 1.1, -0.64, CH));                       // 둥근 전조등 테
+      head.push(cylZ(0.07, 0.02, 0, 1.1, -0.68));
+      det.push(box(0.1, 0.13, 0.03, 0, 0.92, -0.505, CH));                  // 경적 커버
+      det.push(rbox(0.3, 0.1, 0.52, 0.06, 0, 1.03, 0.24, 0x7a4a24));         // 갈색 안장
+      tail.push(box(0.14, 0.06, 0.04, 0, 0.9, 0.865));
+      break;
+    }
+    case 'maxi': { // City Commuter — 맥시 스쿠터 (둥근 앞 얼굴에 V자 LED, 큰 스크린, 단차 시트, 긴 뒷 차체)
+      k.rear = 'none'; k.plate = [0.76, 0.9]; k.engine = false;
+      body.push(ell(0.25, 0.25, 0.2, 0, 1.0, -0.52, null, 22));               // 둥근 앞 얼굴
+      for (const sx of [-1, 1]) { const g = new THREE.BoxGeometry(0.15, 0.035, 0.03); g.rotateZ(sx * 0.32); g.translate(sx * 0.1, 1.04, -0.705); head.push(g); } // V자 LED (얼굴 앞면)
+      det.push(box(0.08, 0.02, 0.03, 0, 0.96, -0.712, 0x1c1e22));
+      det.push(box(0.4, 0.3, 0.02, 0, 1.33, -0.6, 0x2b3d4f, 0.4));          // 스모크 스크린 (얼굴 위에 꽂힘)
+      body.push(rbox(0.22, 0.24, 0.5, 0.08, 0, 0.74, -0.14, null));         // 가운데 터널
+      for (const sx of [-1, 1]) det.push(box(0.14, 0.04, 0.44, sx * 0.18, 0.6, -0.14, 0x2a2d32)); // 발판
+      body.push(ell(0.21, 0.19, 0.46, 0, 0.86, 0.42, null, 22));             // 긴 뒷 차체
+      for (const sx of [-1, 1]) det.push(box(0.012, 0.03, 0.5, sx * 0.205, 0.84, 0.4, 0x1c1e22)); // 옆 라인
+      det.push(rbox(0.28, 0.08, 0.36, 0.05, 0, 1.03, 0.16, DARK));           // 앞 시트
+      det.push(rbox(0.26, 0.1, 0.26, 0.05, 0, 1.08, 0.48, DARK));            // 단차 뒷 시트
+      det.push(rbox(0.08, 0.22, 0.46, 0.04, -0.15, 0.53, 0.5, 0x6a6f75));     // CVT 케이스
+      tail.push(box(0.26, 0.04, 0.03, 0, 0.92, 0.875));
+      break;
+    }
+    case 'classic': { // Vintage Classic — 카페 레이서 (눈물 탱크, 둥근 크롬 라이트, 와이어 휠, 냉각핀 엔진)
+      k.wheel = 'wire'; k.plate = [0.82, 0.9];
+      body.push(ell(0.17, 0.12, 0.34, 0, 1.0, -0.12));                       // 눈물방울 탱크
+      for (const sx of [-1, 1]) det.push(rbox(0.02, 0.07, 0.13, 0.01, sx * 0.165, 0.98, -0.05, DARK)); // 니패드
+      det.push(rbox(0.26, 0.08, 0.36, 0.05, 0, 1.0, 0.26, 0x3a2414));       // 가죽 안장
+      body.push(ell(0.13, 0.09, 0.12, 0, 1.05, 0.46));                      // 안장 뒤 혹
+      det.push(cylZ(0.1, 0.12, 0, 0.98, -0.58, CH));                        // 둥근 크롬 전조등
+      head.push(cylZ(0.085, 0.02, 0, 0.98, -0.645));
+      for (const sx of [-1, 1]) det.push(box(0.04, 0.03, 0.1, sx * 0.1, 0.98, -0.53, CH)); // 포크에 물린 브래킷
+      for (let i = 0; i < 5; i++) { const g = new THREE.CylinderGeometry(0.12, 0.12, 0.025, 14); g.translate(0, 0.7 + i * 0.045, -0.18); det.push(paint(g, i % 2 ? 0x8d939a : 0xb8bec4)); } // 냉각핀
+      { const g = new THREE.CylinderGeometry(0.05, 0.065, 0.7, 10); g.rotateX(Math.PI / 2); g.translate(-0.2, 0.47, 0.48); det.push(paint(g, CH)); } // 왼쪽 머플러 (쌍)
+      tail.push(box(0.1, 0.05, 0.03, 0, 1.0, 0.585));
+      break;
+    }
+    case 'cub': { // Delivery Express — 슈퍼커브형 배달 바이크 (흰 다리가림판, 앞 바구니, 사이드 박스)
+      k.wheel = 'wire'; k.plate = [0.78, 0.9];
+      det.push(rbox(0.36, 0.42, 0.06, 0.05, 0, 0.83, -0.43, 0xf2f2f2, 0.12)); // 다리 가림판
+      limbGeo(V(0, 1.0, -0.42), V(0, 0.64, 0.02), 0.065, null, body);       // 언더본 프레임
+      body.push(ell(0.19, 0.09, 0.13, 0, 1.09, -0.52));                     // 핸들 커버
+      det.push(rbox(0.17, 0.09, 0.04, 0.02, 0, 1.1, -0.64, CH));
+      head.push(box(0.14, 0.07, 0.02, 0, 1.1, -0.665));
+      // 앞 바구니 (다리 가림판 앞)
+      det.push(box(0.34, 0.02, 0.22, 0, 0.88, -0.58, 0x30343a));
+      for (const [w, d, x, z] of [[0.34, 0.02, 0, -0.69], [0.02, 0.22, -0.16, -0.58], [0.02, 0.22, 0.16, -0.58]]) det.push(box(w, 0.2, d, x, 0.98, z, 0x30343a));
+      for (const y of [0.94, 1.02]) det.push(box(0.35, 0.015, 0.015, 0, y, -0.695, 0x9aa0a6));
+      body.push(rbox(0.3, 0.22, 0.36, 0.06, 0, 0.82, 0.42, null));         // 뒤 사이드 커버
+      for (const sx of [-1, 1]) { det.push(box(0.16, 0.36, 0.5, sx * 0.27, 0.78, 0.55, 0x2b2f33)); det.push(box(0.12, 0.03, 0.4, sx * 0.17, 0.92, 0.55, 0x3a3d42)); } // 사이드 박스
+      det.push(rbox(0.28, 0.09, 0.55, 0.05, 0, 1.0, 0.2, DARK));
+      tail.push(box(0.14, 0.06, 0.03, 0, 0.86, 0.615));
+      break;
+    }
+    case 'sport': { // Sport Street 250 — 노즈부터 솟은 꼬리까지 한 덩어리 풀 페어링 + 쌍 눈 + 사이드 벤트
+      k.rear = 'hugger'; k.plate = [0.84, 0.95];
+      body.push(profileBody([[-0.88, 1.0], [-0.78, 1.1], [-0.62, 1.17], [-0.4, 1.16], [-0.12, 1.12], [0.06, 1.02], [0.36, 1.02], [0.62, 1.13], [0.92, 1.21], [0.94, 1.14], [0.6, 1.0], [0.3, 0.88], [0.12, 0.62], [-0.12, 0.46], [-0.3, 0.5], [-0.34, 0.76], [-0.55, 0.86], [-0.72, 0.9], [-0.85, 0.94]], 0.34,
+        (z, y) => (1 - 0.45 * smooth01(0.3, 0.95, z)) * (1 - 0.35 * smooth01(-0.6, -0.9, z)) * (1 - 0.3 * smooth01(0.98, 1.2, y))));
+      for (const sx of [-1, 1]) { const g = new THREE.BoxGeometry(0.1, 0.04, 0.05); g.rotateZ(sx * 0.3); g.translate(sx * 0.075, 1.035, -0.885); head.push(g); } // 쌍 눈 (노즈 끝에 박힘)
+      det.push(box(0.05, 0.05, 0.04, 0, 0.97, -0.89, 0x1c1e22));            // 램에어 흡입구
+      det.push(box(0.24, 0.2, 0.02, 0, 1.24, -0.55, 0x223344, 0.95));       // 스모크 스크린
+      for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) det.push(box(0.012, 0.035, 0.18, sx * 0.209, 0.66 + i * 0.06, -0.16, BLACK)); // 사이드 벤트
+      det.push(rbox(0.26, 0.06, 0.32, 0.03, 0, 1.05, 0.22, DARK));             // 라이더 시트 (안장 홈)
+      det.push(rbox(0.12, 0.05, 0.2, 0.02, 0, 1.18, 0.66, DARK, -0.25));      // 뒷좌석 커버
+      tail.push(box(0.1, 0.035, 0.03, 0, 1.17, 0.95));
+      break;
+    }
+    case 'enduro': { // Off-Road Enduro — 높은 부리 펜더, 번호판, 긴 시트, 높은 머플러, 블록 타이어
+      k.wheel = 'wire'; k.front = 'none'; k.rear = 'none'; k.plate = [0.92, 1.0]; k.exhaust = false; k.knobby = true;
+      body.push(rbox(0.16, 0.04, 0.56, 0.03, 0, 0.9, -0.8, null, -0.2));   // 높은 앞 펜더 (포크에 붙음)
+      det.push(rbox(0.26, 0.24, 0.03, 0.04, 0, 1.04, -0.62, 0xf2f2f2, -0.3)); // 번호판
+      det.push(box(0.12, 0.06, 0.01, 0, 1.08, -0.64, BLACK, -0.3));
+      head.push(box(0.09, 0.05, 0.02, 0, 0.98, -0.645));
+      body.push(rbox(0.38, 0.2, 0.32, 0.06, 0, 0.98, -0.2, null));          // 라디에이터 슈라우드
+      det.push(rbox(0.24, 0.08, 0.78, 0.04, 0, 1.05, 0.15, DARK));         // 긴 평평한 시트
+      body.push(rbox(0.2, 0.04, 0.52, 0.03, 0, 1.0, 0.74, null, 0.25));    // 위로 솟은 뒷 펜더
+      for (const sx of [-1, 1]) limbGeo(V(sx * 0.12, 1.0, -0.45), V(sx * 0.12, 0.56, 0.08), 0.022, 0x2a2d32, det); // 프레임
+      { const g = new THREE.CylinderGeometry(0.045, 0.06, 0.62, 10); g.rotateX(Math.PI / 2 - 0.25); g.translate(0.17, 0.88, 0.45); det.push(paint(g, CH)); } // 높은 머플러
+      tail.push(box(0.1, 0.04, 0.03, 0, 0.94, 0.995));
+      break;
+    }
+    case 'naked': { // Phantom X — 스트리트파이터 (각진 근육 탱크, LED 눈, 노출 엔진·라디에이터, 언더 머플러, 금색 포크)
+      k.exhaust = false; k.plate = [0.84, 0.9]; k.fork = 0xd4a017;
+      det.push(rbox(0.24, 0.08, 0.32, 0.04, 0, 1.04, 0.22, DARK));         // 시트
+      body.push(profileBody([[-0.46, 0.98], [-0.36, 1.15], [-0.1, 1.17], [0.08, 1.06], [0.06, 0.92], [-0.2, 0.82], [-0.42, 0.84]], 0.36,
+        (z, y) => (1 - 0.3 * smooth01(1.0, 1.17, y)) * (1 - 0.25 * smooth01(-0.2, 0.08, z)))); // 근육형 탱크 (앞이 넓고 높은 쐐기)
+      for (const sx of [-1, 1]) { const g = new THREE.BoxGeometry(0.03, 0.14, 0.26); g.rotateZ(sx * -0.35); g.translate(sx * 0.215, 0.93, -0.3); det.push(paint(g, DARK)); } // 탱크 측면 에어 스쿱
+      det.push(rbox(0.2, 0.12, 0.12, 0.03, 0, 1.0, -0.55, DARK));           // 컴팩트 라이트 하우징
+      for (const sx of [-1, 1]) { const g = new THREE.BoxGeometry(0.07, 0.022, 0.01); g.rotateZ(sx * 0.3); g.translate(sx * 0.05, 1.02, -0.614); head.push(g); }
+      det.push(box(0.34, 0.24, 0.04, 0, 0.78, -0.42, 0x2a2d32));           // 라디에이터
+      for (let i = 0; i < 5; i++) det.push(box(0.32, 0.012, 0.045, 0, 0.69 + i * 0.045, -0.42, 0x50555c));
+      for (const sx of [-1, 1]) det.push(rbox(0.1, 0.14, 0.16, 0.03, sx * 0.17, 0.72, -0.05, 0x7a8088)); // 실린더 헤드
+      body.push(profileBody([[0.36, 1.0], [0.62, 1.12], [0.7, 1.16], [0.68, 1.08], [0.4, 0.92]], 0.2, (z) => 1 - 0.5 * smooth01(0.4, 0.7, z))); // 짧고 날카로운 꼬리
+      det.push(rbox(0.24, 0.12, 0.38, 0.04, 0, 0.36, 0.12, 0x2a2d32));     // 언더 머플러
+      for (const sx of [-1, 1]) det.push(cylZ(0.035, 0.06, sx * 0.07, 0.36, 0.33, CH, 10));
+      tail.push(box(0.1, 0.03, 0.03, 0, 1.11, 0.715));
+      break;
+    }
+    case 'cyber': { // Cyber Pulse 3000 — 쐐기형 모노코크 셸 + 네온 라인 + 허브리스 휠
+      k.wheel = 'hubless'; k.front = 'none'; k.rear = 'none'; k.exhaust = false; k.plate = null; k.engine = false; k.fork = null; k.pegs = false;
+      body.push(profileBody([[-0.98, 0.92], [-0.75, 1.06], [-0.4, 1.12], [-0.12, 1.1], [0.05, 1.02], [0.38, 1.03], [0.7, 1.1], [0.92, 1.06], [0.95, 0.9], [0.8, 0.66], [0.4, 0.58], [-0.4, 0.58], [-0.82, 0.66], [-0.97, 0.8]], 0.36,
+        (z, y) => (1 - 0.3 * smooth01(0.5, 0.95, z)) * (1 - 0.3 * smooth01(-0.6, -0.98, z)) * (1 - 0.35 * smooth01(0.95, 1.12, y))));
+      const neon = accent ?? 0x00e5ff;
+      for (const sx of [-1, 1]) { glow.push(box(0.02, 0.03, 1.5, sx * 0.218, 0.8, 0, neon)); glow.push(box(0.02, 0.02, 0.4, sx * 0.19, 1.0, -0.6, neon, -0.2)); }
+      head.push(box(0.28, 0.03, 0.03, 0, 0.93, -1.0));
+      tail.push(box(0.26, 0.03, 0.03, 0, 1.0, 0.975));
+      det.push(rbox(0.26, 0.07, 0.42, 0.04, 0, 1.06, 0.2, DARK));
+      break;
+    }
+    default: return bikeKit('scooter', L, accent);
   }
+  return k;
+}
+
+// 펜더: 바퀴 둘레를 따라 두께 있는 곡면 (a0 → a0+len 각도, z = 바퀴 중심)
+function fenderGeo(z, a0, len, ro = 0.475, ri = 0.43, w = 0.24) {
+  const sh = new THREE.Shape(), N = 14;
+  for (let i = 0; i <= N; i++) { const t = a0 + (len * i) / N; (i ? sh.lineTo : sh.moveTo).call(sh, Math.cos(t) * ro, Math.sin(t) * ro); }
+  for (let i = N; i >= 0; i--) { const t = a0 + (len * i) / N; sh.lineTo(Math.cos(t) * ri, Math.sin(t) * ri); }
+  const g = new THREE.ExtrudeGeometry(sh, { depth: w, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 1 });
+  g.rotateY(-Math.PI / 2);
+  g.translate(w / 2, 0.4, z);
+  return g;
 }
 
 // opts: { box, outfit, helmet } — 차고에서 고른 커스텀 파츠
@@ -2738,7 +2899,7 @@ export function createBike(color, opts = {}) {
   const gloss = [], metal = []; // 광택(헬멧 쉘·바이저·일부 배달통) / 금속 반사(골드·크롬·국가대표 장식)
   const facet = []; // 각진 동물 머리·꼬리 (플랫 셰이딩)
   if (superbike) nationalSuperbike({ body, det, glow, metal, gloss, facet }, opts.nationalCode, opts.accent);
-  else bikeShape(opts.style || 'scooter', body, det, glow, opts.accent);
+  const kit = superbike ? null : bikeKit(opts.style || 'scooter', { body, det, glow, head, tail }, opts.accent);
   const JACKET = out.top;
   const PANTS = out.pants;
 
@@ -2747,55 +2908,40 @@ export function createBike(color, opts = {}) {
     t.rotateY(Math.PI / 2);
     t.translate(0, 0.4, z);
     det.push(paint(t, 0x111111));
-    det.push(cylX(0.13, 0.14, 0, 0.4, z, 0x8a8f96, 10));
+    if (kit?.wheel === 'hubless') { const ring = new THREE.TorusGeometry(0.205, 0.022, 6, 28); ring.rotateY(Math.PI / 2); ring.translate(0, 0.4, z); glow.push(paint(ring, opts.accent ?? 0x00e5ff)); } // 허브리스: 속이 빈 네온 림
+    else det.push(cylX(0.13, 0.14, 0, 0.4, z, 0x8a8f96, 10));
   }
   // 엔진: 윗면(0.72)·앞면(z -0.23)이 부츠 윗면(0.74)·밑창 앞면(-0.25)과 같은 평면이 되지 않게
-  if (!superbike) det.push(box(0.28, 0.3, 0.58, 0, 0.57, 0.06, 0x3a3a3a));
+  if (!superbike && kit.engine) det.push(box(0.28, 0.3, 0.58, 0, 0.57, 0.06, 0x3a3a3a));
   if (!superbike) {
     // 기본 머플러·포크 (국가대표 슈퍼바이크는 전용 티타늄 머플러·골드 포크)
-    const ex = new THREE.CylinderGeometry(0.06, 0.085, 0.75, 8);
-    ex.rotateX(Math.PI / 2);
-    ex.translate(0.2, 0.47, 0.5);
-    det.push(paint(ex, 0xc0c4c8));
-    const fork = new THREE.CylinderGeometry(0.035, 0.035, 0.8, 6);
-    fork.rotateX(-0.45);
-    fork.translate(0, 0.74, -0.58);
-    det.push(paint(fork, 0x666666));
+    if (kit.exhaust) {
+      const ex = new THREE.CylinderGeometry(0.06, 0.085, 0.75, 8);
+      ex.rotateX(Math.PI / 2);
+      ex.translate(0.2, 0.47, 0.5);
+      det.push(paint(ex, 0xc0c4c8));
+    }
+    // 텔레스코픽 쌍 포크: 앞 차축 → 핸들 아래 트리플 클램프 (위쪽이 뒤로 눕는 정상 캐스터)
+    if (kit.fork != null) {
+      for (const sx of [-1, 1]) {
+        limbGeo(V(sx * 0.115, 0.4, -0.72), V(sx * 0.115, 1.03, -0.47), 0.034, kit.fork, det);
+        det.push(box(0.03, 0.05, 0.06, sx * 0.115, 0.4, -0.72, 0x2a2d32)); // 차축 끝
+      }
+      det.push(box(0.3, 0.04, 0.08, 0, 1.03, -0.47, 0x2a2d32)); // 트리플 클램프
+    }
   }
-  det.push(box(0.3, 0.08, 0.42, 0, superbike ? 1.065 : 1.0, 0.22, 0x161616));
+  if (superbike) det.push(box(0.3, 0.08, 0.42, 0, 1.065, 0.22, 0x161616)); // 일반 바이크 시트는 bikeKit이 스타일별로
   det.push(box(0.64, 0.045, 0.045, 0, 1.06, -0.5, 0x222222));
   if (!superbike) {
-    const st = opts.style || 'scooter';
-    det.push(box(0.3, 0.2, 0.04, 0, 1.15, -0.62, 0x223344, -0.9)); // 윈드스크린
-    if (st === 'scooter') {
-      // 스쿠터: 다리 앞 가림판(에이프런) + 발판 + 둥근 뒷 카울 (스텝스루)
-      body.push(box(0.42, 0.52, 0.06, 0, 0.86, -0.5, null, 0.22));
-      body.push(box(0.36, 0.05, 0.42, 0, 0.62, -0.1));
-      { const g = new THREE.SphereGeometry(1, 16, 10); g.scale(0.21, 0.17, 0.44); g.translate(0, 0.86, 0.42); body.push(g); }
-      { const g = new THREE.SphereGeometry(1, 14, 10); g.scale(0.2, 0.2, 0.22); g.translate(0, 0.98, -0.6); body.push(g); }
-      det.push(box(0.3, 0.03, 0.36, 0, 0.655, -0.1, 0x2a2a2a)); // 발판 고무 매트
-    } else {
-      body.push(box(0.38, 0.42, 0.5, 0, 0.88, -0.42, null, -0.5));
-      { const g = new THREE.SphereGeometry(1, 16, 10); g.scale(0.19, 0.13, 0.32); g.translate(0, 0.99, -0.1); body.push(g); } // 둥근 연료탱크
-      body.push(box(0.28, 0.16, 0.5, 0, 0.94, 0.52, null, -0.25));
-      det.push(cylX(0.035, 0.02, 0, 1.12, -0.12, 0xc0c4c8, 10)); // 주유구 캡
-    }
-    if (st === 'sport') { const g = new THREE.ConeGeometry(0.14, 0.42, 4); g.rotateX(Math.PI / 2); g.rotateZ(Math.PI / 4); g.scale(1, 0.6, 1); g.translate(0, 1.0, 0.86); body.push(g); } // 뾰족한 꼬리 카울
-    // 펜더 (앞: 바퀴 위를 감싸는 곡면 / 뒤: 짧은 허거)
-    for (const [z, a0, len] of [[-0.72, 1.05, 1.65], [0.7, 0.15, 1.6]]) { // 앞: 위→앞쪽 / 뒤: 뒤쪽→위
-      // 두께 있는 곡면 펜더 (바퀴 위를 감싸는 고리 조각을 옆으로 밀어낸 모양)
-      const ro = 0.475, ri = 0.43, sh = new THREE.Shape();
-      const N = 14;
-      for (let i = 0; i <= N; i++) { const t = a0 + (len * i) / N; (i ? sh.lineTo : sh.moveTo).call(sh, Math.cos(t) * ro, Math.sin(t) * ro); }
-      for (let i = N; i >= 0; i--) { const t = a0 + (len * i) / N; sh.lineTo(Math.cos(t) * ri, Math.sin(t) * ri); }
-      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.24, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 1 });
-      g.rotateY(-Math.PI / 2); // 모양의 x → 앞뒤(z), 두께 → 좌우(x)
-      g.translate(0.12, 0.4, z);
-      body.push(g);
-    }
-    // 휠: 알로이 림 + 스포크 (클래식은 가는 와이어 스포크)
-    const wire = st === 'classic';
+    // 펜더 (스타일별) + 휠 (알로이 스포크 / 와이어 / 원판 / 허브리스) + 미러·발판·번호판
+    if (kit.front === 'hug') body.push(fenderGeo(-0.72, 1.05, 1.5));
+    if (kit.front === 'vespa') body.push(fenderGeo(-0.72, 0.9, 1.5, 0.47, 0.425, 0.2));
+    if (kit.rear === 'hug') body.push(fenderGeo(0.7, 0.2, 1.5));
+    if (kit.rear === 'hugger') body.push(fenderGeo(0.7, 0.9, 1.0, 0.46, 0.42, 0.18));
     for (const z of [-0.72, 0.7]) {
+      if (kit.wheel === 'hubless') continue;
+      if (kit.wheel === 'disc') { det.push(cylX(0.2, 0.16, 0, 0.4, z, 0xe8eaec, 20)); det.push(cylX(0.07, 0.18, 0, 0.4, z, 0x9aa0a6, 12)); continue; }
+      const wire = kit.wheel === 'wire';
       const rim = new THREE.TorusGeometry(0.205, 0.02, 6, 24);
       rim.rotateY(Math.PI / 2);
       rim.translate(0, 0.4, z);
@@ -2807,14 +2953,12 @@ export function createBike(color, opts = {}) {
       }
       det.push(cylX(0.11, 0.015, 0.075, 0.4, z, 0x6a6f75, 16)); // 브레이크 디스크
     }
-    if (st === 'enduro') {
-      // 오프로드 블록 타이어 돌기
+    if (kit.knobby) {
       for (const z of [-0.72, 0.7]) for (let i = 0; i < 20; i++) {
         const a = (i / 20) * Math.PI * 2;
         det.push(box(0.2, 0.05, 0.05, 0, 0.4 + Math.cos(a) * 0.4, z + Math.sin(a) * 0.4, 0x151515, a));
       }
     }
-    // 미러 + 발판 + 번호판 + 헤드라이트 테두리
     for (const sx of [-1, 1]) {
       const stalk = new THREE.CylinderGeometry(0.012, 0.012, 0.22, 5);
       stalk.rotateZ(sx * -0.3);
@@ -2822,10 +2966,13 @@ export function createBike(color, opts = {}) {
       det.push(paint(stalk, 0x222222));
       det.push(box(0.1, 0.06, 0.02, sx * 0.34, 1.28, -0.52, 0x1a1a1a));
       det.push(box(0.08, 0.04, 0.005, sx * 0.34, 1.28, -0.509, 0x8fb8d6));
-      det.push(box(0.1, 0.025, 0.04, sx * 0.21, 0.6, 0.18, 0x444444)); // 동승자 발판
+      if (kit.pegs) det.push(box(0.1, 0.025, 0.04, sx * 0.21, 0.6, 0.18, 0x444444)); // 동승자 발판
     }
-    det.push(box(0.2, 0.11, 0.012, 0, 0.8, 0.93, 0xf2f2f2, -0.25));    // 번호판
-    det.push(box(0.16, 0.025, 0.014, 0, 0.82, 0.931, 0x222222, -0.25));
+    if (kit.plate) {
+      const [py, pz] = kit.plate;
+      det.push(box(0.2, 0.11, 0.012, 0, py, pz, 0xf2f2f2, -0.25));
+      det.push(box(0.16, 0.025, 0.014, 0, py + 0.02, pz + 0.001, 0x222222, -0.25));
+    }
   }
 
   // 라이더 (의상 + 헤드기어)
@@ -2841,26 +2988,12 @@ export function createBike(color, opts = {}) {
   if (!extBox && !opts.bare) deliveryBox(det, glow, opts.box, { gloss, metal, glass }, opts.box === 'national' ? opts.nationalCode : null);
   const nationalBox = !extBox && opts.box === 'national' && opts.nationalCode;
 
-  // 헤드라이트·후미등: 차체마다 앞·뒤 표면 위치를 재서 그 바깥에 붙임 (차체 속에 파묻히지 않게)
-  let fz = -0.7, bz = 0.78;
-  if (!superbike) {
-    const v = new THREE.Vector3();
-    let minZ = Infinity, maxZ = -Infinity;
-    for (const g of body) {
-      const pa = g.attributes.position;
-      for (let i = 0; i < pa.count; i++) {
-        v.fromBufferAttribute(pa, i);
-        if (Math.abs(v.x) > 0.3) continue;
-        if (v.y > 0.82 && v.y < 1.04 && v.z < 0) minZ = Math.min(minZ, v.z);
-        if (v.y > 0.9 && v.y < 1.1 && v.z > 0) maxZ = Math.max(maxZ, v.z);
-      }
-    }
-    if (Number.isFinite(minZ)) fz = Math.min(-0.7, minZ - 0.015);
-    if (Number.isFinite(maxZ)) bz = Math.max(0.78, maxZ + 0.015);
-    { const r = new THREE.TorusGeometry(0.1, 0.018, 6, 18); r.translate(0, 0.92, fz - 0.01); det.push(paint(r, 0xc0c4c8)); }
+  // 전조등·후미등: 일반 바이크는 스타일마다 차체에 직접 붙임 (bikeKit). 국가대표 슈퍼바이크만 기본 위치
+  const bz = 0.78;
+  if (superbike) {
+    head.push(box(0.18, 0.12, 0.05, 0, 0.92, -0.7));
+    tail.push(box(0.16, 0.06, 0.04, 0, 1.0, bz));
   }
-  head.push(box(0.18, 0.12, 0.05, 0, 0.92, fz));
-  tail.push(box(0.16, 0.06, 0.04, 0, 1.0, bz));
 
   const bodyGeo = merge(body);
   const mg = (l) => (l.length ? merge(l) : null);
@@ -3607,7 +3740,7 @@ function limbGeo(a, b, r, color, list) {
   g.translate(0, dir.length() / 2, 0);
   g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()));
   g.translate(a.x, a.y, a.z);
-  list.push(paint(g, color));
+  list.push(color == null ? g : paint(g, color));
 }
 
 function curbVariantBase(kind) {
