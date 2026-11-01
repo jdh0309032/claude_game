@@ -1263,3 +1263,19 @@ body.touch #menu .help { display: none; }
 .tut-hand::after { content: ''; position: absolute; left: 59px; top: 8px; bottom: 8px; width: 2px; background: rgba(255, 255, 255, 0.35); }
 .tut-dot { position: absolute; left: 48px; top: 23px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.25); animation: tutMove 2.4s ease-in-out infinite; }
 @keyframes tutMove { 0%, 100% { transform: translate(0, 0); } 20% { transform: translate(-40px, 0); } 45% { transform: translate(40px, 0); } 70% { transform: translate(0, -24px); } 85% { transform: translate(0, 24px); } }
+
+/* 다국어: 설정 라벨은 기울이지 않음 / 라틴 문자가 아닌 언어는 굵은 시스템·Noto 글꼴로 대체 (디스플레이 글꼴에 글자가 없어서 가늘게 나오던 것 방지) */
+.st-label { font-style: normal; }
+:root[data-lang="ko"] { --display: 'Russo One', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; --hud: 'Rajdhani', 'Noto Sans KR', 'Apple SD Gothic Neo', system-ui, sans-serif; }
+:root[data-lang="th"] { --display: 'Noto Sans Thai', 'Russo One', system-ui, sans-serif; --hud: 'Noto Sans Thai', 'Rajdhani', system-ui, sans-serif; --brand: 'Noto Sans Thai', 'Nunito', system-ui, sans-serif; }
+:root[data-lang="th"] body { font-family: 'Noto Sans Thai', system-ui, sans-serif; }
+:root[data-lang="km"] { --display: 'Noto Sans Khmer', 'Russo One', system-ui, sans-serif; --hud: 'Noto Sans Khmer', 'Rajdhani', system-ui, sans-serif; --brand: 'Noto Sans Khmer', 'Nunito', system-ui, sans-serif; }
+:root[data-lang="km"] body { font-family: 'Noto Sans Khmer', system-ui, sans-serif; }
+:root[data-lang="my"] { --display: 'Noto Sans Myanmar', 'Russo One', system-ui, sans-serif; --hud: 'Noto Sans Myanmar', 'Rajdhani', system-ui, sans-serif; --brand: 'Noto Sans Myanmar', 'Nunito', system-ui, sans-serif; }
+:root[data-lang="my"] body { font-family: 'Noto Sans Myanmar', system-ui, sans-serif; }
+:root:is([data-lang="ko"], [data-lang="th"], [data-lang="km"], [data-lang="my"]) :is(h2, h3, .result-title, .popup, .play-txt, .tut-card b) { font-weight: 800; letter-spacing: 0; }
+/* 태국어·크메르어·미얀마어는 위아래 표시가 길어 줄 간격을 넉넉히 */
+:root:is([data-lang="th"], [data-lang="km"], [data-lang="my"]) body { line-height: 1.55; }
+/* 자간은 태국어·크메르어·미얀마어 글자 결합을 깨뜨림 → 전부 0 */
+:root:is([data-lang="th"], [data-lang="km"], [data-lang="my"]) * { letter-spacing: 0 !important; }
+:root[data-lang="ko"] .btn, :root[data-lang="ko"] .svc span, :root[data-lang="ko"] .tile .tn { letter-spacing: 0; }

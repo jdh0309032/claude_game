@@ -162,6 +162,28 @@ python3 -m http.server 8000
 - 차고 타일: 배달통·헤드기어·의상·바이크는 색 견본 대신 **3D 모델 썸네일**(배경 투명, `js/thumbs.js` 가 보이는 타일만 몇 개씩 나눠 렌더 후 캐시).
 - 정렬: 무료 기본템 → COMMON → RARE → EPIC → LEGENDARY (같은 등급은 가격순), 특별 아이템은 맨 뒤.
 
+## 다국어 (9개 언어)
+
+- English · 한국어 · Tiếng Việt · Bahasa Indonesia · ไทย · Bahasa Melayu · Filipino · ខ្មែរ · မြန်မာ. 처음엔 기기 언어를 따르고, **설정 → LANGUAGE** 에서 바꾸면 계정에 저장됩니다.
+- 구조: `js/i18n.js` 의 `t('영어 원문', { n })` + HTML `data-i18n` 속성. 번역 원본은 `i18n/<언어>.tsv`(번호·번역), 아이템 설명은 `i18n/items/all.tsv`,
+  `python3 scripts/build-lang.py` 가 빠진 줄·`{자리표시자}`·태그 개수를 검사하고 `js/lang/<언어>.js` 를 만듭니다. 문구를 추가하면 `i18n/keys.json` 에 영어 원문을 넣고 각 TSV 에 번역 줄을 추가하세요.
+- UI·아이템 설명 번역은 사람이 직접 작성한 것입니다. 오픈소스 기계번역(M2M100)을 먼저 시험했지만 짧은 게임 문구 품질이 낮아(예: "Near miss!" → "dekat dengan Miss!") 게임 텍스트에는 쓰지 않고, 관리자 1:1 문의 번역에만 씁니다. 출시 전 원어민 검수를 권장합니다.
+- 태국어·크메르어·미얀마어·한국어는 Noto 웹폰트를 필요할 때만 불러오고, 자간을 0 으로 해서 글자 결합이 깨지지 않게 했습니다. 아이템 이름은 영어 고유명 그대로입니다.
+
+## 고객센터 · 관리자 페이지 · 운영 데이터
+
+- 게임: **설정 → HELP & SUPPORT** 에서 1:1 문의(분류·제목·내용), 답변 확인. 관리자 답변은 플레이어 언어 번역문이 먼저 보이고 '원문'을 눌러 한국어 원문을 볼 수 있습니다. 새 답변이 오면 설정 버튼에 빨간 점.
+- 판이 끝날 때마다 기록(거리·점수·코인·시간·바이크·맵), 잡히지 않은 오류(메시지·스택·빌드·기기)를 서버로 보냅니다(세션당 최대 8건).
+- **관리자 페이지**: [`admin.html`](admin.html) (예: `https://jdh0309032.github.io/claude_game/admin.html`, 폰에서 '홈 화면에 추가' 가능). 관리자 계정으로 로그인.
+  - 대시보드(전체·신규·활동 플레이어, 판 수, 평균 거리·코인·플레이 시간, 결제, 미답변 문의, 오류, 일별 추이 차트, 국가별 플레이어)
+  - 1:1 문의: 목록·상태 필터, 플레이어 메시지 한국어 번역, 한국어 답변 → 플레이어 언어 번역(수정 가능) + 역번역 확인, 답변·종료, 코인 지급
+  - 공지: 한국어로 쓰고 8개 언어 자동 번역 → 고쳐서 게시(게임 NEWS 탭에 언어별로 표시), 순서 변경·삭제
+  - 플레이어: 아이디·닉네임·UUID 검색, 국가 필터 → 상세(국가/세계 순위, 코인·장착·보유, 최근 판 30개, 결제, 문의, 관리자 조치 기록, 저장 데이터 원본), 코인 지급
+  - 지역별 순위(전 세계·8개국), 클라이언트 오류(메시지별 묶음·횟수·영향 플레이어·스택), 가격·보상 설정(JSON)
+- **번역 엔진**: 오픈소스 [M2M100](https://huggingface.co/facebook/m2m100_418M)(MIT, 100개 언어)을 transformers.js 로 **관리자 브라우저 안에서** 실행(`js/admin-mt-worker.js`). 서버 비용·외부 API 없음.
+  처음 쓸 때 모델(약 630MB)을 받아 브라우저에 캐시합니다. 뜻 파악용 기계번역이라 숫자·고유명사는 확인하세요(예: "10.000 xu" → "10만원"으로 오역한 사례).
+- 설정: [`supabase/migrations/009_ops.sql`](supabase/migrations/009_ops.sql) 실행(또는 `setup_all.sql` 재실행). 모든 테이블은 RLS 로 막혀 있고, 플레이어는 자기 문의만, 관리자 함수는 `player_data.is_admin` 계정만 실행됩니다.
+
 ## 안드로이드 앱 (Capacitor)
 
 - 같은 웹 코드를 Capacitor 로 감싼 앱입니다(`android/` 폴더, 앱 ID `com.jdh0309032.grubrider` — 스토어 첫 업로드 후에는 바꿀 수 없음).
@@ -269,6 +291,11 @@ js/models.js          ModelManager(GLTF 로더) + 로우폴리 모델·건물·�
 js/preview.js         3D 쇼룸 / Flex View / 전광판 라이더 스냅샷
 js/ads.js             보상형 광고 (mock / Google H5 Games Ads)
 js/payments.js        코인 결제 (mock / Capacitor + RevenueCat)
+js/i18n.js            다국어 (t(), data-i18n, 언어 감지·폰트) / js/lang/*.js 생성된 번역 사전
+js/updater.js         앱 라이브 업데이트 (GitHub Release 의 web.zip)
+js/thumbs.js          상점 타일 3D 썸네일
+admin.html, js/admin.js, css/admin.css, js/admin-mt-worker.js   관리자 페이지 + 브라우저 번역 워커
+i18n/                 번역 원본 (keys.json, <언어>.tsv, items/all.tsv) / scripts/build-lang.py 번역 빌드
 js/storage.js         서버 저장(player_data), 미션, 계정 인증, 국가 랭킹 API, IP 국가 판별·고정
 js/audio.js           WebAudio 합성 효과음 + 128 BPM BGM 시퀀서
 js/rainfx.js          화면 빗물 오버레이 (Canvas 2D 굴절)

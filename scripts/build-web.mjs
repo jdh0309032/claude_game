@@ -10,7 +10,9 @@ const DIRS = ['css', 'js', 'vendor', 'assets'];
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT);
 for (const f of FILES) if (existsSync(f)) cpSync(f, join(OUT, f));
-for (const d of DIRS) if (existsSync(d)) cpSync(d, join(OUT, d), { recursive: true });
+// 관리자 페이지 파일은 앱에 넣지 않음 (웹에서만 사용)
+const skip = (src) => /admin/.test(src.replace(/\\/g, '/').split('/').pop());
+for (const d of DIRS) if (existsSync(d)) cpSync(d, join(OUT, d), { recursive: true, filter: (src) => !skip(src) });
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 const build = { web: Number(process.env.VERSION_CODE || 0), nativeLevel: pkg.nativeLevel || 1, sha: (process.env.GITHUB_SHA || 'local').slice(0, 7) };
 writeFileSync(join(OUT, 'build.json'), JSON.stringify(build));

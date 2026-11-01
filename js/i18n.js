@@ -15,7 +15,7 @@ export const LANGS = [
   { code: 'my', name: 'မြန်မာ' },
 ];
 const CODES = new Set(LANGS.map((l) => l.code));
-const FONTS = { th: 'Noto+Sans+Thai', km: 'Noto+Sans+Khmer', my: 'Noto+Sans+Myanmar' };
+const FONTS = { ko: 'Noto+Sans+KR', th: 'Noto+Sans+Thai', km: 'Noto+Sans+Khmer', my: 'Noto+Sans+Myanmar' };
 
 let lang = 'en';
 let dict = {};
@@ -74,13 +74,13 @@ export async function setLang(code) {
 export function onLangChange(f) { listeners.add(f); }
 
 export function applyI18n(root = document) {
-  for (const el of root.querySelectorAll('[data-i18n]')) {
-    if (el.dataset.src == null) el.dataset.src = el.textContent.trim();
-    el.textContent = t(el.dataset.src);
-  }
   for (const el of root.querySelectorAll('[data-i18n-html]')) {
     if (el.dataset.src == null) el.dataset.src = el.innerHTML.trim();
     el.innerHTML = t(el.dataset.src);
+  }
+  for (const el of root.querySelectorAll('[data-i18n]')) {
+    if (el.dataset.src == null) el.dataset.src = el.textContent.trim();
+    el.textContent = t(el.dataset.src);
   }
   for (const el of root.querySelectorAll('[data-i18n-ph]')) {
     if (el.dataset.srcPh == null) el.dataset.srcPh = el.getAttribute('placeholder') || '';

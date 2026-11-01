@@ -1,0 +1,343 @@
+0	MOD ADMIN · TIDAK DIREKODKAN
+1	MINYAK
+2	BREK
+3	PENDIKIT
+4	PENGHANTARAN SEGERA!
+5	KM/J
+6	JEDA
+7	JALAN CABARAN
+8	BERITA
+9	GARAJ
+10	KEDUDUKAN
+11	MISI
+12	TETAPAN
+13	MULA MENGHANTAR
+14	TERBAIK
+15	TERKINI
+16	MOD ADMIN
+17	ANAK PANAH / A D stereng · ATAS minyak · BAWAH brek · P jeda
+18	AKAUN PENUNGGANG
+19	LOG MASUK
+20	DAFTAR
+21	ID
+22	KATA LALUAN
+23	SAHKAN KATA LALUAN
+24	Log masuk sebagai
+25	Skor terbaik anda dihantar ke kedudukan global selepas setiap larian.
+26	LOG KELUAR
+27	KEMBALI
+28	SERET UNTUK PUSING
+29	MOTOSIKAL
+30	PENUNGGANG
+31	KOTAK
+32	BENDERA
+33	PAPAN KEDUDUKAN
+34	KETIK PENUNGGANG UNTUK LIHAT
+35	NEGARA
+36	LIGA DUNIA
+37	PENGUMUMAN
+38	BANTUAN
+39	Lengkapkan dalam satu larian untuk syiling segera. Misi yang selesai diganti dengan misi lebih sukar pada larian seterusnya.
+40	BAHASA
+41	KESAN BUNYI
+42	MUZIK
+43	GETARAN
+44	GRAFIK
+45	KESAN SKRIN BASAH
+46	KAWALAN
+47	TUKAR SUSUNAN KAWALAN
+48	NEGARA SAYA
+49	CARA BERMAIN
+50	<b>NYARIS LANGGAR</b> — lalu rapat di sebelah kereta untuk mata bonus. Dalam 0.35 m ialah <b class="gold">SEMPURNA</b> (x2).
+51	<b>KOMBO</b> — sambung nyaris langgar dalam 3 saat untuk naikkan pendarab.
+52	<b>JALAN KIRI / JALAN KANAN</b> — Singapura, Malaysia, Indonesia dan Thailand memandu di sebelah kiri; Vietnam, Filipina, Kemboja dan Myanmar di sebelah kanan. Lihat papan tanda di setiap pintu sempadan.
+53	<b>LAWAN ARUS</b> — menunggang di lorong bertentangan memberi skor x2. Awas kenderaan dari depan.
+54	<b>LOMPAT</b> — naik trak tanjakan atau tanjakan lompat berjalur emas. Di udara, minyak / brek = <b>BALIK KUANG</b> (+500), stereng = <b>PUSING 360</b> (+1,200), kedua-duanya = <b>MEGA BALIK KUANG PEPENJURU</b> (+3,000) setiap pusingan. Mendarat rata dan anda kebal seketika; mendarat senget dan anda jatuh.
+55	<b>RIBUT</b> — 30 saat hujan lebat (skor x1.3). Lopak air membuat anda tergelincir.
+56	Elakkan gerai tepi jalan, kon dan papan tanda di garisan tengah, serta kereta yang melintasi garisan tengah.
+57	<b>KUASA TAMBAHAN</b> (setiap 100-150 m) — Perisai, Magnet, <b>Mod Gergasi</b> (besar dan tidak dapat dihalang), Skor x2, Perlahan.
+58	<b>BAHAYA JALAN</b> — lubang jalan memperlahankan anda; lubang pembetung terbuka dan kotak kargo yang jatuh menamatkan larian.
+59	<b>ZON HANTARAN</b> — tunggang terus melalui zon hijau bercahaya di tepi jalan untuk +50 syiling.
+60	<b>MOTOSIKAL PASUKAN KEBANGSAAN</b> — jadi #1 di negara anda untuk menunggangnya. Hilang #1 dan ia diambil semula.
+61	PERIHAL
+62	DASAR PRIVASI
+63	TERMA PERKHIDMATAN
+64	SET SEMULA KEMAJUAN
+65	PADAM AKAUN
+66	RESIT PENGHANTARAN · DIJEDA
+67	NO. PESANAN
+68	KENDERAAN
+69	KEMAJUAN MISI
+70	SKOR
+71	SAMBUNG
+72	KE MENU
+73	REKOD BAHARU
+74	TONTON IKLAN UNTUK HIDUP SEMULA
+75	HIDUP SEMULA (ADMIN)
+76	TONTON IKLAN UNTUK SYILING x2
+77	TERUSKAN
+78	CABAR DI WHATSAPP
+79	SETERUSNYA
+80	GANJARAN HARIAN
+81	Log masuk 7 hari berturut-turut untuk topi keledar Mahkota Berturut.
+82	TUNTUT
+83	KEDAI SYILING
+84	beli 4, percuma 1
+85	Syiling ialah mata wang maya dalam permainan tanpa nilai tunai dan tidak boleh dipulangkan atau dipindah milik, kecuali jika dikehendaki oleh undang-undang atau dasar kedai. Lihat <a href="terms.html" target="_blank" rel="noopener">Terma</a> dan <a href="privacy.html" target="_blank" rel="noopener">Dasar Privasi</a>.
+86	KOTAK MISTERI
+87	PAKAI
+88	TUTUP
+89	3-12 huruf kecil / nombor
+90	Sekurang-kurangnya 6 aksara
+91	Belok kiri
+92	Belok kanan
+93	Brek
+94	Pendikit
+95	Jeda
+96	Kedai syiling
+97	Kosongkan cabaran
+98	Menu
+99	Bahasa
+100	Negara (admin)
+101	LUBANG JALAN!
+102	ZON HANTARAN!
+103	+{n} SYILING
+104	KALAHKAN PENUNGGANG INI UNTUK KUASAI PAPAN
+105	JADI YANG PERTAMA DI {country}
+106	REKOD PERIBADI
+107	REKOD BAHARU!
+108	JARAK TERBAIK PERIBADI
+109	MEMINTAS {name}!
+110	#1 DI {country}
+111	{n} m LAGI
+112	DIHANTAR!
+113	HANTARAN LEWAT
+114	ARUS ANGIN
+115	MOD DEMAM!
+116	SKOR x3 · MAGNET AUTO
+117	CARA MENUNGGANG
+118	Lalu rapat di sebelah kereta untuk bonus NYARIS LANGGAR
+119	MULA!
+120	AMARAN RIBUT  ·  30 SAAT HUJAN LEBAT  ·  SKOR x1.3
+121	RIBUT TELAH BERLALU
+122	DI UDARA
+123	LOMPATAN
+124	{n}x MEGA BALIK KUANG PEPENJURU
+125	MEGA BALIK KUANG PEPENJURU
+126	PUSING {n}
+127	{n}x BALIK KUANG
+128	BALIK KUANG
+129	GAGAL MENDARAT!
+130	LOMPATAN!
+131	MENDARAT KEMAS · +{n}
+132	TERGELINCIR!
+133	SEMPURNA!
+134	NYARIS LANGGAR!
+135	KOMBO x{n}
+136	PERISAI PECAH
+137	LUBANG PEMBETUNG TERBUKA!
+138	HANCUR!
+139	PELUANG KEDUA!
+140	MISI SELESAI
+141	MOTOSIKAL SAYA
+142	GERGASI
+143	MULA PANTAS
+144	MAGNET
+145	PERLAHAN
+146	PERISAI
+147	KOMBO {n}
+148	HELAH x{n}
+149	RIBUT
+150	TERGELINCIR
+151	LUAR TALIAN · kemajuan tidak disimpan
+152	TETAMU · log masuk untuk simpan syiling dan item
+153	Belum ada pengumuman.
+154	7 HARI
+155	Ketik item untuk pratonton
+156	Motosikal semasa anda dipaparkan di atas
+157	MAKS {n} KM/J
+158	Dicat warna {country}
+159	Jadi #1 di {country} untuk membuka
+160	Kemasan {finish} · motosikal dan topi keledar
+161	DIPAKAI
+162	#1 SAHAJA
+163	7 HARI BERTURUT
+164	PELUANG KOTAK MISTERI
+165	satu kotak, pakaian atau topi keledar rawak yang belum anda miliki dari tahap itu (jika anda sudah memiliki semua item satu tahap, peluangnya dikongsi tahap lain)
+166	DIBUKA
+167	SEMUA TELAH DIKUMPUL!
+168	{n} syiling dipulangkan
+169	PENGGALAK
+170	{n} sedia untuk larian seterusnya
+171	Ketik untuk pakai pada larian seterusnya
+172	BELI {n}?
+173	SYILING TIDAK CUKUP  ·  PERLU {n}
+174	SEDIA UNTUK LARIAN SETERUSNYA
+175	PEMBELIAN BERJAYA
+176	MEMUATKAN…
+177	Tidak tersedia dalam versi web.
+178	Kedai tidak tersedia sekarang. Cuba lagi nanti.
+179	BONUS
+180	ada {n}
+181	Beli {name} x{n} dengan {price} syiling?
+182	DITAMBAH
+183	LOG MASUK DAHULU  ·  SYILING DISIMPAN DALAM AKAUN ANDA
+184	PEMBELIAN GAGAL
+185	PEMBELIAN UJIAN
+186	BAYARAN DITERIMA  ·  SYILING SEDANG DIHANTAR…
+187	SYILING AKAN TIBA SEBENTAR LAGI  ·  BUKA SEMULA APL JIKA TIDAK
+188	SYILING PERCUMA SETERUSNYA DALAM {time}
+189	TONTON IKLAN UNTUK {n} SYILING
+190	DUNIA
+191	Memuatkan...
+192	Tidak dapat memuatkan kedudukan
+193	Belum ada rekod.
+194	Belum ada rekod di {country}.
+195	Jadilah penunggang pertama di papan!
+196	DUNIA
+197	Log masuk untuk melihat kedudukan anda
+198	KEDUDUKAN ANDA DI {where}
+199	{name} belum ada rekod
+200	CIPTA AKAUN
+201	Akaun disimpan di pelayan. Peranti ini hanya menyimpan token log masuk automatik.
+202	Tiada pelayan dikonfigurasi: akaun dan kedudukan disimpan dalam pelayar ini sahaja.
+203	Kata laluan tidak sepadan
+204	Sila tunggu...
+205	SELAMAT DATANG, {name}
+206	TELAH LOG KELUAR
+207	PELAYAN
+208	BANTUAN TELAH MEMBALAS  ·  SEMAK TETAPAN → BANTUAN
+209	MOD ADMIN  ·  SEMUA ITEM DIBUKA  ·  SKOR TIDAK DIREKODKAN
+210	PAKEJ PASUKAN KEBANGSAAN DIBUKA
+211	ANDA KEHILANGAN #1  ·  PAKEJ PASUKAN KEBANGSAAN DIAMBIL SEMULA
+212	Log masuk untuk menghubungi bantuan. Kami membalas dalam bahasa anda.
+213	KATEGORI
+214	TAJUK
+215	Ringkasan pendek
+216	MESEJ
+217	Ceritakan apa yang berlaku. Untuk isu pembayaran, sertakan tarikh dan jumlah.
+218	HANTAR
+219	BATAL
+220	Sila tulis mesej.
+221	DIHANTAR  ·  KAMI AKAN MEMBALAS SEGERA
+222	Anda
+223	Bantuan Grub Rider
+224	Asal
+225	SEMUA PERTANYAAN
+226	Pertanyaan ini telah ditutup. Mulakan yang baharu jika anda perlukan bantuan lagi.
+227	Tulis balasan…
+228	PERTANYAAN BAHARU
+229	Belum ada pertanyaan. Ada soalan tentang pembayaran, pepijat atau akaun? Hantar mesej kepada kami.
+230	HIDUP
+231	MATI
+232	TINGGI
+233	RENDAH (PANTAS)
+234	Padam akaun anda secara kekal? Syiling, item, rekod kedudukan dan pembelian tidak dapat dipulihkan.
+235	Taip DELETE untuk mengesahkan.
+236	GAGAL MEMADAM
+237	AKAUN DIPADAM
+238	MOD ADMIN HIDUP  ·  SKOR TIDAK DIREKODKAN
+239	MOD ADMIN MATI
+240	Set semula syiling, motosikal, kulit, kedudukan dan misi? (Akaun anda dikekalkan)
+241	KEMAJUAN DISET SEMULA
+242	JARAK
+243	NYARIS LANGGAR
+244	KOMBO MAKS
+245	LAWAN ARUS
+246	LOMPATAN
+247	SYILING
+248	Tekan kembali sekali lagi untuk keluar
+249	TERJATUH!
+250	NYARIS LANGGAR
+251	KELAJUAN MAKS
+252	CUBA LAGI
+253	MOD ADMIN · larian ini tidak direkodkan dalam kedudukan
+254	Log masuk untuk menghantar skor anda ke kedudukan {country}
+255	Menghantar ke kedudukan {country}...
+256	Tidak dapat menghantar skor
+257	KEDUDUKAN {country}
+258	SYILING DIGANDAKAN
+259	KEMBALI KE JALAN
+260	HARI {n}
+261	+ MAHKOTA
+262	GANJARAN HARI {n}
+263	MAHKOTA BERTURUT DIBUKA
+264	Nyaris langgar {n} kali dalam satu larian
+265	Tunggang {n} m dalam satu larian
+266	Capai skor {n} dalam satu larian
+267	Kumpul {n} syiling dalam satu larian
+268	Tunggang {n} m di lorong lawan arus
+269	Capai kombo nyaris langgar x{n}
+270	Capai {n} KM/J
+271	Hancurkan {n} kereta dalam Mod Gergasi
+272	Melayang {n} kali dari tanjakan
+273	MOD GERGASI
+274	SKOR x2
+275	KOTAK PENGHANTARAN
+276	PAKAIAN
+277	PENUTUP KEPALA
+278	CAT MOTOSIKAL
+279	WARNA TOPI KELEDAR
+280	TOPI KELEDAR
+281	BIASA
+282	JARANG
+283	EPIK
+284	LEGENDA
+285	PADU
+286	METALIK
+287	NEON
+288	SATU TANGAN
+289	LERET + PEDAL
+290	ANAK PANAH + PEDAL
+291	DIKUNCI
+292	IP
+293	ANGGARAN
+294	ADMIN
+295	Pembayaran / syiling
+296	Pepijat / tergantung
+297	Akaun / log masuk
+298	Cadangan
+299	Lain-lain
+300	MENUNGGU
+301	DIJAWAB
+302	DITUTUP
+303	KEMAS KINI
+304	ACARA
+305	NOTIS
+306	PENYELENGGARAAN
+307	Tiada bendera
+308	Tunggang tanpa bendera
+309	Warna Kilang
+310	Warna asal
+311	Satu jari di mana-mana: leret kiri / kanan untuk stereng, ke atas untuk minyak, ke bawah untuk brek. Tiada butang. Di udara, gerakan yang sama untuk helah.
+312	Leret di sebelah stereng, butang PENDIKIT dan BREK di sebelah lain.
+313	Butang KIRI / KANAN di satu sebelah, PENDIKIT dan BREK di sebelah lain.
+314	Mendarat rata selepas balik kuang untuk kekal di jalan
+315	Setiap km memberi +50 syiling
+316	Tunggang lawan arus untuk skor x2 - berhati-hati!
+317	Jadi #1 di negara anda untuk membuka motosikal Pasukan Kebangsaan
+318	Perlu log masuk
+319	ID itu sudah digunakan
+320	ID atau kata laluan salah
+321	Tidak dapat menghubungi pelayan
+322	Terlalu banyak cubaan, cuba lagi nanti
+323	Negara belum dikesan
+324	ID mesti 3-12 huruf kecil, nombor atau _
+325	Kata laluan mesti sekurang-kurangnya 6 aksara
+326	Masukkan ID dan kata laluan anda
+327	Negara tidak sah
+328	Mod admin: skor tidak direkodkan
+329	Akaun admin: skor tidak direkodkan
+330	Terlalu banyak pertanyaan hari ini. Sila cuba lagi esok.
+331	Terlalu banyak mesej. Sila tunggu sebentar.
+332	Cuba lagi
+333	Item baharu, tahap & ganjaran lebih adil
+334	Kini setiap item ada tahap: Biasa, Jarang, Epik dan Legenda.\n26 kotak dan topi keledar baharu dari seluruh Asia Tenggara - Merlion, Menara Berkembar Petronas, Pagoda Emas, kotak kucing, akuarium dan banyak lagi.\nLarian kini lebih lumayan: syiling bernilai 2, zon hantaran +50, dan setiap km +50.\nPenggalak baharu MULA PANTAS: meluncur pada kelajuan 1.5x.
+335	Mula dengan perisai yang menahan satu perlanggaran
+336	Meluncur pada kelajuan maks 1.5x selama 5 saat, kebal, mengaut semua syiling
+337	SKOR x2 30 SAAT
+338	Skor berganda untuk 30 saat pertama
+339	MULA GERGASI
+340	Mula dalam saiz gergasi yang tidak dapat dihalang
+341	PELUANG KEDUA
+342	Kembali ke jalan sekali secara percuma selepas terjatuh
