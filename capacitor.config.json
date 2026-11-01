@@ -1,0 +1,8 @@
+{
+  "appId": "com.jdh0309032.grubrider",
+  "appName": "Grub Rider",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#00b14f"
+  }
+}

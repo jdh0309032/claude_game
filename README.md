@@ -46,11 +46,11 @@ python3 -m http.server 8000
 
 | 부스트 | 효과 | 가격 |
 | --- | --- | --- |
-| SHIELD | 충돌 1회 막는 보호막으로 출발 | 300 |
-| HEAD START | 출발 직후 5초간 최고속도 1.5배 질주 + 무적 + 코인 자석 (배기 불꽃) | 300 |
-| x2 SCORE 30s | 처음 30초 점수 2배 | 400 |
-| GIANT START | 거대 모드로 출발 | 500 |
-| SECOND CHANCE | 크래시 후 1회 무료 부활 (이어달리기 기회와 별개) | 800 |
+| SHIELD | 충돌 1회 막는 보호막으로 출발 | 400 |
+| HEAD START | 출발 직후 5초간 최고속도 1.5배 질주 + 무적 + 코인 자석 (배기 불꽃) | 400 |
+| x2 SCORE 30s | 처음 30초 점수 2배 | 500 |
+| GIANT START | 거대 모드로 출발 | 600 |
+| SECOND CHANCE | 크래시 후 1회 무료 부활 (이어달리기 기회와 별개) | 1,000 |
 
 - 코인 상점 하단 **BOOST BUNDLES**: 5개 묶음을 4개 가격에. 설정은 `js/config.js` 의 `BOOSTS`, `BOOST_BUNDLE`.
 
@@ -84,7 +84,7 @@ python3 -m http.server 8000
 - **위험 요소** — 갓길 노점상(Kaki Lima 수레·천막), 중앙선 라바콘·공사 표지판,
   **깜빡이를 켜고 1초 뒤 부드럽게(S자, 차체가 살짝 틀어지며 1.5초) 차선을 바꾸는 차량**(앞서가는 같은 방향 차량이 특히 자주),
   **도로 돌발 요소**: 공사 포트홀(덜컹 + 감속, 콤보 끊김), 열린 맨홀(충돌), 떨어진 화물 상자(충돌, 거대화로 날려버림).
-- **DROP ZONE** — 도로 가장자리의 반투명 초록 구역을 정확히 통과하면 +30 코인.
+- **DROP ZONE** — 도로 가장자리의 반투명 초록 구역을 정확히 통과하면 +50 코인.
 - **파워업** (100~150m마다) — 보호막, 코인 자석, **거대화(GIANT MODE: 6초간 1.8배 크기·무적·부딪힌 차 날려버림)**, 점수 x2, 슬로우모션.
 - **국가 구간** — 1,000m마다 나라가 바뀝니다(동남아 8개국, 판마다 시작 국가·순서 무작위, `js/themes.js`). 한국·일본·미국·프랑스 맵은 [`archive/`](archive/) 폴더에 보관만 하고 스폰하지 않습니다.
 
@@ -107,7 +107,7 @@ python3 -m http.server 8000
 - **3D 광고판** — 나라별 패러디 포스터(`js/config.js` 의 `BILLBOARD_POSTERS`) + 대형 LED 전광판 **CURRENT COUNTRY #1: 닉네임 (거리m)** — 지금 달리는 나라의 1위 점수·국기 배지와 그 라이더가 착용한 바이크·의상 3D 스냅샷.
   빌보드는 건물 외벽(차양·간판 포함) 앞에 서도록 위치와 각도를 계산하고, 기둥 아래 가로수·가로등은 비켜 줍니다.
 - **라이벌 마커** — 도로 위에 내 최고 거리(PB)와 국가 1위 기록 위치가 표시되고, 넘어서면 *NEW RECORD* 불꽃 연출.
-- **HOT DELIVERY** — 400m마다 20% 확률로 돌발 퀘스트: 15초 안에 400m를 달리면 +250 코인.
+- **HOT DELIVERY** — 400m마다 20% 확률로 돌발 퀘스트: 15초 안에 400m를 달리면 +200 코인.
 - **슬립스트림** — 대형차 바로 뒤(6m 이내, 같은 차선)에 붙으면 최대 10% 가속.
 - **FEVER 모드** — 5연속 니어미스 시 5초간 점수 x3, 시야각 확대, 네온 트레일, 코인 자석, 차량 날려버리기.
 - **낮/노을/밤 사이클** + 국가별 색조.
@@ -121,7 +121,7 @@ python3 -m http.server 8000
   시작 화면(컴팩트): 위에는 로고 글자 + 코인·계정 한 줄만 투명하게 떠 있고, 차고·랭킹·미션·설정은 오른쪽 세로 원형 버튼, 아래 시트는 부스트 5칸 + START RIDE(버튼 안에 BEST 거리 | RECENT 직전 판 거리)만 (가로 화면에선 시트가 오른쪽에 떠서 라이더가 가려지지 않음).
   주행 중 알림은 최대 2개만 (같은 알림은 xN 으로 합침, 이전 알림은 작게 흐려짐). 피버 잔상은 바이크 뒤 노면에 깔리는 무지개 빛줄기라 점프 중에도 바이크를 가리지 않습니다.
   차고에서 아래로 스크롤해도 위쪽 3D 미리보기와 구매 버튼이 고정되어 입혀 보는 모습이 계속 보입니다.
-  **PAINT 탭**: 단색(무광)·메탈릭(환경 반사 금속 재질)·네온(발광 + 후광) 17색 — 한 번 사면 바이크와 헤드기어 둘 다에 칠할 수 있습니다. **MYSTERY BOX**(1,000 코인) 가챠: 미보유 상자·의상·헬멧 랜덤(국기 제외), 전부 보유 시 400 코인 환급.
+  **PAINT 탭**: 단색(무광)·메탈릭(환경 반사 금속 재질)·네온(발광 + 후광) 17색 — 한 번 사면 바이크와 헤드기어 둘 다에 칠할 수 있습니다. **MYSTERY BOX**(4,000 코인) 가챠: 등급을 먼저 뽑고(COMMON 60 / RARE 30 / EPIC 9 / LEGENDARY 1%) 그 등급의 미보유 상자·의상·헬멧 하나(국기 제외), 전부 보유 시 1,600 코인 환급.
 - **FLAGS 탭 (상점 국기)** — 46개국 국기(주행 테마 8개국 10,000 / 그 외 8,000 코인, `FLAG_SHOP_CODES`). 헬멧 스티커·차체 데칼·배달 상자 깃발로 붙고, *No Flag* 로 뗄 수 있습니다.
   국기는 모두 **실제 국기 이미지**(`assets/flags/XX.svg`, [country-flag-icons](https://github.com/catamphetamine/country-flag-icons) MIT)를 씁니다.
 - **국가대표 패키지 (국가 1위 전용)** — 구매 불가. 내 국가 랭킹 **실시간 1위**가 되는 즉시 **국가대표 바이크**(슈퍼바이크, 최고 320 km/h, 아래 참고)와
@@ -138,16 +138,46 @@ python3 -m http.server 8000
 - **미션 / 이어달리기** — 한 판 미션 3개, 코인 150개로 부활.
 - **일시정지 = 배달 주문서** — 영수증 스타일로 주행 기록과 미션 진행률(%)을 보여줍니다.
 
+## 코인 경제 · 아이템 등급
+
+- 목표: 보통 판(약 4 km) 수입 **700~1,000 코인** (광고 2배 시 1,400~2,000).
+  - 길 위 코인 1개 = 2 · 드롭존 +50 · 1 km 돌파마다 +50 · 핫 딜리버리 +200 · 미션 80 + 레벨×80 · 이어하기 500.
+- 아이템 등급(타일 왼쪽 위 C/R/E/L 표시, 테두리 색):
+
+  | 등급 | 목표 | 배달통·헬멧 | 의상 | 바이크 | 페인트 |
+  | --- | --- | --- | --- | --- | --- |
+  | COMMON | 3~5판 | 3,000~4,000 | 3,000~3,500 | 8,000 | 단색 1,500 |
+  | RARE | 약 10판 | 8,500 | 8,500 | 20,000~35,000 | 메탈릭 4,000 |
+  | EPIC | 약 25판 | 20,000 | 18,000 | 50,000~75,000 | 네온 8,000 |
+  | LEGENDARY | 50판+ | 45,000 | — | 110,000~150,000 | — |
+
+- 수치 기본값은 `js/config.js` 의 `ECON`·각 아이템 `price/tier`. **앱 업데이트 없이 바꾸기**: [`008_app_config.sql`](supabase/migrations/008_app_config.sql) 실행 후
+  관리자 계정으로 `select admin_set_config('economy', '{"hotReward": 250, "prices": {"box": {"aquarium": 40000}}}');` 처럼 넣으면 다음 실행부터 반영(넣은 항목만 덮어씀).
+
+## 안드로이드 앱 (Capacitor)
+
+- 같은 웹 코드를 Capacitor 로 감싼 앱입니다(`android/` 폴더, 앱 ID `com.jdh0309032.grubrider` — 스토어 첫 업로드 후에는 바꿀 수 없음).
+- **자동 빌드**: 푸시할 때마다 GitHub Actions(`Android build`)가 앱을 만들고, 실행 결과 페이지 아래 Artifacts 에 zip 으로 올립니다.
+  - 서명 키 Secrets 가 없으면 `app-debug.apk`(테스트용). 폰에서 "출처를 알 수 없는 앱" 허용 후 설치.
+    빌드마다 디버그 키가 달라 업데이트하려면 기존 앱을 지우고 설치해야 합니다.
+  - 출시 서명 키를 Secrets 에 넣으면 `app-release.apk`(덮어쓰기 업데이트 가능) + `app-release.aab`(플레이 스토어 업로드용).
+- **출시 서명 키 만들기** (한 번만, 내 컴퓨터에서. 파일·비밀번호는 잃어버리면 같은 앱으로 업데이트 불가 → 백업 필수, 저장소에 올리지 말 것):
+  1. `keytool -genkeypair -v -keystore grubrider.keystore -alias grubrider -keyalg RSA -keysize 2048 -validity 10000`
+  2. `base64 -w0 grubrider.keystore` 출력값을 저장소 Settings → Secrets and variables → Actions 에 `ANDROID_KEYSTORE_BASE64` 로,
+     비밀번호·별칭을 `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS`(grubrider) / `ANDROID_KEY_PASSWORD` 로 등록
+- 로컬 빌드: `npm install` → `npm run android:sync`(웹 파일을 `www/` 로 복사 후 동기화) → `npm run android:open`(Android Studio).
+- 버전: `versionCode` = 빌드 번호(자동 증가), `versionName` = `1.0.<빌드 번호>`.
+
 ## 보상형 광고 (배너 없음)
 
-- 결과 화면: **WATCH AD TO REVIVE**(한 판 1회), **WATCH AD TO DOUBLE COINS**. 차고: **WATCH AD FOR 300 COINS**(3분 쿨타임).
+- 결과 화면: **WATCH AD TO REVIVE**(한 판 1회), **WATCH AD TO DOUBLE COINS**. 차고: **WATCH AD FOR 200 COINS**(20분 쿨타임).
 - 기본값은 테스트용 가짜 광고(`ADS.provider: 'mock'`, 5초 카운트다운)입니다. 실제 광고는 Google H5 Games Ads(AdSense) 승인 후
   `js/config.js` 에서 `ADS.provider: 'h5'`, `adClient: 'ca-pub-...'` 를 넣고 `testMode: false` 로 바꾸세요. 광고를 끄려면 `'none'`.
 
 ## 코인 결제 (인앱 결제)
 
 - 메뉴·차고의 코인 표시(**+**)를 누르면 **COIN SHOP** 이 열립니다. 상품 4종(`js/config.js` 의 `COIN_PACKS`):
-  2,000 / 6,600(+10%) / 15,000(+25%) / 45,000(+50%) 코인. 보너스 %는 기본 팩 대비 실제 비율과 같아야 합니다(과장 표시 금지).
+  3,000 / 10,000(+10%) / 22,000(+21%) / 65,000(+43%) 코인. 보너스 %는 기본 팩 대비 실제 비율과 같아야 합니다(과장 표시 금지).
 - `PAYMENTS.provider`
   - `'mock'`(기본): 테스트 결제 창 → 코인이 바로 들어옴(실제 돈 없음). **출시 빌드에서는 반드시 `'native'` 로 바꾸세요.**
   - `'native'`: Capacitor 앱 + RevenueCat(`@revenuecat/purchases-capacitor`) 으로 Google Play / App Store 결제. 웹에서는 상점이 비활성화됩니다.
@@ -160,7 +190,8 @@ python3 -m http.server 8000
   `supabase functions deploy revenuecat-webhook --no-verify-jwt` → `supabase secrets set REVENUECAT_WEBHOOK_AUTH=<임의의 긴 값>` →
   RevenueCat 웹훅 URL `https://<프로젝트>.supabase.co/functions/v1/revenuecat-webhook`, Authorization 헤더에 같은 값 →
   `js/config.js` 의 `revenuecatApiKeyAndroid/Ios`(공개 SDK 키) 입력.
-- 미스터리 박스는 차고에 확률(미보유 아이템 균등 1/N)을 표시합니다(가챠 확률 공개 정책).
+- 미스터리 박스는 차고에 등급별 확률을 표시합니다(가챠 확률 공개 정책).
+- 코인 팩 수량을 바꾸면 `revenuecat-webhook` 의 `PRODUCT_COINS` 도 같이 바꾸고 Edge Function 을 다시 배포해야 합니다.
 
 ## 스토어 정책 · 개인정보
 
@@ -181,7 +212,7 @@ python3 -m http.server 8000
 변경되면 0.3초 안에 묶어서 바로 전송하고, 앱 전환·종료 직전에도 한 번 더 저장합니다. 기기에는 **로그인 유지용 토큰만** 남습니다.
 비로그인(게스트)은 메모리에서만 플레이하고 새로고침하면 진행이 사라집니다. 새 계정으로 처음 로그인하면 그때까지의 게스트 진행이 계정으로 옮겨집니다.
 
-설정 방법 (가장 쉬운 방법: [`supabase/setup_all.sql`](supabase/setup_all.sql) 하나를 SQL Editor 에서 실행 — 아래 3·4단계 + admin 관리자 지정 + 007(결제·계정 삭제·점수 검증)이 모두 들어 있고 여러 번 실행해도 안전):
+설정 방법 (가장 쉬운 방법: [`supabase/setup_all.sql`](supabase/setup_all.sql) 하나를 SQL Editor 에서 실행 — 아래 3·4단계 + admin 관리자 지정 + 007(결제·계정 삭제·점수 검증) + 008(운영 설정)이 모두 들어 있고 여러 번 실행해도 안전):
 
 1. [Supabase](https://supabase.com) 프로젝트 생성
 2. Authentication → Providers → Email 에서 **Confirm email 끄기** (아이디를 `아이디@grabrider.game` 가상 이메일로 가입시킴)

@@ -1165,3 +1165,14 @@ body.touch #menu .help { display: none; }
   #menu .side-dock .svc { width: 56px; height: 56px; }
   #menu .side-dock .svc i .ic { width: 21px; height: 21px; }
 }
+
+/* 아이템 등급 (COMMON / RARE / EPIC / LEGENDARY) */
+.tile[class*="tier-"] { border-color: color-mix(in srgb, var(--tc) 45%, var(--line)); }
+.tile .tier-dot {
+  position: absolute; top: 4px; left: 4px; width: 16px; height: 16px; border-radius: 50%;
+  display: grid; place-items: center; font-style: normal; font-size: 9px; font-weight: 900; color: #fff; background: var(--tc);
+}
+.tile.tier-legendary { background: linear-gradient(160deg, #fff8dc, #fff 55%); }
+.tile.tier-legendary .tier-dot { box-shadow: 0 0 8px rgba(224, 168, 0, 0.8); }
+.tile.tier-epic { background: linear-gradient(160deg, #f5edff, #fff 55%); }
+.tier-tag { font-style: normal; font-weight: 900; color: var(--tc); letter-spacing: 1px; }

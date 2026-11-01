@@ -1,0 +1,16 @@
+{
+  "name": "grub-rider",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Grub Rider - 3D delivery runner (static web game + Capacitor Android app)",
+  "scripts": {
+    "build:web": "node scripts/build-web.mjs",
+    "android:sync": "npm run build:web && npx cap sync android",
+    "android:open": "npx cap open android"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0"
+  }
+}

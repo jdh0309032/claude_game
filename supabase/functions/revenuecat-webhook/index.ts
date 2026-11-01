@@ -7,10 +7,10 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 // 상품 ID → 지급 코인 (js/config.js 의 COIN_PACKS 와 같게 유지)
 const PRODUCT_COINS: Record<string, number> = {
-  grub_coins_s: 2000,
-  grub_coins_m: 6600,
-  grub_coins_l: 15000,
-  grub_coins_xl: 45000,
+  grub_coins_s: 3000,
+  grub_coins_m: 10000,
+  grub_coins_l: 22000,
+  grub_coins_xl: 65000,
 };
 
 Deno.serve(async (req) => {

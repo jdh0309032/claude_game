@@ -10,7 +10,7 @@ const LEGACY_KEYS = ['motorush.save.v1', 'grabrider.localdb.v1'];
 
 // 상점 가격표는 config.js 에서 관리
 export { BIKES, BOXES, OUTFITS, HELMETS, PAINTS } from './config.js';
-import { BIKES } from './config.js';
+import { BIKES, BOXES, OUTFITS, HELMETS, PAINTS, BOOSTS, ECON, ADS } from './config.js';
 import { guessRegion, isCountryCode } from './themes.js';
 
 // 이전 버전 바이크 id → 새 라인업으로 이전
@@ -247,7 +247,7 @@ function newMission() {
   const def = MISSION_DEFS[type];
   const over = Math.max(0, lvl - def.targets.length + 1);
   const target = Math.round(def.targets[Math.min(lvl, def.targets.length - 1)] * (1 + over * 0.5));
-  return { type, lvl, target, reward: 40 + lvl * 40, done: false };
+  return { type, lvl, target, reward: ECON.missionBase + lvl * ECON.missionStep, done: false };
 }
 
 export function ensureMissions() {
@@ -444,6 +444,37 @@ export async function adminSetCountry(code) {
     return { ok: true, country: cc };
   } catch (e) {
     return { ok: false, error: isMissingSchema(e) ? 'Server needs the 005 database migration' : friendly(e) };
+  }
+}
+
+// 운영 설정 (008 app_config): 'economy' 로 가격·보상 덮어쓰기. 서버가 없거나 테이블이 없으면 기본값 유지
+const PRICE_LISTS = () => ({ bike: BIKES, box: BOXES, outfit: OUTFITS, helmet: HELMETS, paint: PAINTS, boost: BOOSTS });
+const ECON_NUM_KEYS = ['coinValue', 'dropReward', 'hotReward', 'kmBonus', 'continueCost', 'gachaPrice', 'gachaRefund', 'missionBase', 'missionStep'];
+export function applyEconomy(e) {
+  if (!e || typeof e !== 'object') return;
+  const num = (v) => (Number.isFinite(v) && v >= 0 && v <= 10000000 ? Math.round(v) : null);
+  for (const k of ECON_NUM_KEYS) if (num(e[k]) != null) ECON[k] = num(e[k]);
+  if (num(e.freeCoins) != null) ADS.freeCoins = num(e.freeCoins);
+  if (num(e.freeCoinsCooldownSec) != null) ADS.freeCoinsCooldownSec = num(e.freeCoinsCooldownSec);
+  const lists = PRICE_LISTS();
+  for (const [kind, map] of Object.entries(e.prices || {})) {
+    const list = lists[kind];
+    if (!list || !map || typeof map !== 'object') continue;
+    for (const [id, p] of Object.entries(map)) {
+      const it = list.find((x) => x.id === id);
+      if (it && it.price > 0 && num(p) > 0) it.price = num(p); // 무료·특별 아이템은 건드리지 않음
+    }
+  }
+}
+export async function loadAppConfig() {
+  if (!ONLINE) return null;
+  try {
+    const rows = await sb('/rest/v1/app_config?select=key,value');
+    const cfg = Object.fromEntries((rows || []).map((r) => [r.key, r.value]));
+    applyEconomy(cfg.economy);
+    return cfg;
+  } catch (e) {
+    return null; // 008 마이그레이션 전이거나 오프라인
   }
 }
 

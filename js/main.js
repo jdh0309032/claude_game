@@ -8,14 +8,14 @@ import {
 } from './themes.js';
 import { PreviewStage, renderRiderSnapshot } from './preview.js';
 import { showRewarded, adsEnabled } from './ads.js';
-import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, GACHA_PRICE, GACHA_REFUND, STREAK_REWARDS, STREAK_SPECIAL_HELMET, FLAG_CHECK_INTERVAL_SEC,
+import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, ECON, GACHA_ODDS, TIERS, STREAK_REWARDS, STREAK_SPECIAL_HELMET, FLAG_CHECK_INTERVAL_SEC,
   FLAG_SHOP_CODES, FLAG_PRICE_THEME, FLAG_PRICE_OTHER, ADMIN_DEBUG_TOGGLE, APP_INFO, BOOSTS, BOOST_BUNDLE, BOOST_START_TIME, HEAD_START_TIME,
 } from './config.js';
 import { paymentsMode, initPayments, getPacks, buyPack } from './payments.js';
 import {
   save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, PAINTS, getBike,
   replaceDoneMissions, missionText, auth, leaderboard, getSession, ONLINE, detectCountry,
-  loadPlayerData, flushSave, lockCountry, isServerReady, adminSetCountry, claimPendingCoins, deleteAccount,
+  loadPlayerData, flushSave, lockCountry, isServerReady, adminSetCountry, claimPendingCoins, deleteAccount, loadAppConfig,
 } from './storage.js';
 
 const $ = (id) => document.getElementById(id);
@@ -33,7 +33,6 @@ const SPAWN_Z = -230;
 const ROAD_HALF = 7.5;
 const BIKE_HW = 0.34, BIKE_HL = 0.95;
 const ROAD_LEN = 420, TILE = 40;
-const CONTINUE_COST = 150;
 const SQUALL_TIME = 30;
 const GRAVITY = 16;
 const CAR_COLORS = [0xd62828, 0xf77f00, 0x2a9d8f, 0x264653, 0x8d99ae, 0xe9ecef, 0x1d3557, 0x6a4c93, 0x40916c, 0x151515, 0xbfc0c0, 0x7f5539, 0x3a86ff];
@@ -790,7 +789,6 @@ function updateJumpRamps(dt, collide) {
 
 // ---------- 배달 드롭존: 도로 가장자리 구역을 정확히 통과하면 코인
 const dropZones = [];
-const DROP_REWARD = 30;
 function spawnDropZone() {
   const r1 = wr('hazard');
   let d = dropZones.find((z) => !z.active);
@@ -811,9 +809,8 @@ function updateDropZones(dt, collide) {
     if (collide && !d.done && d.z > -M.DROP_ZONE.length / 2 && d.z < M.DROP_ZONE.length / 2 && G.state === 'playing'
       && !G.air && Math.abs(G.x - d.x) < M.DROP_ZONE.width / 2 - BIKE_HW * 0.5) {
       d.done = true;
-      G.bonusCoins += DROP_REWARD;
-      save.coins += DROP_REWARD;
-      popup('DROP ZONE!', 'perfect', `+${DROP_REWARD} COINS`);
+      earn(ECON.dropReward);
+      popup('DROP ZONE!', 'perfect', `+${ECON.dropReward} COINS`);
       sfx.mission();
       vibrate(25);
     }
@@ -994,9 +991,14 @@ function updateCoins(dt, collide) {
   coinMesh.instanceMatrix.needsUpdate = true;
 }
 
+// 판 수입: 저장 코인 + 이번 판 합계(결과 화면·광고 2배 기준)
+function earn(n) {
+  save.coins += n;
+  G.earned += n;
+}
 function collectCoin() {
   G.coinsRun++;
-  save.coins++;
+  earn(ECON.coinValue);
   G.score += 10 * G.mult;
   sfx.coin();
 }
@@ -1332,7 +1334,7 @@ function updateMarkers() {
 // ======================================================================
 // 돌발 핫 배달 (15초 안에 400m)
 // ======================================================================
-const HOT_TIME = 15, HOT_DIST = 400, HOT_REWARD = 250;
+const HOT_TIME = 15, HOT_DIST = 400;
 function updateHotDelivery(rdt) {
   if (G.distance > G.nextHot) {
     G.nextHot += 400;
@@ -1356,10 +1358,9 @@ function updateHotDelivery(rdt) {
   $('hotBar').style.width = `${clamp(done / HOT_DIST, 0, 1) * 100}%`;
   if (done >= HOT_DIST) {
     G.hot = null;
-    G.bonusCoins += HOT_REWARD;
-    save.coins += HOT_REWARD;
+    earn(ECON.hotReward);
     G.hotDone++;
-    popup('DELIVERED!', 'perfect', `+${HOT_REWARD} COINS`);
+    popup('DELIVERED!', 'perfect', `+${ECON.hotReward} COINS`);
     sfx.fireworks();
     vibrate([30, 40, 30]);
   } else if (h.t <= 0) {
@@ -1795,7 +1796,7 @@ function resetRun(seed) {
     squallT: 0, rain: false, rainAmt: 0, lightning: 0, boltT: 0, shake: 0, crashT: 0,
     air: false, airY: 0, airVy: 0, slipT: 0, slipDir: 0, rpm: 0, braking: false,
     missionsDone: [], cd: 0, cdShown: 0, globalSubmitted: false,
-    seed: runSeed, nextBoard: 120, nextMega: 300, nextHot: 500, hot: null, bonusCoins: 0, hotDone: 0,
+    seed: runSeed, nextBoard: 120, nextMega: 300, nextHot: 500, hot: null, earned: 0, nextKm: 1000, hotDone: 0,
     draftT: 0, feverT: 0, pbDist: save.bestDist || 0, pbPassed: false,
     rivalDist: 0, rivalName: '', rivalPassed: false, doubled: false, revived: false,
   });
@@ -1870,6 +1871,11 @@ function spawnGap() {
 
 function scrollWorld(dz) {
   G.distance += dz;
+  if (G.distance >= G.nextKm && G.state === 'playing') { // 1 km 돌파 보너스
+    earn(ECON.kmBonus);
+    popup(`${fmt(G.nextKm / 1000)} KM!`, 'power', `+${ECON.kmBonus} COINS`);
+    G.nextKm += 1000;
+  }
   updateThemes(dz, frameDt);
   updateBoards(dz);
   roadTex.offset.y = (G.distance / TILE) % 1;
@@ -2698,7 +2704,8 @@ function renderTiles(kind) {
     const st = itemState(kind, it);
     const sel = garageSel && garageSel.kind === kind && garageSel.id === it.id;
     const name = kind === 'flag' && it.id ? it.id : it.name;
-    return `<button class="tile ${st} ${sel ? 'sel' : ''}" data-kind="${kind}" data-id="${it.id}" title="${escapeHtml(it.name)}">
+    const tr = it.tier && TIERS[it.tier];
+    return `<button class="tile ${st} ${sel ? 'sel' : ''} ${tr ? `tier-${it.tier}` : ''}" data-kind="${kind}" data-id="${it.id}" title="${escapeHtml(it.name)}"${tr ? ` style="--tc:${tr.color}"` : ''}>${tr ? `<i class="tier-dot">${tr.label[0]}</i>` : ''}
       ${tileVisual(kind, it)}<span class="tn">${escapeHtml(name)}</span>${tileSub(kind, it, st)}</button>`;
   }).join('')}</div>`;
 }
@@ -2728,7 +2735,8 @@ function renderActionBar() {
   else if (st === 'owned') btn = '<button class="btn primary" data-act="equip">EQUIP</button>';
   else if (st === 'buy') btn = `<button class="btn gold" data-act="buy" ${save.coins < it.price ? 'disabled' : ''}>${icon('coin')}${fmtCoins(it.price)}</button>`;
   else btn = `<button class="btn" disabled>${it.special === 'national' ? '#1 ONLY' : '7-DAY STREAK'}</button>`;
-  bar.innerHTML = `<div class="ga-info"><small>${KINDS[sel.kind].label}</small><b>${escapeHtml(it.name)}</b><span>${escapeHtml(desc)}</span></div>${btn}`;
+  const tr = it.tier && TIERS[it.tier];
+  bar.innerHTML = `<div class="ga-info"><small>${KINDS[sel.kind].label}${tr ? ` · <em class="tier-tag" style="--tc:${tr.color}">${tr.label}</em>` : ''}</small><b>${escapeHtml(it.name)}</b><span>${escapeHtml(desc)}</span></div>${btn}`;
 }
 
 function renderGarage() {
@@ -2737,8 +2745,9 @@ function renderGarage() {
     const look = previewLook();
     stage.setRider(look.opts, look.color);
   }
-  $('btnGacha').disabled = save.coins < GACHA_PRICE;
-  $('gachaOdds').textContent = `MYSTERY BOX ODDS · equal ${gachaPoolSize() ? `1 in ${gachaPoolSize()}` : '-'} chance for each box, outfit and helmet you don't own`;
+  $('btnGacha').disabled = save.coins < ECON.gachaPrice;
+  $('gachaOdds').textContent = `MYSTERY BOX ODDS · ${Object.entries(GACHA_ODDS).map(([t, p]) => `${TIERS[t].label} ${p}%`).join(' · ')} — a random unowned box, outfit or helmet of that tier (if you own every item of a tier, the others share its chance)`;
+  $('btnGacha').querySelector('span').textContent = `MYSTERY BOX · ${fmt(ECON.gachaPrice)}`;
   $('btnAdCoins').classList.toggle('hidden', !adsEnabled());
   updateAdCoinsLabel();
   for (const b of $('garageTabs').children) b.classList.toggle('on', b.dataset.tab === garageTab);
@@ -2792,32 +2801,42 @@ $('garageAction').addEventListener('click', (e) => {
   renderGarage();
 });
 
-// ---------- 랜덤 가차 상자 (1,000 코인)
+// ---------- 미스터리 박스: 등급 먼저 뽑고(GACHA_ODDS), 그 등급의 미보유 상자·의상·헬멧 중 하나
 let gachaResult = null;
-function gachaPoolSize() {
-  let n = 0;
-  for (const [kind, cat] of Object.entries(SHOP)) {
-    if (kind !== 'flag') for (const it of cat.list) if (it.price > 0 && !it.special && !save[cat.owned].includes(it.id)) n++;
-  }
-  return n;
-}
-$('btnGacha').addEventListener('click', () => {
-  if (save.coins < GACHA_PRICE) return;
+function gachaPool() {
   const pool = [];
   for (const [kind, cat] of Object.entries(SHOP)) {
     if (kind !== 'flag') for (const it of cat.list) if (it.price > 0 && !it.special && !save[cat.owned].includes(it.id)) pool.push({ kind, it });
   }
-  save.coins -= GACHA_PRICE;
+  return pool;
+}
+const gachaPoolSize = () => gachaPool().length;
+function gachaPick(pool) {
+  const byTier = {};
+  for (const e of pool) (byTier[e.it.tier || 'common'] ||= []).push(e);
+  const tiers = Object.keys(GACHA_ODDS).filter((t) => byTier[t]);
+  let r = Math.random() * tiers.reduce((a, t) => a + GACHA_ODDS[t], 0);
+  for (const t of tiers) {
+    r -= GACHA_ODDS[t];
+    if (r <= 0) return pick(byTier[t]);
+  }
+  return pick(byTier[tiers[tiers.length - 1]]);
+}
+$('btnGacha').addEventListener('click', () => {
+  if (save.coins < ECON.gachaPrice) return;
+  const pool = gachaPool();
+  save.coins -= ECON.gachaPrice;
   const reveal = $('gachaReveal');
   if (!pool.length) {
-    save.coins += GACHA_REFUND;
+    save.coins += ECON.gachaRefund;
     gachaResult = null;
-    reveal.innerHTML = `<div class="swatch" style="background:#ffd34d"></div><b>ALL COLLECTED!</b><span class="muted">Refunded ${fmt(GACHA_REFUND)} coins</span>`;
+    reveal.innerHTML = `<div class="swatch" style="background:#ffd34d"></div><b>ALL COLLECTED!</b><span class="muted">Refunded ${fmt(ECON.gachaRefund)} coins</span>`;
   } else {
-    gachaResult = pick(pool);
+    gachaResult = gachaPick(pool);
     save[SHOP[gachaResult.kind].owned].push(gachaResult.it.id);
     const label = { box: 'DELIVERY BOX', outfit: 'OUTFIT', helmet: 'HELMET' }[gachaResult.kind];
-    reveal.innerHTML = `<div class="swatch" style="background:${gachaResult.it.swatch}"></div><small class="muted">${label}</small><b>${escapeHtml(gachaResult.it.name)}</b><span class="muted">${escapeHtml(gachaResult.it.desc)}</span>`;
+    const tr = TIERS[gachaResult.it.tier] || TIERS.common;
+    reveal.innerHTML = `<div class="swatch" style="background:${gachaResult.it.swatch}"></div><small class="tier-tag" style="--tc:${tr.color}">${tr.label} ${label}</small><b>${escapeHtml(gachaResult.it.name)}</b><span class="muted">${escapeHtml(gachaResult.it.desc)}</span>`;
   }
   $('btnGachaEquip').classList.toggle('hidden', !gachaResult);
   persist();
@@ -3508,7 +3527,7 @@ function renderReceipt() {
     ['NEAR MISSES', `${G.nearMiss} (MAX COMBO ${G.maxCombo})`],
     ['WRONG WAY', `${fmt(G.oncomingDist)} m`],
     ['AIR JUMPS', `${G.jumps}`],
-    ['COINS', `${fmt(G.coinsRun)}`],
+    ['COINS', `${fmt(G.earned)}`],
   ];
   $('rcItems').innerHTML = items.map(([k, v]) => `<div class="rc-item"><span>${k}</span><span>${v}</span></div>`).join('');
   $('rcMissions').innerHTML = save.missions.map((m) => {
@@ -3575,21 +3594,21 @@ function showGameOver() {
     ['MAX COMBO', G.maxCombo],
     ['TOP SPEED', `${G.maxKmh} KM/H`],
     ['AIR JUMPS', G.jumps],
-    ['COINS', fmt(G.coinsRun)],
+    ['COINS', fmt(G.earned)],
   ];
   $('goStats').innerHTML = stats.map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join('');
   $('goMissions').innerHTML = G.missionsDone.map((m) => `<div>${icon('check')} ${escapeHtml(missionText(m))} +${m.reward}</div>`).join('');
 
   // 이어달리기 (멀티에선 불가)
   const cont = $('btnContinue');
-  $('contCost').textContent = CONTINUE_COST;
+  $('contCost').textContent = ECON.continueCost;
   cont.classList.toggle('hidden', G.continued);
-  cont.disabled = save.coins < CONTINUE_COST;
+  cont.disabled = save.coins < ECON.continueCost;
   $('retryLabel').textContent = 'RETRY';
   // 보상형 광고: 부활 1회 / 코인 2배 1회 (배너 없음)
   $('btnAdRevive').classList.toggle('hidden', !adsEnabled() || G.continued || isAdminMode());
   $('btnAdminRevive').classList.toggle('hidden', !isAdminMode());
-  $('btnAdDouble').classList.toggle('hidden', !adsEnabled() || G.doubled || G.coinsRun + G.bonusCoins <= 0);
+  $('btnAdDouble').classList.toggle('hidden', !adsEnabled() || G.doubled || G.earned <= 0);
 
   show('gameover');
   submitGlobal();
@@ -3662,8 +3681,8 @@ $('btnHome').addEventListener('click', () => {
 const scoreEntry = (score, dist) => ({ score, dist, bike: save.bike, box: save.box, outfit: save.outfit, helmet: save.helmet, flag: myLook().opts.flag || '' });
 
 $('btnContinue').addEventListener('click', () => {
-  if (G.continued || save.coins < CONTINUE_COST) return;
-  save.coins -= CONTINUE_COST;
+  if (G.continued || save.coins < ECON.continueCost) return;
+  save.coins -= ECON.continueCost;
   persist();
   reviveRun();
 });
@@ -3679,7 +3698,7 @@ $('btnAdRevive').addEventListener('click', async () => {
 $('btnAdDouble').addEventListener('click', async () => {
   if (G.doubled) return;
   if (!(await showRewarded('double_coins', adHooks))) return;
-  const extra = G.coinsRun + G.bonusCoins;
+  const extra = G.earned;
   G.doubled = true;
   save.coins += extra;
   persist();
@@ -3851,6 +3870,12 @@ function showDailyStreak() {
 preloadFlags([...THEMES.map((t) => t.code), ...FLAG_SHOP_CODES]);
 
 // 시작: IP 로 국가 판별 → 자동 로그인 → 서버 데이터 → 국가 고정 → 국가대표 검증
+// 운영 설정(가격·보상)은 다른 로딩과 병렬로 받고, 도착하면 보이는 화면만 다시 그림
+loadAppConfig().then((cfg) => {
+  if (!cfg) return;
+  if (G.state === 'menu') refreshMenu();
+  if (!$('garage').classList.contains('hidden')) renderGarage();
+});
 detectCountry()
   .then(() => auth.restore())
   .then((s) => (s ? onSignedIn() : refreshMenu()));
