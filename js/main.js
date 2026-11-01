@@ -14,10 +14,12 @@ import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, ECON, GACHA_ODDS, TIERS, DEFAUL
 } from './config.js';
 import { paymentsMode, initPayments, getPacks, buyPack } from './payments.js';
 import { initLiveUpdate, webBuild } from './updater.js';
+import { t, setLang, detectLang, getLang, LANGS, applyI18n, onLangChange } from './i18n.js';
 import {
   save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, PAINTS, getBike,
   replaceDoneMissions, missionText, auth, leaderboard, getSession, ONLINE, detectCountry,
   loadPlayerData, flushSave, lockCountry, isServerReady, adminSetCountry, claimPendingCoins, deleteAccount, loadAppConfig,
+  submitInquiry, replyInquiry, myInquiries, logRun, logClientError,
 } from './storage.js';
 
 const $ = (id) => document.getElementById(id);
@@ -41,7 +43,7 @@ const CAR_COLORS = [0xd62828, 0xf77f00, 0x2a9d8f, 0x264653, 0x8d99ae, 0xe9ecef, 
 const POWER_TYPES = ['shield', 'magnet', 'giant', 'x2', 'slow'];
 // 등장 비중: 자석·보호막·거대화 위주
 const POWER_WEIGHTS = [0.3, 0.3, 0.22, 0.1, 0.08];
-const POWER_LABEL = { shield: 'SHIELD', magnet: 'MAGNET', giant: 'GIANT MODE', x2: 'x2 SCORE', slow: 'SLOW-MO' };
+const POWER_LABEL = { shield: 'SHIELD', magnet: 'MAGNET', giant: 'GIANT MODE', x2: 'x2 SCORE', slow: 'SLOW-MO' }; // 표시할 때 t()
 const GIANT_TIME = 6;
 // NPC 차선 변경: 깜빡이 시간 / 옆 차선까지 이동 시간 (s)
 const LANE_BLINK = 1.0, LANE_MOVE = 1.5;
@@ -744,7 +746,7 @@ function hitPothole() {
   G.combo = 0;
   sfx.land();
   vibrate([30, 30, 30]);
-  popup('POTHOLE!', 'power');
+  popup(t('POTHOLE!'), 'power');
 }
 
 // ---------- 독립 점프대 (견인트럭 외에 도로 위 곳곳)
@@ -812,7 +814,7 @@ function updateDropZones(dt, collide) {
       && !G.air && Math.abs(G.x - d.x) < M.DROP_ZONE.width / 2 - BIKE_HW * 0.5) {
       d.done = true;
       earn(ECON.dropReward);
-      popup('DROP ZONE!', 'perfect', `+${ECON.dropReward} COINS`);
+      popup(t('DROP ZONE!'), 'perfect', t('+{n} COINS', { n: ECON.dropReward }));
       sfx.mission();
       vibrate(25);
     }
@@ -1057,7 +1059,7 @@ function applyPower(type) {
   }
   sfx.power();
   vibrate(30);
-  popup(POWER_LABEL[type], 'power');
+  popup(t(POWER_LABEL[type]), 'power');
 }
 
 // ======================================================================
@@ -1258,7 +1260,7 @@ function spawnMegaBoard() {
       dist: fmt(row?.dist || 0),
       score: fmt(row?.score || 0),
       empty: !row,
-      foot: row ? 'BEAT THIS RIDER TO TAKE THE BOARD' : `BE THE FIRST IN ${theme.country.toUpperCase()}`,
+      foot: row ? t('BEAT THIS RIDER TO TAKE THE BOARD') : t('BE THE FIRST IN {country}', { country: theme.country.toUpperCase() }),
     }));
   }
   b.obj.info.material.map = megaInfoCache.get(infoKey);
@@ -1298,7 +1300,7 @@ function clearBoards() {
 // 라이벌 마커 (개인 최고 거리 / 지역 1위 거리)
 // ======================================================================
 const pbMarker = M.createRivalMarker(0x39ff88);
-pbMarker.setLabel('PERSONAL BEST');
+pbMarker.setLabel(t('PERSONAL BEST'));
 const rivalMarker = M.createRivalMarker(0xffc400);
 pbMarker.visible = rivalMarker.visible = false;
 scene.add(pbMarker, rivalMarker);
@@ -1323,12 +1325,12 @@ function updateMarkers() {
   if (G.state !== 'playing') return;
   if (!G.pbPassed && G.pbDist > 0 && G.distance >= G.pbDist) {
     G.pbPassed = true;
-    popup('NEW RECORD!', 'perfect', 'PERSONAL BEST DISTANCE');
+    popup(t('NEW RECORD!'), 'perfect', t('PERSONAL BEST DISTANCE'));
     sfx.mission();
   }
   if (!G.rivalPassed && G.rivalDist > 0 && G.distance >= G.rivalDist) {
     G.rivalPassed = true;
-    popup(`PASSED ${G.rivalName}!`, 'combo', `#1 IN ${countryName(save.country).toUpperCase()}`);
+    popup(t('PASSED {name}!', { name: G.rivalName }), 'combo', t('#1 IN {country}', { country: countryName(save.country).toUpperCase() }));
     sfx.fever();
   }
 }
@@ -1342,7 +1344,7 @@ function updateHotDelivery(rdt) {
     G.nextHot += 400;
     if (!G.hot && Math.random() < 0.2) {
       G.hot = { t: HOT_TIME, start: G.distance };
-      popup('HOT DELIVERY!', 'big', `${HOT_TIME}s / ${HOT_DIST} m`);
+      popup(t('HOT DELIVERY!'), 'big', `${HOT_TIME}s / ${HOT_DIST} m`);
       sfx.beep(true);
     }
   }
@@ -1356,18 +1358,18 @@ function updateHotDelivery(rdt) {
   const done = G.distance - h.start;
   el.classList.remove('hidden');
   el.classList.toggle('urgent', h.t < 4);
-  $('hotText').textContent = `${Math.max(0, h.t).toFixed(1)}s · ${fmt(Math.max(0, HOT_DIST - done))} m LEFT`;
+  $('hotText').textContent = `${Math.max(0, h.t).toFixed(1)}s · ${t('{n} m LEFT', { n: fmt(Math.max(0, HOT_DIST - done)) })}`;
   $('hotBar').style.width = `${clamp(done / HOT_DIST, 0, 1) * 100}%`;
   if (done >= HOT_DIST) {
     G.hot = null;
     earn(ECON.hotReward);
     G.hotDone++;
-    popup('DELIVERED!', 'perfect', `+${ECON.hotReward} COINS`);
+    popup(t('DELIVERED!'), 'perfect', t('+{n} COINS', { n: ECON.hotReward }));
     sfx.fireworks();
     vibrate([30, 40, 30]);
   } else if (h.t <= 0) {
     G.hot = null;
-    popup('LATE DELIVERY', 'combo');
+    popup(t('LATE DELIVERY'), 'combo');
   }
 }
 
@@ -1380,7 +1382,7 @@ let draftingNow = false;
 
 function updateDraft(dt) {
   if (draftingNow) {
-    if (G.draftT === 0) popup('SLIPSTREAM', 'power');
+    if (G.draftT === 0) popup(t('SLIPSTREAM'), 'power');
     G.draftT = Math.min(2, G.draftT + dt);
   } else {
     G.draftT = 0;
@@ -1412,7 +1414,7 @@ const trailHistory = [];
 
 function startFever() {
   G.feverT = FEVER_TIME;
-  popup('FEVER MODE!', 'big', 'x3 SCORE · AUTO MAGNET');
+  popup(t('FEVER MODE!'), 'big', t('x3 SCORE · AUTO MAGNET'));
   sfx.fever();
   vibrate([20, 30, 20, 30, 40]);
 }
@@ -1842,9 +1844,27 @@ function startRun(opts = {}) {
   G.cd = 3.2;
   G.cdShown = 0;
   $('countdown').classList.remove('hidden');
-  if (save.stats.runs === 0) {
-    toast('Brush past cars for NEAR MISS bonuses');
-  }
+  if (save.stats.runs === 0) showTutorial();
+}
+
+// 첫 판: 조작 안내 카드 (손가락 애니메이션). 첫 조작을 하거나 6초가 지나면 사라짐
+let tutTimer = 0;
+function showTutorial() {
+  const c = save.settings.controls || 'onehand';
+  $('tutTitle').textContent = t('HOW TO RIDE');
+  $('tutText').textContent = t(c === 'onehand' ? 'Slide left / right to steer. Slide up for gas, down to brake.' : c === 'slide' ? 'Slide to steer. Hold THROTTLE to go, BRAKE to slow down.' : 'Use the arrows to steer. Hold THROTTLE to go, BRAKE to slow down.');
+  $('tutorial').classList.remove('hidden');
+  clearTimeout(tutTimer);
+  tutTimer = setTimeout(hideTutorial, 6500);
+  const off = () => { hideTutorial(); window.removeEventListener('pointerdown', off); window.removeEventListener('keydown', off); };
+  setTimeout(() => { window.addEventListener('pointerdown', off); window.addEventListener('keydown', off); }, 3400); // 카운트다운 중에는 유지
+}
+function hideTutorial() {
+  clearTimeout(tutTimer);
+  const el = $('tutorial');
+  if (el.classList.contains('hidden')) return;
+  el.classList.add('out');
+  setTimeout(() => { el.classList.add('hidden'); el.classList.remove('out'); toast(t('Brush past cars for NEAR MISS bonuses')); }, 300);
 }
 
 function updateCountdown(rdt) {
@@ -1855,7 +1875,7 @@ function updateCountdown(rdt) {
     G.cdShown = n;
     el.classList.remove('tick');
     void el.offsetWidth;
-    el.innerHTML = `<span>${n > 0 ? n : 'GO!'}</span>`;
+    el.innerHTML = `<span>${n > 0 ? n : t('GO!')}</span>`;
     el.classList.add('tick');
     sfx.beep(n <= 0);
   }
@@ -1875,7 +1895,7 @@ function scrollWorld(dz) {
   G.distance += dz;
   if (G.distance >= G.nextKm && G.state === 'playing') { // 1 km 돌파 보너스
     earn(ECON.kmBonus);
-    popup(`${fmt(G.nextKm / 1000)} KM!`, 'power', `+${ECON.kmBonus} COINS`);
+    popup(`${fmt(G.nextKm / 1000)} KM!`, 'power', t('+{n} COINS', { n: ECON.kmBonus }));
     G.nextKm += 1000;
   }
   updateThemes(dz, frameDt);
@@ -1946,7 +1966,7 @@ function startSquall() {
   G.squallT = SQUALL_TIME;
   G.rain = true;
   G.boltT = rand(4, 8);
-  toast('SQUALL WARNING  ·  30s HEAVY RAIN  ·  SCORE x1.3');
+  toast(t('SQUALL WARNING  ·  30s HEAVY RAIN  ·  SCORE x1.3'));
   lightningStrike();
 }
 
@@ -1975,7 +1995,7 @@ function updatePlaying(rdt) {
     }
     if (G.squallT <= 0) {
       G.rain = false;
-      toast('SQUALL HAS PASSED');
+      toast(t('SQUALL HAS PASSED'));
     }
   }
   if (G.combo > 0) {
@@ -2087,7 +2107,7 @@ function startJump(c) {
   c.passed = true;
   sfx.jump();
   vibrate(30);
-  popup('AIRBORNE', 'big');
+  popup(t('AIRBORNE'), 'big');
 }
 
 // 공중 자세는 쿼터니언 하나로 관리: 입력 방향(위·아래 = 플립, 좌·우 = 스핀, 사선 = 그 사이 축)을
@@ -2147,10 +2167,10 @@ function trickKind() {
 }
 
 function trickName(kind, n) {
-  if (!n) return 'AIR JUMP';
-  if (kind === 'diagonal') return n > 1 ? `${n}x DIAGONAL MEGA FLIP` : 'DIAGONAL MEGA FLIP';
-  if (kind === 'spin') return `${n * 360} SPIN`;
-  return n > 1 ? `${n}x FLIP` : 'FLIP';
+  if (!n) return t('AIR JUMP');
+  if (kind === 'diagonal') return n > 1 ? t('{n}x DIAGONAL MEGA FLIP', { n }) : t('DIAGONAL MEGA FLIP');
+  if (kind === 'spin') return t('{n} SPIN', { n: n * 360 });
+  return n > 1 ? t('{n}x FLIP', { n }) : t('FLIP');
 }
 
 // 회전 종류별 차등 점수 (1바퀴당): 앞뒤 플립 < 옆으로 도는 스핀 < 대각선 다축 회전
@@ -2167,7 +2187,7 @@ function land() {
   const clean = offLevelAngle() < LAND_TOL;
   const n = G.rotationCount, kind = trickKind();
   if (!clean) {
-    popup('CRASH LANDING!', 'big');
+    popup(t('CRASH LANDING!'), 'big');
     crash({ x: G.x - 0.5 });
     return;
   }
@@ -2178,7 +2198,7 @@ function land() {
   const pts = Math.round(trickPoints(kind, n) * (G.x2Time > 0 ? 2 : 1));
   G.score += pts;
   if (n > 0) G.tricks += n;
-  popup(n ? trickName(kind, n) : 'AIR JUMP!', 'perfect', `CLEAN LANDING · +${fmt(pts)}`);
+  popup(n ? trickName(kind, n) : t('AIR JUMP!'), 'perfect', t('CLEAN LANDING · +{n}', { n: fmt(pts) }));
   G.shake = 0.5;
   sfx.land();
   vibrate(40);
@@ -2189,7 +2209,7 @@ function hitPuddle() {
   G.slipDir = Math.random() < 0.5 ? -1 : 1;
   sfx.splash();
   vibrate(20);
-  popup('SLIPPING!', 'power');
+  popup(t('SLIPPING!'), 'power');
   screenRain.splash(16);
 }
 
@@ -2251,8 +2271,8 @@ function nearMiss(c, gap) {
   pts = Math.round(pts);
   G.score += pts;
   const tag = c.type === 'police' ? 'POLICE x2  ' : '';
-  popup(perfect ? 'PERFECT!' : 'NEAR MISS!', perfect ? 'perfect' : '', `${tag}+${pts}`);
-  if (G.combo >= 2 && G.combo % 5 === 0) popup(`COMBO x${G.combo}`, 'combo');
+  popup(perfect ? t('PERFECT!') : t('NEAR MISS!'), perfect ? 'perfect' : '', `${tag}+${pts}`);
+  if (G.combo >= 2 && G.combo % 5 === 0) popup(t('COMBO x{n}', { n: G.combo }), 'combo');
   sfx.near(perfect);
   vibrate(perfect ? 25 : 12);
 }
@@ -2268,11 +2288,11 @@ function hitObstacle(o, kind = 'car') {
     if (G.shield) {
       G.shield = false;
       G.invuln = 1.2;
-      popup('SHIELD BROKEN', 'power');
+      popup(t('SHIELD BROKEN'), 'power');
       sfx.smash();
       return;
     }
-    popup('OPEN MANHOLE!', 'big');
+    popup(t('OPEN MANHOLE!'), 'big');
     crash(o);
     return;
   }
@@ -2280,12 +2300,12 @@ function hitObstacle(o, kind = 'car') {
     if (!smashing) {
       G.shield = false;
       G.invuln = 1.2;
-      popup('SHIELD BROKEN', 'power');
+      popup(t('SHIELD BROKEN'), 'power');
     } else if (kind === 'car') {
       G.smashed++;
       const pts = 300 * (G.x2Time > 0 ? 2 : 1);
       G.score += pts;
-      popup('SMASH!', 'combo', `+${pts}`);
+      popup(t('SMASH!'), 'combo', `+${pts}`);
     }
     knockAway(o, kind);
     sfx.smash();
@@ -2372,7 +2392,7 @@ function updateCrashing(rdt) {
       const was = G.continued;
       reviveRun();
       G.continued = was;
-      popup('SECOND CHANCE!', 'big');
+      popup(t('SECOND CHANCE!'), 'big');
     } else {
       showGameOver();
     }
@@ -2402,18 +2422,25 @@ function checkMissions() {
     save.missionLevels[m.type] = (save.missionLevels[m.type] || 0) + 1;
     save.coins += m.reward;
     G.missionsDone.push(m);
-    toast(`MISSION COMPLETE  ·  ${missionText(m)}  ·  +${m.reward} COINS`);
+    toast(`${t('MISSION COMPLETE')}  ·  ${missionText(m)}  ·  ${t('+{n} COINS', { n: m.reward })}`);
     sfx.mission();
     persist();
   }
 }
 
 // ---------- UI 헬퍼
-const SCREENS = ['menu', 'garage', 'ranking', 'missions', 'notices', 'settings', 'pause', 'gameover', 'auth', 'daily', 'gacha', 'coinshop'];
+const SCREENS = ['menu', 'garage', 'ranking', 'missions', 'notices', 'support', 'settings', 'pause', 'gameover', 'auth', 'daily', 'gacha', 'coinshop'];
 let currentScreen = null;
 function show(id) {
+  const changed = currentScreen !== id;
   currentScreen = id;
   for (const s of SCREENS) $(s).classList.toggle('hidden', s !== id);
+  if (id && changed) { // 패널이 살짝 떠오르며 나타남
+    const el = $(id);
+    el.classList.remove('enter');
+    void el.offsetWidth;
+    el.classList.add('enter');
+  }
   // 모달이 떠 있으면 터치 조작부 전체를 숨김 (모달 위로 뚫고 나오지 않게)
   document.body.classList.toggle('modal-open', Boolean(id));
   if (id === 'garage') mountStage('garageStage', true);
@@ -2429,7 +2456,7 @@ function mountStage(containerId, draggable) {
   const look = myLook();
   stage.setRider(look.opts, look.color);
   stage.mount($(containerId), { draggable });
-  setFlexLabel(`MY RIDE · ${bikeName(save.bike, myNationalCode())}`, look.opts.flag);
+  setFlexLabel(`${t('MY RIDE')} · ${bikeName(save.bike, myNationalCode())}`, look.opts.flag);
 }
 function setFlexLabel(text, flag) {
   $('flexLabel').innerHTML = `${flag ? flagBadge(flag, 'flag') : ''}${escapeHtml(text)}`;
@@ -2519,12 +2546,12 @@ function powerChip(key, ic, label, t, cls = '') {
 function updatePowerHud() {
   const html = [
     powerChip('fever', 'bolt', 'FEVER x3', G.feverT, 'hot'),
-    powerChip('giant', 'giant', 'GIANT', G.giantT, 'hot'),
-    powerChip('x2', 'x2', 'SCORE', G.x2Time),
-    powerChip('head', 'bolt', 'HEAD START', G.headT, 'hot'),
-    powerChip('magnet', 'magnet', 'MAGNET', G.headT > 0 ? 0 : G.magnetTime),
-    powerChip('slow', 'clock', 'SLOW-MO', G.slowTime),
-    G.shield ? powerChip('shield', 'shield', 'SHIELD', true) : '',
+    powerChip('giant', 'giant', t('GIANT'), G.giantT, 'hot'),
+    powerChip('x2', 'x2', t('SCORE'), G.x2Time),
+    powerChip('head', 'bolt', t('HEAD START'), G.headT, 'hot'),
+    powerChip('magnet', 'magnet', t('MAGNET'), G.headT > 0 ? 0 : G.magnetTime),
+    powerChip('slow', 'clock', t('SLOW-MO'), G.slowTime),
+    G.shield ? powerChip('shield', 'shield', t('SHIELD'), true) : '',
     G.secondChance ? powerChip('revive', 'retry', '2ND CHANCE', true) : '',
   ].join('');
   if (html !== lastPowers) {
@@ -2541,8 +2568,8 @@ function updateHud() {
   hud.mult.textContent = 'x' + G.mult.toFixed(1);
   hud.mult.classList.toggle('hot', G.mult >= 2);
   hud.combo.classList.toggle('hidden', G.combo < 2);
-  if (G.combo >= 2) hud.combo.textContent = `COMBO ${G.combo}`;
-  hud.best.textContent = `BEST ${fmt(Math.max(save.best, G.score))}`;
+  if (G.combo >= 2) hud.combo.textContent = t('COMBO {n}', { n: G.combo });
+  hud.best.textContent = `${t('BEST')} ${fmt(Math.max(save.best, G.score))}`;
   hud.speed.textContent = Math.round(G.speed * 3.6);
   hud.dist.textContent = `${fmt(G.distance)} m`;
   hud.coins.textContent = fmtCoins(save.coins);
@@ -2555,12 +2582,12 @@ function updateHud() {
 
   updatePowerHud();
   const tags = [];
-  if (G.air && G.rotationCount > 0) tags.push(tagHtml('flip', `TRICK x${G.rotationCount}`));
-  else if (G.draftT > 0) tags.push(tagHtml('gauge', 'SLIPSTREAM'));
+  if (G.air && G.rotationCount > 0) tags.push(tagHtml('flip', t('TRICK x{n}', { n: G.rotationCount })));
+  else if (G.draftT > 0) tags.push(tagHtml('gauge', t('SLIPSTREAM')));
   if (G.onc) tags.push(tagHtml('warn', 'WRONG WAY x2', 'onc'));
-  if (G.air) tags.push(tagHtml('jump', 'AIRBORNE'));
-  if (G.rain) tags.push(tagHtml('rain', `SQUALL ${Math.ceil(Math.max(0, G.squallT))}s · x1.3`));
-  if (G.slipT > 0) tags.push(tagHtml('drop', 'SLIPPING', 'onc'));
+  if (G.air) tags.push(tagHtml('jump', t('AIRBORNE')));
+  if (G.rain) tags.push(tagHtml('rain', `${t('SQUALL')} ${Math.ceil(Math.max(0, G.squallT))}s · x1.3`));
+  if (G.slipT > 0) tags.push(tagHtml('drop', t('SLIPPING'), 'onc'));
   const html = tags.join('');
   if (html !== lastTags) {
     hud.tags.innerHTML = html;
@@ -2584,10 +2611,10 @@ function goMenu() {
 function refreshMenu() {
   updateNoticeDot();
   $('challengeChip').classList.toggle('hidden', challengeSeed == null);
-  if (challengeSeed != null) $('challengeText').textContent = `CHALLENGE ROAD #${challengeSeed}`;
+  if (challengeSeed != null) $('challengeText').textContent = `${t('CHALLENGE ROAD')} #${challengeSeed}`;
   const s = getSession();
   $('menuName').textContent = s ? s.nickname : save.lastName || 'Rider';
-  $('accountLabel').textContent = s ? s.nickname.toUpperCase() : 'SIGN IN';
+  $('accountLabel').textContent = s ? s.nickname.toUpperCase() : t('SIGN IN');
   $('menuBest').textContent = fmt(save.best);
   $('menuDist').textContent = `${fmt(save.bestDist || 0)} m`;
   $('menuRecent').textContent = `${fmt(save.lastDist || 0)} m`;
@@ -2597,7 +2624,7 @@ function refreshMenu() {
   renderBoostBar();
   $('adminBadge').classList.toggle('hidden', !isAdminMode());
   $('guestNote').classList.toggle('hidden', Boolean(s) && isServerReady());
-  $('guestNote').textContent = s ? 'OFFLINE · progress is not being saved' : 'GUEST · sign in to save coins and items';
+  $('guestNote').textContent = s ? t('OFFLINE · progress is not being saved') : t('GUEST · sign in to save coins and items');
 }
 
 let backTo = 'menu';
@@ -2623,7 +2650,11 @@ function setNotices(raw) {
   if (!list) return;
   const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
   notices = list.filter((n) => n && typeof n === 'object' && str(n.title, 80))
-    .map((n) => ({ id: str(n.id, 60) || str(n.title, 60), date: str(n.date, 20), tag: str(n.tag, 16).toUpperCase() || 'NOTICE', title: str(n.title, 80), body: str(n.body, 2000) }))
+    .map((n) => ({
+      id: str(n.id, 60) || str(n.title, 60), date: str(n.date, 20), tag: str(n.tag, 16).toUpperCase() || 'NOTICE', title: str(n.title, 80), body: str(n.body, 2000),
+      // 관리자 페이지가 자동 번역해 넣는 언어별 제목·본문 { vi: { title, body }, ... }
+      i18n: Object.fromEntries(Object.entries(n.i18n && typeof n.i18n === 'object' ? n.i18n : {}).map(([k, v]) => [k, { title: str(v?.title, 80), body: str(v?.body, 2000) }])),
+    }))
     .slice(0, 30);
 }
 function updateNoticeDot() {
@@ -2631,9 +2662,13 @@ function updateNoticeDot() {
 }
 function renderNotices() {
   $('noticeList').innerHTML = notices.length
-    ? notices.map((n) => `<article class="notice tag-${n.tag.toLowerCase()}"><div class="nt-head"><em>${escapeHtml(n.tag)}</em><small>${escapeHtml(n.date)}</small></div>
-      <h3>${escapeHtml(n.title)}</h3><p>${escapeHtml(n.body).replace(/\n/g, '<br>')}</p></article>`).join('')
-    : '<p class="muted">No notices yet.</p>';
+    ? notices.map((n) => {
+      const loc = n.i18n?.[getLang()];
+      const title = loc?.title || t(n.title), body = loc?.body || t(n.body);
+      return `<article class="notice tag-${n.tag.toLowerCase()}"><div class="nt-head"><em>${escapeHtml(t(n.tag))}</em><small>${escapeHtml(n.date)}</small></div>
+      <h3>${escapeHtml(title)}</h3><p>${escapeHtml(body).replace(/\n/g, '<br>')}</p></article>`;
+    }).join('')
+    : `<p class="muted">${t('No notices yet.')}</p>`;
 }
 $('btnNotices').addEventListener('click', () => {
   renderNotices();
@@ -2652,6 +2687,9 @@ for (const b of document.querySelectorAll('[data-back]')) {
     if (backTo === 'gameover') {
       show('gameover');
       submitGlobal();
+    } else if (backTo === 'settings') {
+      renderSettings();
+      show('settings');
     } else {
       refreshMenu();
       show('menu');
@@ -2727,7 +2765,7 @@ function tileVisual(kind, it) {
 
 function tileSub(kind, it, st) {
   if (st === 'equipped') return `<em class="ok">${icon('check')}</em>`;
-  if (st === 'locked') return `<em class="lock">${it.special === 'national' ? '#1' : '7-DAY'}</em>`;
+  if (st === 'locked') return `<em class="lock">${it.special === 'national' ? '#1' : t('7-DAY')}</em>`;
   if (st === 'buy') return `<em class="price">${icon('coin')}${fmtCoins(it.price)}</em>`;
   return '';
 }
@@ -2743,10 +2781,10 @@ function renderTiles(kind) {
   const k = KINDS[kind];
   const items = sortByTier(k.list().filter((it) => kind !== 'bike' || !it.special || it.special === 'national'));
   const compact = kind === 'flag' || kind === 'bikePaint' || kind === 'helmetPaint';
-  return `<div class="shop-section">${k.label}</div><div class="tile-grid ${compact ? 'compact' : ''}">${items.map((it) => {
+  return `<div class="shop-section">${t(k.label)}</div><div class="tile-grid ${compact ? 'compact' : ''}">${items.map((it) => {
     const st = itemState(kind, it);
     const sel = garageSel && garageSel.kind === kind && garageSel.id === it.id;
-    const name = kind === 'flag' && it.id ? it.id : it.name;
+    const name = kind === 'flag' && it.id ? it.id : t(it.name);
     const tr = it.tier && TIERS[it.tier];
     return `<button class="tile ${st} ${sel ? 'sel' : ''} ${tr ? `tier-${it.tier}` : ''}" data-kind="${kind}" data-id="${it.id}" title="${escapeHtml(it.name)}"${tr ? ` style="--tc:${tr.color}"` : ''}>${tr ? `<i class="tier-dot">${tr.label[0]}</i>` : ''}
       ${tileVisual(kind, it)}<span class="tn">${escapeHtml(name)}</span>${tileSub(kind, it, st)}</button>`;
@@ -2765,21 +2803,21 @@ function renderActionBar() {
   const sel = garageSel;
   const it = sel && itemOf(sel.kind, sel.id);
   if (!it) {
-    bar.innerHTML = '<div class="ga-info"><b>Tap an item to preview</b><small>Your current ride is shown above</small></div>';
+    bar.innerHTML = `<div class="ga-info"><b>${t('Tap an item to preview')}</b><small>${t('Your current ride is shown above')}</small></div>`;
     return;
   }
   const st = itemState(sel.kind, it);
   let desc = it.desc || '';
-  if (sel.kind === 'bike' && !it.special) desc = `${desc} · TOP ${it.maxKmh} KM/H`;
-  if (it.special === 'national') desc = save.nationalUnlocked || isAdminMode() ? `Painted in ${countryName(myNationalCode())} colors` : `Be #1 in ${countryName(save.country)} to unlock`;
-  if (it.finish) desc = `${it.finish.toUpperCase()} finish · bike and headgear`;
+  if (sel.kind === 'bike' && !it.special) desc = `${t(desc)} · ${t('TOP {n} KM/H', { n: it.maxKmh })}`;
+  if (it.special === 'national') desc = save.nationalUnlocked || isAdminMode() ? t('Painted in {country} colors', { country: countryName(myNationalCode()) }) : t('Be #1 in {country} to unlock', { country: countryName(save.country) });
+  if (it.finish) desc = t('{finish} finish · bike and headgear', { finish: t(it.finish.toUpperCase()) });
   let btn;
-  if (st === 'equipped') btn = '<button class="btn" disabled>EQUIPPED</button>';
-  else if (st === 'owned') btn = '<button class="btn primary" data-act="equip">EQUIP</button>';
+  if (st === 'equipped') btn = `<button class="btn" disabled>${t('EQUIPPED')}</button>`;
+  else if (st === 'owned') btn = `<button class="btn primary" data-act="equip">${t('EQUIP')}</button>`;
   else if (st === 'buy') btn = `<button class="btn gold" data-act="buy" ${save.coins < it.price ? 'disabled' : ''}>${icon('coin')}${fmtCoins(it.price)}</button>`;
-  else btn = `<button class="btn" disabled>${it.special === 'national' ? '#1 ONLY' : '7-DAY STREAK'}</button>`;
+  else btn = `<button class="btn" disabled>${it.special === 'national' ? t('#1 ONLY') : t('7-DAY STREAK')}</button>`;
   const tr = it.tier && TIERS[it.tier];
-  bar.innerHTML = `<div class="ga-info"><small>${KINDS[sel.kind].label}${tr ? ` · <em class="tier-tag" style="--tc:${tr.color}">${tr.label}</em>` : ''}</small><b>${escapeHtml(it.name)}</b><span>${escapeHtml(desc)}</span></div>${btn}`;
+  bar.innerHTML = `<div class="ga-info"><small>${t(KINDS[sel.kind].label)}${tr ? ` · <em class="tier-tag" style="--tc:${tr.color}">${t(tr.label)}</em>` : ''}</small><b>${escapeHtml(t(it.name))}</b><span>${escapeHtml(t(desc))}</span></div>${btn}`;
 }
 
 function renderGarage() {
@@ -2789,8 +2827,8 @@ function renderGarage() {
     stage.setRider(look.opts, look.color);
   }
   $('btnGacha').disabled = save.coins < ECON.gachaPrice;
-  $('gachaOdds').textContent = `MYSTERY BOX ODDS · ${Object.entries(GACHA_ODDS).map(([t, p]) => `${TIERS[t].label} ${p}%`).join(' · ')} — a random unowned box, outfit or helmet of that tier (if you own every item of a tier, the others share its chance)`;
-  $('btnGacha').querySelector('span').textContent = `MYSTERY BOX · ${fmt(ECON.gachaPrice)}`;
+  $('gachaOdds').textContent = `${t('MYSTERY BOX ODDS')} · ${Object.entries(GACHA_ODDS).map(([k, p]) => `${t(TIERS[k].label)} ${p}%`).join(' · ')} — ${t('a random unowned box, outfit or helmet of that tier (if you own every item of a tier, the others share its chance)')}`;
+  $('btnGacha').querySelector('span').textContent = `${t('MYSTERY BOX')} · ${fmt(ECON.gachaPrice)}`;
   $('btnAdCoins').classList.toggle('hidden', !adsEnabled());
   updateAdCoinsLabel();
   for (const b of $('garageTabs').children) b.classList.toggle('on', b.dataset.tab === garageTab);
@@ -2830,7 +2868,7 @@ $('garageAction').addEventListener('click', (e) => {
     save.coins -= it.price;
     save[k.owned].push(id);
     sfx.power();
-    toast(`UNLOCKED  ·  ${it.name}`);
+    toast(`${t('UNLOCKED')}  ·  ${it.name}`);
   } else {
     if (st !== 'owned') return;
     sfx.click();
@@ -2874,13 +2912,13 @@ $('btnGacha').addEventListener('click', () => {
   if (!pool.length) {
     save.coins += ECON.gachaRefund;
     gachaResult = null;
-    reveal.innerHTML = `<div class="swatch" style="background:#ffd34d"></div><b>ALL COLLECTED!</b><span class="muted">Refunded ${fmt(ECON.gachaRefund)} coins</span>`;
+    reveal.innerHTML = `<div class="swatch" style="background:#ffd34d"></div><b>${t('ALL COLLECTED!')}</b><span class="muted">${t('Refunded {n} coins', { n: fmt(ECON.gachaRefund) })}</span>`;
   } else {
     gachaResult = gachaPick(pool);
     save[SHOP[gachaResult.kind].owned].push(gachaResult.it.id);
-    const label = { box: 'DELIVERY BOX', outfit: 'OUTFIT', helmet: 'HELMET' }[gachaResult.kind];
+    const label = t({ box: 'DELIVERY BOX', outfit: 'OUTFIT', helmet: 'HELMET' }[gachaResult.kind]);
     const tr = TIERS[gachaResult.it.tier] || TIERS.common;
-    reveal.innerHTML = `<div class="swatch" style="background:${gachaResult.it.swatch}"></div><small class="tier-tag" style="--tc:${tr.color}">${tr.label} ${label}</small><b>${escapeHtml(gachaResult.it.name)}</b><span class="muted">${escapeHtml(gachaResult.it.desc)}</span>`;
+    reveal.innerHTML = `<div class="swatch" style="background:${gachaResult.it.swatch}"></div><small class="tier-tag" style="--tc:${tr.color}">${t(tr.label)} ${label}</small><b>${escapeHtml(t(gachaResult.it.name))}</b><span class="muted">${escapeHtml(t(gachaResult.it.desc))}</span>`;
   }
   $('btnGachaEquip').classList.toggle('hidden', !gachaResult);
   persist();
@@ -2913,22 +2951,22 @@ function renderBoostBar() {
   const bar = $('boostBar');
   if (!bar) return;
   const armed = new Set(save.armedBoosts);
-  bar.innerHTML = `<div class="boost-head"><b>BOOSTS</b><small>${armed.size ? `${armed.size} ready for the next ride` : 'Tap to equip for the next ride'}</small></div>
+  bar.innerHTML = `<div class="boost-head"><b>${t('BOOSTS')}</b><small>${armed.size ? t('{n} ready for the next ride', { n: armed.size }) : t('Tap to equip for the next ride')}</small></div>
     <div class="boost-row">${BOOSTS.map((b) => {
     const n = boostCount(b.id);
     const on = armed.has(b.id);
     const confirm = boostBuyArm === b.id;
-    const foot = confirm ? `<em class="buy">BUY ${fmt(b.price)}?</em>`
+    const foot = confirm ? `<em class="buy">${t('BUY {n}?', { n: fmt(b.price) })}</em>`
       : n > 0 ? `<em class="cnt">x${n}</em>` : `<em class="price">${icon('coin')}${fmt(b.price)}</em>`;
-    return `<button class="boost${on ? ' on' : ''}${confirm ? ' confirm' : ''}" data-boost="${b.id}" title="${escapeHtml(b.desc)}">
-      ${on ? `<span class="chk">${icon('check')}</span>` : ''}<i>${icon(b.icon)}</i><span class="nm">${escapeHtml(b.name)}</span>${foot}</button>`;
+    return `<button class="boost${on ? ' on' : ''}${confirm ? ' confirm' : ''}" data-boost="${b.id}" title="${escapeHtml(t(b.desc))}">
+      ${on ? `<span class="chk">${icon('check')}</span>` : ''}<i>${icon(b.icon)}</i><span class="nm">${escapeHtml(t(b.name))}</span>${foot}</button>`;
   }).join('')}</div>`;
 }
 function buyBoost(id, count = 1, price) {
   const b = BOOSTS.find((x) => x.id === id);
   const cost = price ?? b.price * count;
   if (save.coins < cost) {
-    toast(`NOT ENOUGH COINS  ·  ${fmt(cost)} NEEDED`);
+    toast(t('NOT ENOUGH COINS  ·  {n} NEEDED', { n: fmt(cost) }));
     return false;
   }
   save.coins -= cost;
@@ -2954,7 +2992,7 @@ $('boostBar').addEventListener('click', (e) => {
     boostBuyArm = null;
     if (buyBoost(id)) {
       save.armedBoosts = [...save.armedBoosts, id];
-      toast(`${b.name}  ·  READY FOR THE NEXT RIDE`);
+      toast(`${t(b.name)}  ·  ${t('READY FOR THE NEXT RIDE')}`);
     }
   } else {
     boostBuyArm = id;
@@ -3004,7 +3042,7 @@ async function claimCoins() {
   try {
     const n = await claimPendingCoins();
     if (n > 0) {
-      toast(`PURCHASE COMPLETE  ·  +${fmt(n)} COINS`);
+      toast(`${t('PURCHASE COMPLETE')}  ·  ${t('+{n} COINS', { n: fmt(n) })}`);
       sfx.fireworks();
       refreshCoinLabels();
       if (currentScreen === 'garage') renderGarage();
@@ -3034,11 +3072,11 @@ async function renderCoinShop() {
   note.textContent = mode === 'mock' ? 'TEST MODE · no real money is charged.'
     : mode === 'off' ? 'Coin purchases are available in the mobile app.'
       : !getSession() ? 'Sign in to buy coins so they are saved to your account.' : '';
-  grid.innerHTML = '<div class="muted">LOADING…</div>';
+  grid.innerHTML = `<div class="muted">${t('LOADING…')}</div>`;
   const packs = mode === 'off' ? [] : await getPacks();
   if (currentScreen !== 'coinshop') return;
   if (!packs.length) {
-    grid.innerHTML = `<div class="muted">${mode === 'off' ? 'Not available on the web version.' : 'The store is not available right now. Try again later.'}</div>`;
+    grid.innerHTML = `<div class="muted">${mode === 'off' ? t('Not available on the web version.') : t('The store is not available right now. Try again later.')}</div>`;
     return;
   }
   grid.innerHTML = '';
@@ -3048,7 +3086,7 @@ async function renderCoinShop() {
     const tier = Math.min(4, Math.max(1, Math.round(Math.log10(pk.coins) * 2 - 5)));
     b.innerHTML = `${pk.tag ? `<span class="pack-tag">${escapeHtml(pk.tag)}</span>` : ''}
       <span class="pack-coins tier${tier}">${'<i></i>'.repeat(tier)}</span>
-      <b>${fmt(pk.coins)}</b>${pk.bonus ? `<small class="pack-bonus">+${pk.bonus}% BONUS</small>` : '<small class="pack-bonus">&nbsp;</small>'}
+      <b>${fmt(pk.coins)}</b>${pk.bonus ? `<small class="pack-bonus">+${pk.bonus}% ${t('BONUS')}</small>` : '<small class="pack-bonus">&nbsp;</small>'}
       <span class="pack-price">${escapeHtml(pk.price)}</span>`;
     b.addEventListener('click', () => purchasePack(pk));
     grid.appendChild(b);
@@ -3058,7 +3096,7 @@ async function renderCoinShop() {
 function renderBoostBundles() {
   const { count, payFor } = BOOST_BUNDLE;
   $('bundleGrid').innerHTML = BOOSTS.map((b) => `<button class="bundle" data-bundle="${b.id}">
-    <i>${icon(b.icon)}</i><span class="nm">${escapeHtml(b.name)} x${count}</span><small>own ${boostCount(b.id)}</small>
+    <i>${icon(b.icon)}</i><span class="nm">${escapeHtml(t(b.name))} x${count}</span><small>${t('own {n}', { n: boostCount(b.id) })}</small>
     <em>${icon('coin')}${fmt(b.price * payFor)}</em></button>`).join('');
 }
 $('bundleGrid').addEventListener('click', (e) => {
@@ -3066,8 +3104,8 @@ $('bundleGrid').addEventListener('click', (e) => {
   if (!btn) return;
   const b = BOOSTS.find((x) => x.id === btn.dataset.bundle);
   const { count, payFor } = BOOST_BUNDLE;
-  if (!confirm(`Buy ${b.name} x${count} for ${fmt(b.price * payFor)} coins?`)) return;
-  if (buyBoost(b.id, count, b.price * payFor)) toast(`${b.name} x${count}  ·  ADDED`);
+  if (!confirm(t('Buy {name} x{n} for {price} coins?', { name: t(b.name), n: count, price: fmt(b.price * payFor) }))) return;
+  if (buyBoost(b.id, count, b.price * payFor)) toast(`${t(b.name)} x${count}  ·  ${t('ADDED')}`);
   refreshCoinLabels();
   renderBoostBundles();
 });
@@ -3075,7 +3113,7 @@ async function purchasePack(pk) {
   if (shopBusy) return;
   const mode = paymentsMode();
   if (mode === 'native' && !getSession()) {
-    toast('SIGN IN FIRST  ·  COINS ARE SAVED TO YOUR ACCOUNT');
+    toast(t('SIGN IN FIRST  ·  COINS ARE SAVED TO YOUR ACCOUNT'));
     renderAuth();
     openScreen('auth');
     return;
@@ -3085,23 +3123,23 @@ async function purchasePack(pk) {
   try {
     const res = await buyPack(pk);
     if (!res.ok) {
-      if (!res.cancelled) toast(`PURCHASE FAILED  ·  ${res.error || 'Try again'}`);
+      if (!res.cancelled) toast(`${t('PURCHASE FAILED')}  ·  ${t(res.error || 'Try again')}`);
       return;
     }
     if (res.test) {
       save.coins += pk.coins;
       persist();
-      toast(`TEST PURCHASE  ·  +${fmt(pk.coins)} COINS`);
+      toast(`${t('TEST PURCHASE')}  ·  ${t('+{n} COINS', { n: fmt(pk.coins) })}`);
       sfx.fireworks();
     } else {
       // 스토어 결제 완료 → 서버 지급(웹훅)을 기다렸다가 받기
-      toast('PAYMENT RECEIVED  ·  DELIVERING YOUR COINS…');
+      toast(t('PAYMENT RECEIVED  ·  DELIVERING YOUR COINS…'));
       let got = 0;
       for (let i = 0; i < 15 && !got; i++) {
         await new Promise((r) => setTimeout(r, 2000));
         got = await claimCoins();
       }
-      if (!got) toast('COINS WILL ARRIVE SHORTLY  ·  REOPEN THE APP IF NOT');
+      if (!got) toast(t('COINS WILL ARRIVE SHORTLY  ·  REOPEN THE APP IF NOT'));
     }
     refreshCoinLabels();
   } finally {
@@ -3122,8 +3160,8 @@ function updateAdCoinsLabel() {
   const btn = $('btnAdCoins');
   btn.disabled = left > 0;
   $('adCoinsLabel').textContent = left > 0
-    ? `NEXT FREE COINS IN ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
-    : `WATCH AD FOR ${ADS.freeCoins} COINS`;
+    ? t('NEXT FREE COINS IN {time}', { time: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` })
+    : t('WATCH AD FOR {n} COINS', { n: ADS.freeCoins });
 }
 let adTicker = null;
 function startAdTicker() {
@@ -3143,7 +3181,7 @@ $('btnAdCoins').addEventListener('click', async () => {
   save.coins += ADS.freeCoins;
   save.adCooldownUntil = Date.now() + ADS.freeCoinsCooldownSec * 1000;
   persist();
-  toast(`+${ADS.freeCoins} COINS`);
+  toast(t('+{n} COINS', { n: ADS.freeCoins }));
   sfx.coin();
   renderGarage();
 });
@@ -3182,7 +3220,7 @@ function selectRankRow(i) {
   if (!r) {
     const look = myLook();
     stage.setRider(look.opts, look.color);
-    setFlexLabel(`MY RIDE · ${bikeName(save.bike, myNationalCode())}`, look.opts.flag);
+    setFlexLabel(`${t('MY RIDE')} · ${bikeName(save.bike, myNationalCode())}`, look.opts.flag);
     return;
   }
   const look = rowLook(r);
@@ -3195,9 +3233,9 @@ async function renderRanking() {
   const world = rankTab === 'world';
   for (const b of $('rankTabs').children) b.classList.toggle('on', b.dataset.rtab === rankTab);
   $('rankTabs').querySelector('[data-rtab="country"]').innerHTML = `${flagBadge(save.country)}${escapeHtml(countryName(save.country).toUpperCase())}`;
-  mode.textContent = world ? 'WORLD' : save.country;
+  mode.textContent = world ? t('WORLD') : save.country;
   mode.className = 'badge';
-  list.innerHTML = '<div class="empty">Loading...</div>';
+  list.innerHTML = `<div class="empty">${t('Loading...')}</div>`;
   me.innerHTML = '';
   rankRows = [];
   selectRankRow(-1);
@@ -3206,7 +3244,7 @@ async function renderRanking() {
   const res = await leaderboard.fetchTop({ country, world });
   if (rankTab !== tab || currentScreen !== 'ranking') return;
   if (!res.ok) {
-    list.innerHTML = `<div class="empty">Could not load the ranking<br><small>${escapeHtml(res.error)}</small></div>`;
+    list.innerHTML = `<div class="empty">${t('Could not load the ranking')}<br><small>${escapeHtml(t(res.error))}</small></div>`;
     return;
   }
   if (!world) {
@@ -3217,13 +3255,13 @@ async function renderRanking() {
   rankSel = rankRows.length ? 0 : -1;
   list.innerHTML = rankRows.length
     ? rankTable(rankRows, world)
-    : `<div class="empty">No records ${world ? 'yet' : `in ${escapeHtml(countryName(country))} yet`}.<br>Be the first rider on the board!</div>`;
+    : `<div class="empty">${world ? t('No records yet.') : t('No records in {country} yet.', { country: escapeHtml(countryName(country)) })}<br>${t('Be the first rider on the board!')}</div>`;
   selectRankRow(rankSel);
   const s = getSession();
-  const where = world ? 'THE WORLD' : escapeHtml(countryName(country).toUpperCase());
-  if (!s) me.innerHTML = 'Sign in to see your rank <button class="btn primary" id="rankLogin">SIGN IN</button>';
-  else if (res.me) me.innerHTML = `YOUR RANK IN ${where} <b>#${res.me.rank}</b> · <b>${fmt(res.me.score)}</b> <button class="btn small" id="rankMine">MY RIDE</button>`;
-  else me.innerHTML = `${escapeHtml(s.nickname)} has no record yet <button class="btn small" id="rankMine">MY RIDE</button>`;
+  const where = world ? t('THE WORLD') : escapeHtml(countryName(country).toUpperCase());
+  if (!s) me.innerHTML = `${t('Sign in to see your rank')} <button class="btn primary" id="rankLogin">${t('SIGN IN')}</button>`;
+  else if (res.me) me.innerHTML = `${t('YOUR RANK IN {where}', { where })} <b>#${res.me.rank}</b> · <b>${fmt(res.me.score)}</b> <button class="btn small" id="rankMine">${t('MY RIDE')}</button>`;
+  else me.innerHTML = `${t('{name} has no record yet', { name: escapeHtml(s.nickname) })} <button class="btn small" id="rankMine">${t('MY RIDE')}</button>`;
   $('rankLogin')?.addEventListener('click', () => { renderAuth(); openScreen('auth', 'menu'); });
   $('rankMine')?.addEventListener('click', () => { sfx.click(); selectRankRow(-1); });
 }
@@ -3253,13 +3291,13 @@ function renderAuth() {
   if (s) $('authNick').textContent = s.nickname;
   for (const b of $('authTabs').children) b.classList.toggle('on', b.dataset.auth === authTab);
   $('authPw2Wrap').classList.toggle('hidden', authTab !== 'signup');
-  $('authSubmit').textContent = authTab === 'signup' ? 'CREATE ACCOUNT' : 'SIGN IN';
+  $('authSubmit').textContent = authTab === 'signup' ? t('CREATE ACCOUNT') : t('SIGN IN');
   $('authPw').autocomplete = authTab === 'signup' ? 'new-password' : 'current-password';
   $('authMsg').textContent = '';
   $('authMsg').className = 'form-msg';
   $('authNote').textContent = ONLINE
-    ? 'Accounts are stored on the server. Only an auto sign-in token is kept on this device.'
-    : 'No server configured: accounts and ranking are saved in this browser only.';
+    ? t('Accounts are stored on the server. Only an auto sign-in token is kept on this device.')
+    : t('No server configured: accounts and ranking are saved in this browser only.');
 }
 $('authTabs').addEventListener('click', (e) => {
   const b = e.target.closest('[data-auth]');
@@ -3271,24 +3309,24 @@ $('authForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const id = $('authId').value, pw = $('authPw').value, msg = $('authMsg');
   if (authTab === 'signup' && pw !== $('authPw2').value) {
-    msg.textContent = 'Passwords do not match';
+    msg.textContent = t('Passwords do not match');
     return;
   }
   const btn = $('authSubmit');
   btn.disabled = true;
   msg.className = 'form-msg ok';
-  msg.textContent = 'Please wait...';
+  msg.textContent = t('Please wait...');
   const res = authTab === 'signup' ? await auth.signUp(id, pw) : await auth.signIn(id, pw);
   btn.disabled = false;
   if (!res.ok) {
     msg.className = 'form-msg';
-    msg.textContent = res.error;
+    msg.textContent = t(res.error);
     return;
   }
   $('authPw').value = '';
   $('authPw2').value = '';
   sfx.mission();
-  toast(`WELCOME, ${res.user.nickname.toUpperCase()}`);
+  toast(t('WELCOME, {name}', { name: res.user.nickname.toUpperCase() }));
   await onSignedIn({ uploadBest: true });
   if (backTo === 'gameover') {
     backTo = 'menu';
@@ -3303,7 +3341,7 @@ $('btnLogout').addEventListener('click', async () => {
   serverAdmin = false;
   authTab = 'login';
   sfx.click();
-  toast('SIGNED OUT');
+  toast(t('SIGNED OUT'));
   onDataReplaced();
   renderAuth();
 });
@@ -3332,14 +3370,16 @@ function onDataReplaced() {
 async function onSignedIn({ uploadBest = false } = {}) {
   const res = await loadPlayerData();
   if (!res.ok) {
-    toast(`SERVER  ·  ${res.error}`);
+    toast(`${t('SERVER')}  ·  ${t(res.error)}`);
     refreshMenu();
     return;
   }
   serverAdmin = res.isAdmin;
   if (!res.country) await lockCountry();
+  if (save.settings.lang && save.settings.lang !== getLang()) setLang(save.settings.lang);
+  refreshSupportBadge().then(() => { if (supportUnread) toast(t('SUPPORT REPLIED  ·  CHECK SETTINGS → HELP & SUPPORT')); });
   onDataReplaced();
-  if (serverAdmin) toast('ADMIN MODE  ·  ALL ITEMS UNLOCKED  ·  SCORES NOT RECORDED');
+  if (serverAdmin) toast(t('ADMIN MODE  ·  ALL ITEMS UNLOCKED  ·  SCORES NOT RECORDED'));
   // 새 계정이면 게스트로 세운 기록을 올림
   if (uploadBest && res.fresh && save.best > 0) await leaderboard.submit(scoreEntry(save.best, save.bestDist), { admin: isAdminMode() });
   regionTopsDirty(save.country);
@@ -3377,7 +3417,7 @@ function applyNationalStatus(unlocked, code, { silent = false } = {}) {
     save.bike = 'national';
     save.box = 'national';
     if (!silent) {
-      toast(`#1 IN ${countryName(code).toUpperCase()}  ·  NATIONAL TEAM PACKAGE UNLOCKED`);
+      toast(`${t('#1 IN {country}', { country: countryName(code).toUpperCase() })}  ·  ${t('NATIONAL TEAM PACKAGE UNLOCKED')}`);
       sfx.fireworks();
     }
   } else {
@@ -3385,7 +3425,7 @@ function applyNationalStatus(unlocked, code, { silent = false } = {}) {
       if (save.bike === 'national') save.bike = save.ownedBikes.includes(save.prevBike) ? save.prevBike : 'rookie';
       if (save.box === 'national') save.box = save.ownedBoxes.includes(save.prevBox) ? save.prevBox : 'basic';
     }
-    if (was && !silent) toast('YOU LOST #1  ·  NATIONAL TEAM PACKAGE TAKEN BACK');
+    if (was && !silent) toast(t('YOU LOST #1  ·  NATIONAL TEAM PACKAGE TAKEN BACK'));
   }
   persist();
   syncMyLook();
@@ -3434,24 +3474,147 @@ function renderMissions() {
     </div>`).join('');
 }
 
+// ---------- 1:1 문의 (설정 → HELP & SUPPORT). 관리자 답변은 내 언어 번역문이 있으면 그것을 먼저 보여줌
+const INQ_CATS = [['payment', 'Payment / coins'], ['bug', 'Bug / crash'], ['account', 'Account / login'], ['suggestion', 'Suggestion'], ['other', 'Other']];
+const INQ_STATUS = { open: 'WAITING', answered: 'ANSWERED', closed: 'CLOSED' };
+let supportView = 'list', supportList = [], supportSel = null, supportUnread = false;
+const deviceInfo = () => `${window.Capacitor?.getPlatform?.() || 'web'} · ${(navigator.userAgent.match(/Android [\d.]+|iPhone OS [\d_]+|Windows NT [\d.]+|Mac OS X [\d_]+/) || [''])[0]}`.slice(0, 160);
+const fmtDate = (iso) => { try { return new Date(iso).toLocaleString(getLang(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
+
+async function refreshSupportBadge() {
+  if (!getSession() || !isServerReady()) { supportUnread = false; } else {
+    const res = await myInquiries(false);
+    supportList = res.list;
+    supportUnread = supportList.some((i) => i.user_unread);
+  }
+  $('settingsDot').classList.toggle('hidden', !supportUnread);
+  $('supportDot').classList.toggle('hidden', !supportUnread);
+}
+
+async function openSupport() {
+  supportView = 'list';
+  supportSel = null;
+  openScreen('support', 'settings');
+  await renderSupport(true);
+}
+
+async function renderSupport(reload = false) {
+  const body = $('supportBody');
+  if (!getSession()) {
+    body.innerHTML = `<div class="app-card"><p>${t('Sign in to contact support. We reply in your language.')}</p></div>
+      <button class="btn primary" id="supLogin">${t('SIGN IN')}</button>`;
+    $('supLogin').addEventListener('click', () => { renderAuth(); openScreen('auth', 'menu'); });
+    return;
+  }
+  if (reload) {
+    body.innerHTML = `<div class="empty">${t('Loading...')}</div>`;
+    const res = await myInquiries(true);
+    if (!res.ok) { body.innerHTML = `<div class="empty">${escapeHtml(t(res.error))}</div>`; return; }
+    supportList = res.list;
+    supportUnread = false;
+    $('settingsDot').classList.add('hidden');
+    $('supportDot').classList.add('hidden');
+  }
+  if (supportView === 'new') {
+    body.innerHTML = `<form id="supForm" class="form sup-form">
+      <label><span>${t('CATEGORY')}</span><select id="supCat" class="select">${INQ_CATS.map(([v, l]) => `<option value="${v}">${escapeHtml(t(l))}</option>`).join('')}</select></label>
+      <label><span>${t('SUBJECT')}</span><input id="supSubject" maxlength="120" placeholder="${escapeHtml(t('Short summary'))}"></label>
+      <label><span>${t('MESSAGE')}</span><textarea id="supMsg" maxlength="2000" rows="6" placeholder="${escapeHtml(t('Tell us what happened. For payment issues, include the date and amount.'))}"></textarea></label>
+      <p id="supErr" class="form-msg"></p>
+      <button class="btn primary" type="submit">${t('SEND')}</button>
+      <button class="btn" type="button" id="supCancel">${t('CANCEL')}</button>
+    </form>`;
+    $('supCancel').addEventListener('click', () => { supportView = 'list'; renderSupport(); });
+    $('supForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = $('supMsg').value.trim();
+      if (msg.length < 2) { $('supErr').textContent = t('Please write a message.'); return; }
+      e.submitter && (e.submitter.disabled = true);
+      const build = await webBuild();
+      const res = await submitInquiry({ category: $('supCat').value, subject: $('supSubject').value.trim(), message: msg, lang: getLang(), appBuild: build ? `build ${build}` : APP_INFO.version, device: deviceInfo() });
+      if (!res.ok) { $('supErr').textContent = t(res.error); e.submitter && (e.submitter.disabled = false); return; }
+      toast(t('SENT  ·  WE WILL REPLY SOON'));
+      supportView = 'list';
+      renderSupport(true);
+    });
+    return;
+  }
+  if (supportView === 'thread') {
+    const inq = supportList.find((i) => i.id === supportSel);
+    if (!inq) { supportView = 'list'; renderSupport(); return; }
+    inq.user_unread = false; // 열어 본 문의는 읽음 (서버는 목록을 불러올 때 이미 읽음 처리)
+    const msgs = inq.messages.map((m) => {
+      const mine = m.sender === 'user';
+      const translated = !mine && m.translated && m.translated_lang === getLang();
+      return `<div class="sup-msg ${mine ? 'me' : 'staff'}">
+        <small>${mine ? t('You') : t('Grub Rider Support')} · ${fmtDate(m.created_at)}</small>
+        <p>${escapeHtml(translated ? m.translated : (m.translated || m.body)).replace(/\n/g, '<br>')}</p>
+        ${translated ? `<details><summary>${t('Original')}</summary><p>${escapeHtml(m.body).replace(/\n/g, '<br>')}</p></details>` : ''}
+      </div>`;
+    }).join('');
+    body.innerHTML = `<button class="btn small sup-back" id="supList">← ${t('ALL INQUIRIES')}</button>
+      <div class="sup-thread-head"><b>${escapeHtml(inq.subject || t(INQ_CATS.find((c) => c[0] === inq.category)?.[1] || 'Other'))}</b><em class="sup-st st-${inq.status}">${t(INQ_STATUS[inq.status])}</em></div>
+      <div class="sup-thread">${msgs}</div>
+      ${inq.status === 'closed' ? `<p class="muted">${t('This inquiry is closed. Start a new one if you need more help.')}</p>` : `<form id="supReply" class="sup-reply"><textarea id="supReplyMsg" rows="2" maxlength="2000" placeholder="${escapeHtml(t('Write a reply…'))}"></textarea><button class="btn primary" type="submit">${t('SEND')}</button></form><p id="supErr" class="form-msg"></p>`}`;
+    $('supList').addEventListener('click', () => { supportView = 'list'; renderSupport(); });
+    $('supReply')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = $('supReplyMsg').value.trim();
+      if (!msg) return;
+      const res = await replyInquiry(inq.id, msg, getLang());
+      if (!res.ok) { $('supErr').textContent = t(res.error); return; }
+      renderSupport(true).then(() => { supportView = 'thread'; renderSupport(); });
+    });
+    const th = body.querySelector('.sup-thread');
+    if (th) th.scrollTop = th.scrollHeight;
+    return;
+  }
+  body.innerHTML = `<button class="btn primary" id="supNew" data-icon="next"><span>${t('NEW INQUIRY')}</span></button>
+    ${supportList.length ? `<div class="sup-list">${supportList.map((i) => `<button class="sup-item" data-inq="${i.id}">
+      <span><b>${escapeHtml(i.subject || t(INQ_CATS.find((c) => c[0] === i.category)?.[1] || 'Other'))}</b><small>${fmtDate(i.updated_at)}</small></span>
+      <em class="sup-st st-${i.status}">${t(INQ_STATUS[i.status])}</em>${i.user_unread ? '<i class="dot"></i>' : ''}</button>`).join('')}</div>`
+      : `<p class="muted">${t('No inquiries yet. Questions about payments, bugs or your account? Send us a message.')}</p>`}`;
+  hydrateIcons(body);
+  $('supNew').addEventListener('click', () => { supportView = 'new'; renderSupport(); });
+  for (const b of body.querySelectorAll('[data-inq]')) b.addEventListener('click', () => { supportSel = Number(b.dataset.inq); supportView = 'thread'; renderSupport(); });
+}
+$('btnSupport').addEventListener('click', () => openSupport());
+
 // ---------- 설정
-const onOff = (v) => (v ? 'ON' : 'OFF');
+// 언어: 설정에서 고르면 저장(계정에 함께 저장)하고 화면 전체를 다시 그림
+$('langSelect').addEventListener('change', async (e) => {
+  save.settings.lang = e.target.value;
+  persist();
+  await setLang(e.target.value);
+});
+onLangChange(() => {
+  refreshMenu();
+  renderBoostBar();
+  if (currentScreen === 'settings') renderSettings();
+  if (currentScreen === 'garage') renderGarage();
+  if (currentScreen === 'missions') renderMissions();
+  if (currentScreen === 'notices') renderNotices();
+  if (currentScreen === 'auth') renderAuth();
+});
+const onOff = (v) => (v ? t('ON') : t('OFF'));
 const SETTING_LABELS = {
   sound: onOff,
   music: onOff,
   vibrate: onOff,
   wetFx: onOff,
-  quality: (v) => (v === 'high' ? 'HIGH' : 'LOW (FAST)'),
-  controls: (v) => ({ onehand: 'ONE-HAND', slide: 'SLIDE + PEDALS', arrows: 'ARROWS + PEDALS' }[v] || 'ONE-HAND'),
+  quality: (v) => (v === 'high' ? t('HIGH') : t('LOW (FAST)')),
+  controls: (v) => t({ onehand: 'ONE-HAND', slide: 'SLIDE + PEDALS', arrows: 'ARROWS + PEDALS' }[v] || 'ONE-HAND'),
   flipControls: onOff,
 };
 function renderSettings() {
+  $('langSelect').innerHTML = LANGS.map((l) => `<option value="${l.code}">${escapeHtml(l.name)}</option>`).join('');
+  $('langSelect').value = getLang();
   for (const b of document.querySelectorAll('[data-setting]')) {
     b.textContent = SETTING_LABELS[b.dataset.setting](save.settings[b.dataset.setting]);
   }
-  $('controlsHint').textContent = CONTROL_HINTS[save.settings.controls] || CONTROL_HINTS.onehand;
+  $('controlsHint').textContent = t(CONTROL_HINTS[save.settings.controls] || CONTROL_HINTS.onehand);
   $('flipRow').classList.toggle('hidden', save.settings.controls === 'onehand');
-  const src = { server: 'LOCKED', ip: 'IP', tz: 'ESTIMATED' }[save.countrySource] || '';
+  const src = t({ server: 'LOCKED', ip: 'IP', tz: 'ESTIMATED' }[save.countrySource] || '');
   $('countryLabel').innerHTML = `${flagBadge(save.country)}${escapeHtml(countryName(save.country))} <small class="muted">${isAdminMode() ? 'ADMIN' : src}</small>`;
   // 관리자만 국가를 바꿀 수 있음
   const sel = $('adminCountry');
@@ -3463,7 +3626,7 @@ function renderSettings() {
   }
   const showAdmin = ADMIN_DEBUG_TOGGLE && DEBUG && !serverAdmin;
   $('adminRow').classList.toggle('hidden', !showAdmin && !serverAdmin);
-  $('btnAdmin').textContent = isAdminMode() ? 'ON' : 'OFF';
+  $('btnAdmin').textContent = isAdminMode() ? t('ON') : t('OFF');
   $('btnAdmin').disabled = serverAdmin;
   $('appVersion').textContent = `${APP_INFO.name} v${APP_INFO.version}`;
   webBuild().then((n) => { if (n) $('appVersion').textContent = `${APP_INFO.name} v${APP_INFO.version} · build ${n}`; });
@@ -3472,16 +3635,16 @@ function renderSettings() {
 // 계정 삭제 (스토어 정책 필수): 두 번 확인 → 서버에서 계정·기록·데이터 삭제
 $('btnDeleteAccount').addEventListener('click', async () => {
   if (!getSession()) return;
-  if (!confirm('Delete your account permanently? Your coins, items, ranking records and purchases cannot be recovered.')) return;
-  if (prompt('Type DELETE to confirm.') !== 'DELETE') return;
+  if (!confirm(t('Delete your account permanently? Your coins, items, ranking records and purchases cannot be recovered.'))) return;
+  if (prompt(t('Type DELETE to confirm.')) !== 'DELETE') return;
   const res = await deleteAccount();
   if (!res.ok) {
-    toast(`DELETE FAILED  ·  ${res.error}`);
+    toast(`${t('DELETE FAILED')}  ·  ${t(res.error)}`);
     return;
   }
   serverAdmin = false;
   debugAdmin = false;
-  toast('ACCOUNT DELETED');
+  toast(t('ACCOUNT DELETED'));
   onDataReplaced();
   applyNationalStatus(false, '', { silent: true });
   renderSettings();
@@ -3493,7 +3656,7 @@ $('adminCountry').addEventListener('change', async (e) => {
   if (serverAdmin) {
     const res = await adminSetCountry(code);
     if (!res.ok) {
-      toast(`COUNTRY  ·  ${res.error}`);
+      toast(`${t('COUNTRY')}  ·  ${t(res.error)}`);
       renderSettings();
       return;
     }
@@ -3509,7 +3672,7 @@ $('btnAdmin').addEventListener('click', () => {
   if (serverAdmin || !DEBUG) return;
   debugAdmin = !debugAdmin;
   sfx.click();
-  toast(debugAdmin ? 'ADMIN MODE ON  ·  SCORES NOT RECORDED' : 'ADMIN MODE OFF');
+  toast(debugAdmin ? t('ADMIN MODE ON  ·  SCORES NOT RECORDED') : t('ADMIN MODE OFF'));
   onDataReplaced();
   renderSettings();
 });
@@ -3548,7 +3711,7 @@ for (const b of document.querySelectorAll('[data-setting]')) {
   });
 }
 $('btnReset').addEventListener('click', () => {
-  if (!confirm('Reset coins, bikes, skins, ranking and missions? (Your account is kept)')) return;
+  if (!confirm(t('Reset coins, bikes, skins, ranking and missions? (Your account is kept)'))) return;
   resetSave();
   sfx.setEnabled(save.settings.sound);
   sfx.setMusic(save.settings.music);
@@ -3558,7 +3721,7 @@ $('btnReset').addEventListener('click', () => {
   buildBike();
   resetBikePose();
   renderSettings();
-  toast('PROGRESS RESET');
+  toast(t('PROGRESS RESET'));
 });
 
 // ---------- 일시정지 (DELIVERY RECEIPT)
@@ -3568,11 +3731,11 @@ function renderReceipt() {
   $('rcRider').textContent = (s ? s.nickname : save.lastName || 'Guest Rider').toUpperCase();
   $('rcBike').textContent = bikeName(save.bike, myNationalCode());
   const items = [
-    ['DISTANCE', `${fmt(G.distance)} m`],
-    ['NEAR MISSES', `${G.nearMiss} (MAX COMBO ${G.maxCombo})`],
-    ['WRONG WAY', `${fmt(G.oncomingDist)} m`],
-    ['AIR JUMPS', `${G.jumps}`],
-    ['COINS', `${fmt(G.earned)}`],
+    [t('DISTANCE'), `${fmt(G.distance)} m`],
+    [t('NEAR MISSES'), `${G.nearMiss} (${t('MAX COMBO')} ${G.maxCombo})`],
+    [t('WRONG WAY'), `${fmt(G.oncomingDist)} m`],
+    [t('AIR JUMPS'), `${G.jumps}`],
+    [t('COINS'), `${fmt(G.earned)}`],
   ];
   $('rcItems').innerHTML = items.map(([k, v]) => `<div class="rc-item"><span>${k}</span><span>${v}</span></div>`).join('');
   $('rcMissions').innerHTML = save.missions.map((m) => {
@@ -3603,6 +3766,27 @@ function resumeGame() {
 }
 $('btnPause').addEventListener('click', togglePause);
 $('btnResume').addEventListener('click', resumeGame);
+
+// 안드로이드 뒤로가기 버튼 (앱): 주행 중 → 일시정지, 화면 → 뒤로, 메뉴 → 두 번 누르면 종료
+{
+  const App = window.Capacitor?.Plugins?.App;
+  let exitArmed = 0;
+  App?.addListener?.('backButton', () => {
+    if (!$('tutorial').classList.contains('hidden')) { hideTutorial(); return; }
+    if (G.state === 'playing') { togglePause(); return; }
+    if (G.state === 'paused') { resumeGame(); return; }
+    if (G.state === 'countdown') return;
+    if (currentScreen === 'gameover') { $('btnHome').click(); return; }
+    if (currentScreen === 'support' && supportView !== 'list') { supportView = 'list'; renderSupport(); return; }
+    if (currentScreen === 'gacha') { $('btnGachaClose').click(); return; }
+    if (currentScreen === 'coinshop') { $('btnShopBack').click(); return; }
+    if (currentScreen === 'daily') { $('btnClaimDaily').click(); return; }
+    if (currentScreen && currentScreen !== 'menu') { $(currentScreen).querySelector('[data-back]')?.click(); return; }
+    if (Date.now() - exitArmed < 2000) { App.exitApp(); return; }
+    exitArmed = Date.now();
+    toast(t('Press back again to exit'));
+  });
+}
 $('btnQuit').addEventListener('click', () => {
   sfx.resume();
   finalizeRun();
@@ -3614,9 +3798,21 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------- 결과 / 랭킹 등록 / 이어달리기
 function setResultTitle(delivered) {
-  const t = $('goTitle');
-  t.textContent = delivered ? 'DELIVERED!' : 'CRASHED!';
-  t.className = `result-title ${delivered ? 'delivered' : 'crash'}`;
+  const el = $('goTitle');
+  el.textContent = delivered ? t('DELIVERED!') : t('CRASHED!');
+  el.className = `result-title ${delivered ? 'delivered' : 'crash'}`;
+}
+
+// 결과 점수: 0 → 최종값으로 빠르게 올라가는 연출 (0.9초, ease-out)
+function countUp(el, to) {
+  const t0 = performance.now(), dur = 900;
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / dur);
+    el.textContent = fmt(Math.round(to * (1 - (1 - k) ** 3)));
+    if (k < 1 && currentScreen === 'gameover') requestAnimationFrame(step);
+    else el.textContent = fmt(to);
+  };
+  requestAnimationFrame(step);
 }
 
 function showGameOver() {
@@ -3625,7 +3821,7 @@ function showGameOver() {
   $('brakeFx').classList.remove('on');
   const score = Math.floor(G.score);
   const isRecord = score > save.best && score > 0;
-  $('goScore').textContent = fmt(score);
+  countUp($('goScore'), score);
   $('goNew').classList.toggle('hidden', !isRecord);
   setResultTitle(isRecord);
   save.best = Math.max(save.best, score);
@@ -3634,12 +3830,12 @@ function showGameOver() {
   $('hotBanner').classList.add('hidden');
   G.hot = null;
   const stats = [
-    ['DISTANCE', `${fmt(G.distance)} m`],
-    ['NEAR MISS', G.nearMiss],
-    ['MAX COMBO', G.maxCombo],
-    ['TOP SPEED', `${G.maxKmh} KM/H`],
-    ['AIR JUMPS', G.jumps],
-    ['COINS', fmt(G.earned)],
+    [t('DISTANCE'), `${fmt(G.distance)} m`],
+    [t('NEAR MISS'), G.nearMiss],
+    [t('MAX COMBO'), G.maxCombo],
+    [t('TOP SPEED'), `${G.maxKmh} KM/H`],
+    [t('AIR JUMPS'), G.jumps],
+    [t('COINS'), fmt(G.earned)],
   ];
   $('goStats').innerHTML = stats.map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join('');
   $('goMissions').innerHTML = G.missionsDone.map((m) => `<div>${icon('check')} ${escapeHtml(missionText(m))} +${m.reward}</div>`).join('');
@@ -3649,7 +3845,7 @@ function showGameOver() {
   $('contCost').textContent = ECON.continueCost;
   cont.classList.toggle('hidden', G.continued);
   cont.disabled = save.coins < ECON.continueCost;
-  $('retryLabel').textContent = 'RETRY';
+  $('retryLabel').textContent = t('RETRY');
   // 보상형 광고: 부활 1회 / 코인 2배 1회 (배너 없음)
   $('btnAdRevive').classList.toggle('hidden', !adsEnabled() || G.continued || isAdminMode());
   $('btnAdminRevive').classList.toggle('hidden', !isAdminMode());
@@ -3668,11 +3864,11 @@ async function submitGlobal() {
   const score = Math.floor(G.score);
   const cname = escapeHtml(countryName(save.country));
   if (isAdminMode()) {
-    box.innerHTML = `${icon('gear')} ADMIN MODE · this run is not recorded on the ranking`;
+    box.innerHTML = `${icon('gear')} ${t('ADMIN MODE · this run is not recorded on the ranking')}`;
     return;
   }
   if (!s) {
-    box.innerHTML = `${flagBadge(save.country)} Sign in to post your score to the ${cname} ranking <button class="btn primary" id="goLogin">SIGN IN</button>`;
+    box.innerHTML = `${flagBadge(save.country)} ${t('Sign in to post your score to the {country} ranking', { country: cname })} <button class="btn primary" id="goLogin">${t('SIGN IN')}</button>`;
     $('goLogin').addEventListener('click', () => { renderAuth(); openScreen('auth', 'gameover'); });
     return;
   }
@@ -3682,10 +3878,10 @@ async function submitGlobal() {
   }
   if (G.globalSubmitted === score) return;
   G.globalSubmitted = score;
-  box.innerHTML = `${flagBadge(save.country)} Posting to the ${cname} ranking...`;
+  box.innerHTML = `${flagBadge(save.country)} ${t('Posting to the {country} ranking...', { country: cname })}`;
   const res = await leaderboard.submit(scoreEntry(score, G.distance), { admin: isAdminMode() });
   if (!res.ok) {
-    box.innerHTML = `${flagBadge(save.country)} Could not post score: ${escapeHtml(res.error)}`;
+    box.innerHTML = `${flagBadge(save.country)} ${t('Could not post score')}: ${escapeHtml(t(res.error))}`;
     G.globalSubmitted = false;
     return;
   }
@@ -3697,12 +3893,18 @@ async function submitGlobal() {
     applyNationalStatus(Boolean(r && r.rank === 1), r?.country || save.country);
   } catch (e) { /* 순위 조회 실패 시 표시만 생략 */ }
   regionTopsDirty(save.country);
-  box.innerHTML = `${flagBadge(save.country)} ${cname.toUpperCase()} RANK <b>${rank}</b> · BEST <b>${fmt(res.best)}</b>`;
+  box.innerHTML = `${flagBadge(save.country)} ${t('{country} RANK', { country: cname.toUpperCase() })} <b>${rank}</b> · ${t('BEST')} <b>${fmt(res.best)}</b>`;
 }
 
 function finalizeRun() {
   if (G.finalized || !('score' in G)) return;
   G.finalized = true;
+  if (!isAdminMode()) {
+    webBuild().then((b) => logRun({
+      dist: G.distance, score: G.score, coins: G.earned, duration: G.time || 0, bike: save.bike,
+      theme: THEMES[G.themeIdx]?.code || '', country: save.country, appBuild: b ? `build ${b}` : APP_INFO.version,
+    }));
+  }
   const score = Math.floor(G.score);
   save.best = Math.max(save.best, score);
   save.stats.runs++;
@@ -3748,7 +3950,7 @@ $('btnAdDouble').addEventListener('click', async () => {
   save.coins += extra;
   persist();
   $('btnAdDouble').classList.add('hidden');
-  toast(`COINS DOUBLED  ·  +${fmt(extra)}`);
+  toast(`${t('COINS DOUBLED')}  ·  +${fmt(extra)}`);
   sfx.coin();
 });
 // WhatsApp 챌린지: 내 점수 + 같은 도로 시드 링크
@@ -3777,7 +3979,7 @@ function reviveRun() {
   G.state = 'playing';
   sfx.init();
   sfx.engineStart();
-  popup('BACK ON THE ROAD', 'big');
+  popup(t('BACK ON THE ROAD'), 'big');
 }
 
 // ---------- 외부 3D 모델 교체 (로딩 완료 시 즉시 반영)
@@ -3878,7 +4080,12 @@ if (DEBUG) {
   };
 }
 goMenu();
-$('loading').remove();
+// 로딩 화면: 첫 프레임이 그려진 뒤 부드럽게 사라짐
+requestAnimationFrame(() => requestAnimationFrame(() => {
+  const l = $('loading');
+  l.classList.add('done');
+  setTimeout(() => l.remove(), 450);
+}));
 // 7일 연속 출석 (로그인 계정만: 서버에 저장되므로)
 // 어제도 접속했으면 연속 +1, 아니면 1일차부터. 7일차엔 특수 헬멧
 let dailyShown = false;
@@ -3890,17 +4097,17 @@ function showDailyStreak() {
   const yesterday = new Date(Date.now() - 86400000).toDateString();
   const day = save.lastDaily === yesterday ? (save.streak % 7) + 1 : 1;
   $('streakGrid').innerHTML = STREAK_REWARDS.map((c, i) => `<div class="${i + 1 < day ? 'done' : i + 1 === day ? 'today' : ''} ${i === 6 ? 'special' : ''}">
-    DAY ${i + 1}<b>${fmt(c)}</b>${i === 6 ? '<small>+ CROWN</small>' : icon('coin')}</div>`).join('');
+    ${t('DAY {n}', { n: i + 1 })}<b>${fmt(c)}</b>${i === 6 ? `<small>${t('+ CROWN')}</small>` : icon('coin')}</div>`).join('');
   show('daily');
   $('btnClaimDaily').addEventListener('click', () => {
     const coins = STREAK_REWARDS[day - 1];
     save.coins += coins;
     save.streak = day;
     save.lastDaily = today;
-    let msg = `DAY ${day} REWARD  ·  +${fmt(coins)} COINS`;
+    let msg = `${t('DAY {n} REWARD', { n: day })}  ·  ${t('+{n} COINS', { n: fmt(coins) })}`;
     if (day === 7 && !save.ownedHelmets.includes(STREAK_SPECIAL_HELMET)) {
       save.ownedHelmets.push(STREAK_SPECIAL_HELMET);
-      msg += '  ·  STREAK CROWN UNLOCKED';
+      msg += `  ·  ${t('STREAK CROWN UNLOCKED')}`;
     }
     persist();
     sfx.init();
@@ -3916,6 +4123,19 @@ preloadFlags([...THEMES.map((t) => t.code), ...FLAG_SHOP_CODES]);
 
 // 시작: IP 로 국가 판별 → 자동 로그인 → 서버 데이터 → 국가 고정 → 국가대표 검증
 initLiveUpdate(); // 앱: 라이브 업데이트 확인 (웹에서는 무시)
+{
+  const sent = new Set();
+  const report = (message, stack, source) => {
+    const key = String(message).slice(0, 200);
+    if (!message || sent.has(key) || sent.size >= 8) return;
+    sent.add(key);
+    webBuild().then((b) => logClientError({ message, stack, source, appBuild: b ? `build ${b}` : APP_INFO.version, device: deviceInfo() }));
+  };
+  window.addEventListener('error', (e) => report(e.message, e.error?.stack, `${e.filename || ''}:${e.lineno || ''}:${e.colno || ''}`));
+  window.addEventListener('unhandledrejection', (e) => report(`Unhandled: ${e.reason?.message || e.reason}`, e.reason?.stack, 'promise'));
+}
+const LOAD_TIPS = ['Brush past cars for NEAR MISS bonuses', 'Land level after a flip to stay on the road', 'Every km pays +50 coins', 'Ride the wrong way for x2 score - carefully!', 'Be #1 in your country to unlock the National Team bike'];
+setLang(save.settings.lang || detectLang()).then(() => { const el = $('loadTip'); if (el) el.textContent = t(pick(LOAD_TIPS)); });
 // 운영 설정(가격·보상)은 다른 로딩과 병렬로 받고, 도착하면 보이는 화면만 다시 그림
 loadAppConfig().then((cfg) => {
   if (!cfg) return;

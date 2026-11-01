@@ -12,20 +12,21 @@ const LEGACY_KEYS = ['motorush.save.v1', 'grabrider.localdb.v1'];
 export { BIKES, BOXES, OUTFITS, HELMETS, PAINTS } from './config.js';
 import { BIKES, BOXES, OUTFITS, HELMETS, PAINTS, BOOSTS, ECON, ADS } from './config.js';
 import { guessRegion, isCountryCode } from './themes.js';
+import { t } from './i18n.js';
 
 // 이전 버전 바이크 id → 새 라인업으로 이전
 const LEGACY_BIKES = { street: 'city', racer: 'sport', hyper: 'phantom' };
 
 export const MISSION_DEFS = {
-  near:     { label: (n) => `Get ${n} near misses in one run`,          targets: [5, 10, 20, 35, 50, 80] },
-  dist:     { label: (n) => `Ride ${n.toLocaleString()} m in one run`, targets: [1000, 2500, 5000, 8000, 12000, 20000] },
-  score:    { label: (n) => `Score ${n.toLocaleString()} in one run`, targets: [3000, 10000, 25000, 50000, 100000, 200000] },
-  coins:    { label: (n) => `Collect ${n} coins in one run`,          targets: [10, 25, 50, 80, 120, 200] },
-  oncoming: { label: (n) => `Ride ${n.toLocaleString()} m in the wrong way lane`, targets: [200, 500, 1000, 2000, 3500, 5000] },
-  combo:    { label: (n) => `Reach a x${n} near-miss combo`,          targets: [3, 5, 8, 12, 16, 20] },
-  speed:    { label: (n) => `Hit ${n} KM/H`,            targets: [120, 150, 180, 210, 240, 280] },
-  smash:    { label: (n) => `Smash ${n} cars in Giant Mode`,     targets: [1, 3, 5, 10, 15, 25] },
-  jump:     { label: (n) => `Get airborne ${n} times off ramps`,      targets: [1, 2, 3, 5, 8, 12] },
+  near:     { label: (n) => t('Get {n} near misses in one run', { n }),          targets: [5, 10, 20, 35, 50, 80] },
+  dist:     { label: (n) => t('Ride {n} m in one run', { n: n.toLocaleString() }), targets: [1000, 2500, 5000, 8000, 12000, 20000] },
+  score:    { label: (n) => t('Score {n} in one run', { n: n.toLocaleString() }), targets: [3000, 10000, 25000, 50000, 100000, 200000] },
+  coins:    { label: (n) => t('Collect {n} coins in one run', { n }),          targets: [10, 25, 50, 80, 120, 200] },
+  oncoming: { label: (n) => t('Ride {n} m in the wrong way lane', { n: n.toLocaleString() }), targets: [200, 500, 1000, 2000, 3500, 5000] },
+  combo:    { label: (n) => t('Reach a x{n} near-miss combo', { n }),          targets: [3, 5, 8, 12, 16, 20] },
+  speed:    { label: (n) => t('Hit {n} KM/H', { n }),            targets: [120, 150, 180, 210, 240, 280] },
+  smash:    { label: (n) => t('Smash {n} cars in Giant Mode', { n }),     targets: [1, 3, 5, 10, 15, 25] },
+  jump:     { label: (n) => t('Get airborne {n} times off ramps', { n }),      targets: [1, 2, 3, 5, 8, 12] },
 };
 
 // 서버(player_data.data)에 저장하는 키
@@ -67,7 +68,7 @@ function defaults() {
     missionLevels: {},
     // controls: 'onehand'(기본, 좌우 슬라이드만 · 자동 가속) | 'slide'(슬라이드 + 스로틀/브레이크) | 'arrows'(방향 버튼 + 스로틀/브레이크)
     // flipControls: 조향·페달 좌우 반전 / ctrlVer: 조작 기본값 이전용 버전
-    settings: { sound: true, music: true, vibrate: true, quality: 'high', controls: 'onehand', flipControls: false, wetFx: true, ctrlVer: 3 },
+    settings: { sound: true, music: true, vibrate: true, quality: 'high', controls: 'onehand', flipControls: false, wetFx: true, ctrlVer: 3, lang: '' }, // lang '' = 기기 언어
     stats: { runs: 0, totalDist: 0, totalNear: 0 },
     // ---- 아래는 서버 data 에 저장하지 않는 런타임 상태
     country: guessRegion(), // 랭킹 국가 (IP 판별 → 로그인 시 서버에 고정된 값)
@@ -214,6 +215,54 @@ export async function claimPendingCoins() {
     if (!isMissingSchema(e)) console.warn('[pay] claim failed', e);
     return 0;
   }
+}
+
+// ---------- 1:1 문의 (009_ops.sql)
+async function rpc(name, body, needAuth = true) {
+  if (needAuth) await ensureFreshToken();
+  return sb(`/rest/v1/rpc/${name}`, { method: 'POST', auth: needAuth, body });
+}
+const opsError = (e) => (isMissingSchema(e) ? 'Server needs the 009 database migration' : friendly(e));
+export async function submitInquiry({ category, subject, message, lang, appBuild, device }) {
+  if (!session) return { ok: false, error: 'Sign in required' };
+  try {
+    const id = await rpc('submit_inquiry', { p_category: category, p_subject: subject, p_message: message, p_lang: lang, p_app_build: appBuild, p_device: device });
+    return { ok: true, id };
+  } catch (e) {
+    return { ok: false, error: /too many/i.test(e.message) ? 'Too many inquiries today. Please try again tomorrow.' : opsError(e) };
+  }
+}
+export async function replyInquiry(id, message, lang) {
+  try {
+    await rpc('reply_my_inquiry', { p_id: id, p_message: message, p_lang: lang });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: /too many/i.test(e.message) ? 'Too many messages. Please wait a while.' : opsError(e) };
+  }
+}
+export async function myInquiries(markRead = false) {
+  if (!session || !serverReady) return { ok: true, list: [] };
+  try {
+    return { ok: true, list: (await rpc('my_inquiries', { p_mark_read: markRead })) || [] };
+  } catch (e) {
+    return { ok: false, error: opsError(e), list: [] };
+  }
+}
+
+// ---------- 통계·오류 기록 (실패해도 게임에는 영향 없음)
+export function logRun(r) {
+  if (!ONLINE) return;
+  const body = { p_dist: r.dist | 0, p_score: r.score | 0, p_coins: r.coins | 0, p_duration: r.duration | 0, p_bike: r.bike || '', p_theme: r.theme || '', p_country: r.country || '', p_app_build: r.appBuild || '' };
+  (session ? ensureFreshToken() : Promise.resolve())
+    .then(() => sb('/rest/v1/rpc/log_run', { method: 'POST', auth: Boolean(session), body, keepalive: true }))
+    .catch(() => {});
+}
+export function logClientError(e) {
+  if (!ONLINE) return;
+  sb('/rest/v1/rpc/log_client_error', {
+    method: 'POST', auth: Boolean(session), keepalive: true,
+    body: { p_message: String(e.message || '').slice(0, 500), p_stack: String(e.stack || '').slice(0, 3000), p_source: String(e.source || '').slice(0, 300), p_app_build: e.appBuild || '', p_device: e.device || '' },
+  }).catch(() => {});
 }
 
 // 계정 삭제 (스토어 필수): 서버의 계정·기록·데이터 삭제 후 게스트로
