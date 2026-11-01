@@ -2432,16 +2432,19 @@ function checkMissions() {
 const SCREENS = ['menu', 'garage', 'ranking', 'missions', 'notices', 'support', 'settings', 'pause', 'gameover', 'auth', 'daily', 'gacha', 'coinshop'];
 let currentScreen = null;
 // 버튼 글자 맞춤: 먼저 한 줄로 두고 넘치면 글자를 최대 72%까지 줄임. 그래도 넘치면 고르게 두 줄로 (CSS text-wrap: balance)
+// 큰 글자가 따로 있는 버튼(시작 버튼의 .play-txt)은 그 글자만 줄임
 function fitButton(el) {
-  el.style.fontSize = '';
+  const tg = el.querySelector(':scope > .play-txt') || el;
+  tg.style.fontSize = '';
   el.classList.add('fit-1');
-  if (el.scrollWidth <= el.clientWidth + 1) return;
-  const base = parseFloat(getComputedStyle(el).fontSize) || 16;
+  const over = () => el.scrollWidth > el.clientWidth + 1 || tg.scrollWidth > tg.clientWidth + 1;
+  if (!over()) return;
+  const base = parseFloat(getComputedStyle(tg).fontSize) || 16;
   const min = Math.max(11, base * 0.72);
-  let f = Math.max(min, Math.floor(base * (el.clientWidth / el.scrollWidth) * 2) / 2);
-  el.style.fontSize = `${f}px`;
-  while (el.scrollWidth > el.clientWidth + 1 && f > min) { f -= 0.5; el.style.fontSize = `${f}px`; }
-  if (el.scrollWidth > el.clientWidth + 1) { el.classList.remove('fit-1'); el.style.fontSize = `${Math.max(11, base * 0.86)}px`; }
+  let f = Math.max(min, Math.floor(base * Math.min(el.clientWidth / el.scrollWidth, tg.clientWidth / tg.scrollWidth) * 2) / 2);
+  tg.style.fontSize = `${f}px`;
+  while (over() && f > min) { f -= 0.5; tg.style.fontSize = `${f}px`; }
+  if (over()) { el.classList.remove('fit-1'); tg.style.fontSize = `${Math.max(11, base * 0.86)}px`; }
 }
 let fitQueued = false;
 function scheduleFit() {
@@ -3647,7 +3650,7 @@ function renderSettings() {
   $('controlsHint').textContent = t(CONTROL_HINTS[save.settings.controls] || CONTROL_HINTS.onehand);
   $('flipRow').classList.toggle('hidden', save.settings.controls === 'onehand');
   const src = t({ server: 'LOCKED', ip: 'IP', tz: 'ESTIMATED' }[save.countrySource] || '');
-  $('countryLabel').innerHTML = `${flagBadge(save.country)}${escapeHtml(countryName(save.country))} <small class="muted">${isAdminMode() ? 'ADMIN' : src}</small>`;
+  $('countryLabel').innerHTML = `${flagBadge(save.country)}<span class="cl-name">${escapeHtml(countryName(save.country))}</span> <small class="muted">${isAdminMode() ? 'ADMIN' : src}</small>`;
   // 관리자만 국가를 바꿀 수 있음
   const sel = $('adminCountry');
   sel.classList.toggle('hidden', !isAdminMode());

@@ -1287,3 +1287,10 @@ body.touch #menu .help { display: none; }
 .btn { overflow-wrap: anywhere; text-wrap: balance; line-height: 1.2; }
 .btn.fit-1 { white-space: nowrap; }
 :root[data-lang="ko"] .btn { word-break: keep-all; }
+.btn.fit-1 .play-txt { white-space: nowrap; }
+/* 설정 줄: 왼쪽 이름과 오른쪽 값이 함께 줄어들고, 나라 이름은 말줄임 */
+.setting { gap: 10px; }
+.setting > span:first-child { flex: 1 1 auto; } /* 단어 중간에서는 안 끊김 (min-content 까지만 줄어듦) */
+.country-label { min-width: 0; flex: 0 1 auto; }
+.country-label .cl-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.country-label small, .country-label img, .country-label .flag { flex-shrink: 0; }
