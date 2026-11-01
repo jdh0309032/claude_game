@@ -509,6 +509,70 @@ function buildCar(type) {
     }
   }
 
+  // ---- 점검 후 보강 디테일 (차종 구분이 잘 되게)
+  const arches = (y0, depth = 0.95) => {
+    // 바퀴 위 검은 펜더 아치 (반원 띠)
+    for (const z of wheelZ) for (const sx of [-1, 1]) {
+      const g = new THREE.CylinderGeometry(wr + 0.1, wr + 0.1, 0.1, 12, 1, true, -Math.PI / 2, Math.PI);
+      g.rotateZ(Math.PI / 2);
+      g.translate(sx * (hw + 0.02), y0, z);
+      det.push(paint(g, 0x1b1d22));
+    }
+  };
+  if (type === 'sedan' || type === 'taxi' || type === 'police') {
+    for (const z of wheelZ) for (const sx of [-1, 1]) det.push(cylX(wr * 0.62, 0.02, sx * (hw - 0.0), wr, z, 0xc9ced3, 12)); // 휠캡
+  }
+  if (type === 'suv') {
+    // SUV: 루프랙 + 검은 휠 아치 클래딩 + 뒤 스페어타이어 + 언더 스키드 + 굵은 범퍼
+    const roofY = 0.3 + 0.8 + 0.08 + 0.62 + 0.08;
+    for (const sx of [-1, 1]) det.push(box(0.05, 0.06, L * 0.5, sx * W * 0.36, roofY + 0.05, 0.3, 0x2a2d32));
+    for (const z of [-0.1, 0.7]) det.push(box(W * 0.74, 0.04, 0.05, 0, roofY + 0.09, z, 0x2a2d32));
+    arches(wr);
+    { const g = new THREE.CylinderGeometry(0.34, 0.34, 0.2, 14); g.rotateX(Math.PI / 2); g.translate(0, 0.95, hl + 0.12); det.push(paint(g, 0x16181c)); const h = new THREE.CylinderGeometry(0.17, 0.17, 0.22, 10); h.rotateX(Math.PI / 2); h.translate(0, 0.95, hl + 0.13); det.push(paint(h, 0x8a8f96)); }
+    det.push(box(W * 0.6, 0.08, 0.5, 0, 0.18, -hl + 0.3, 0x8a8f96));
+    det.push(box(W * 0.5, 0.05, 0.04, 0, 0.7, -hl - 0.03, 0xc0c4c8)); // 크롬 그릴 바
+  }
+  if (type === 'bus' || type === 'doubledecker') {
+    const top = type === 'bus' ? 3.05 : 4.25;
+    arches(wr);
+    if (type === 'bus') det.push(box(W * 0.6, 0.28, 2.2, 0, top + 0.14, 0.5, 0xd8dde2)); // 지붕 에어컨
+    for (const sx of [-1, 1]) {
+      det.push(box(0.05, 0.05, 0.5, sx * (hw + 0.2), top - 0.6, -hl + 0.2, 0x222222));
+      det.push(box(0.08, 0.32, 0.14, sx * (hw + 0.42), top - 0.85, -hl - 0.02, 0x16181c)); // 큰 사이드미러
+    }
+    det.push(box(W * 0.8, 0.9, 0.04, 0, top - 0.8, hl + 0.02, GLASS)); // 뒷유리
+    det.push(box(W + 0.04, 0.28, 0.2, 0, 0.45, -hl - 0.05, TRIM));
+    det.push(box(W + 0.04, 0.28, 0.2, 0, 0.45, hl + 0.05, TRIM));
+  }
+  if (type === 'truck') {
+    // 트럭: 크롬 그릴 + 큰 미러 + 연료탱크 + 머드플랩 + 캡 위 에어 디플렉터
+    det.push(box(W * 0.7, 0.5, 0.04, 0, 1.05, -hl - 0.02, 0xc0c4c8));
+    for (let k = 0; k < 5; k++) det.push(box(W * 0.66, 0.03, 0.05, 0, 0.86 + k * 0.1, -hl - 0.04, 0x55595e));
+    for (const sx of [-1, 1]) {
+      det.push(box(0.08, 0.35, 0.14, sx * (hw + 0.25), 2.1, -hl + 0.4, 0x16181c));
+      det.push(box(0.05, 0.05, 0.3, sx * (hw + 0.12), 2.1, -hl + 0.45, 0x222222));
+      det.push(box(0.3, 0.45, 0.04, sx * (hw - 0.15), 0.4, wheelZ[wheelZ.length - 1] + wr + 0.15, 0x111111));
+    }
+    { const g = new THREE.CylinderGeometry(0.22, 0.22, 0.9, 12); g.rotateX(Math.PI / 2); g.translate(-hw + 0.05, 0.55, -hl + 2.75); det.push(paint(g, 0xc0c4c8)); }
+    det.push(box(W * 0.9, 0.35, 0.9, 0, 2.95, -hl + 1.35, 0xd8dde2, 0.3));
+  }
+  if (type === 'angkot') {
+    // 앙콧: 지붕 짐받이 + 노선 번호판 + 옆 이중 줄무늬
+    const top = 1.68;
+    for (const sx of [-1, 1]) det.push(box(0.04, 0.08, L * 0.6, sx * W * 0.42, top + 0.05, hl - L * 0.39, 0x2a2d32));
+    for (let k = 0; k < 4; k++) det.push(box(W * 0.84, 0.04, 0.04, 0, top + 0.1, hl - L * 0.15 - k * L * 0.15, 0x2a2d32));
+    det.push(box(0.7, 0.22, 0.04, 0, top - 0.2, -hl + L * 0.24 + 0.02, 0x101010));
+    head.push(box(0.5, 0.1, 0.03, 0, top - 0.2, -hl + L * 0.24 - 0.01));
+    for (const sx of [-1, 1]) for (const [y, c] of [[0.85, 0xffd60a], [0.73, 0xe63946]]) det.push(box(0.02, 0.07, L * 0.74, sx * (hw + 0.012), y, hl - L * 0.39, c));
+  }
+  if (type === 'songthaew') {
+    // 송태우: 짐칸 지붕 기둥 + 뒤 발판 + 지붕 위 짐받이
+    for (const sx of [-1, 1]) for (const z of [hl - 0.1, hl - (L - 1.4) + 0.1]) det.push(box(0.06, 1.0, 0.06, sx * (hw - 0.05), 1.65, z, 0xc0c4c8));
+    det.push(box(W * 0.8, 0.06, 0.4, 0, 0.55, hl + 0.25, 0x8a8f96));
+    for (let k = 0; k < 3; k++) det.push(box(W * 0.9, 0.04, 0.04, 0, 2.26, hl - 0.4 - k * 0.9, 0x2a2d32));
+    for (const sx of [-1, 1]) det.push(box(0.04, 0.06, L - 1.6, sx * W * 0.45, 2.26, hl - (L - 1.4) / 2, 0x2a2d32));
+  }
+
   if (type === 'tricycle' || type === 'remork' || type === 'trishaw') {
     // 삼륜·인력거: 오토바이(자전거) 앞에 헤드램프 1개, 차체 뒤에 후미등 1개, 깜빡이는 차체 모서리에 붙임
     // [앞등 x, z, y], [뒷등 x, z, y]: 각각 오토바이 앞끝 / 사이드카·객차 뒤끝에 붙임
@@ -1725,6 +1789,14 @@ function deliveryBox(det, glow, style, mats = {}, code = null) {
       backB(0.1, 0.05, 0, 1.45, 0x0e3a4a, 2);
       for (let k = 0; k < 7; k++) backB(0.012, 0.02 + (k % 3) * 0.015, -0.21 + k * 0.012, 1.48, [0x39ff88, 0xffd60a, 0xff3b30][k % 3], 1, glow);
       for (let k = 0; k < 4; k++) backB(0.025, 0.015, 0.14 + k * 0.03, 1.48, 0xc9ced3, 1);
+      // 옆면 우퍼(테두리·콘·캡) + 접이식 안테나 + 앞 은색 띠
+      for (const sx of [-1, 1]) {
+        const ring = new THREE.CylinderGeometry(0.16, 0.16, 0.02, 20); ring.rotateZ(Math.PI / 2); ring.translate(sx * (W / 2 + 0.01), CY - 0.02, CZ); det.push(paint(ring, 0x9aa0a6));
+        const cone = new THREE.CylinderGeometry(0.13, 0.06, 0.04, 20); cone.rotateZ(sx * Math.PI / 2); cone.translate(sx * (W / 2 + 0.02), CY - 0.02, CZ); det.push(paint(cone, 0x111214));
+        const cap = new THREE.SphereGeometry(0.04, 10, 8); cap.scale(0.5, 1, 1); cap.translate(sx * (W / 2 + 0.035), CY - 0.02, CZ); det.push(paint(cap, 0x9aa0a6));
+      }
+      { const a = new THREE.CylinderGeometry(0.008, 0.012, 0.42, 6); a.rotateZ(-0.35); a.translate(0.22, TOP + 0.21, CZ - 0.15); det.push(paint(a, 0xd5d9dd)); }
+      det.push(box(W + 0.01, 0.03, 0.02, 0, CY + 0.17, CZ - D / 2 - 0.005, 0xc9ced3));
       handle(0xc9ced3, TOP + 0.06);
       return;
     }
@@ -2995,7 +3067,7 @@ function dropTexture() {
   return dropTex;
 }
 export const DROP_ZONE = { width: 2.0, length: 8 };
-export function createDropZone() {
+function createDropZoneBase() {
   const grp = new THREE.Group();
   const area = new THREE.Mesh(
     new THREE.PlaneGeometry(DROP_ZONE.width, DROP_ZONE.length).rotateX(-Math.PI / 2),
@@ -3067,15 +3139,31 @@ export function palmGeometry() {
     x = nx;
     y += 1.0;
   }
-  // 잎 9장: 아래로 처지는 납작한 박스
-  for (let i = 0; i < 9; i++) {
-    const a = (i / 9) * Math.PI * 2;
-    const leaf = new THREE.BoxGeometry(2.6, 0.05, 0.5);
-    leaf.translate(1.3, 0, 0);
-    leaf.rotateZ(-0.45 - (i % 3) * 0.12);
-    leaf.rotateY(a);
-    leaf.translate(x, y + 0.05, 0);
-    parts.push(paint(leaf, i % 2 ? 0x2f8f3a : 0x3fa14a));
+  // 잎 10장: 위로 솟았다가 아래로 처지는 두 마디 잎줄기 + 양옆 작은 잎(우상복엽)
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + (i % 2) * 0.12;
+    const up = i % 3 === 0 ? 0.35 : 0.15;
+    const col = i % 2 ? 0x2f8f3a : 0x3fa14a;
+    const segs = [[1.2, up], [1.4, -0.55]];
+    let px = 0, py = 0;
+    for (const [len, ang] of segs) {
+      const rib = new THREE.BoxGeometry(len, 0.04, 0.06);
+      rib.translate(len / 2, 0, 0);
+      rib.rotateZ(ang);
+      rib.translate(px, py, 0);
+      const leaflets = [];
+      for (let k = 1; k < 4; k++) for (const sz of [-1, 1]) {
+        const lf = new THREE.BoxGeometry(0.34, 0.025, 0.44);
+        lf.rotateY(sz * 0.5);
+        lf.translate((len * k) / 4, 0, sz * 0.22);
+        lf.rotateZ(ang);
+        lf.translate(px, py, 0);
+        leaflets.push(lf);
+      }
+      for (const g of [rib, ...leaflets]) { g.rotateY(a); g.translate(x, y + 0.1, 0); parts.push(paint(g, col)); }
+      px += Math.cos(ang) * len;
+      py += Math.sin(ang) * len;
+    }
   }
   for (let i = 0; i < 3; i++) {
     const nut = new THREE.SphereGeometry(0.16, 6, 5);
@@ -3086,7 +3174,7 @@ export function palmGeometry() {
 }
 
 // Ruko(상가주택): 정면이 +X 를 향함. 인스턴스 색으로 외벽 색 변화
-export function rukoGeometry() {
+function rukoGeometryBase() {
   const W = 6, L = 10, H = 8.5; // x 깊이, z 폭, 높이
   const p = [];
   p.push(box(W, H, L, 0, H / 2, 0, 0xf4efe6));
@@ -3143,7 +3231,7 @@ export const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true }); // �
 const NEON = [0xff2d95, 0x00e5ff, 0xffe600, 0x7cff4f, 0xff7a00, 0xb15cff];
 
 // 각 스타일: { base, glow? } — base 는 vcMat, glow 는 glowMat 으로 렌더
-export function buildingStyle(style) {
+function buildingStyleBase(style) {
   const W = 6, L = 10, b = [], g = [];
   const face = W / 2;
   if (style === 'ruko') return { base: rukoGeometry(), glow: null };
@@ -3383,19 +3471,55 @@ export function treeVariant(kind) {
     return merge(p);
   }
 
-  const trunk = new THREE.CylinderGeometry(0.16, 0.24, 2.2, 6);
-  trunk.translate(0, 1.1, 0);
-  const parts = [paint(trunk, 0x5b4636)];
-  const leaf = { sakura: [0xffb7c5, 0xff9eb5], ginkgo: [0xf6c945, 0xe9b824], round: [0x3f8f46, 0x2f7d3a] }[kind] || [0x3f8f46, 0x2f7d3a];
-  for (const [x, y, z, r] of [[0, 3.2, 0, 1.5], [0.8, 2.8, 0.4, 1.0], [-0.7, 2.9, -0.5, 1.05], [0.2, 3.9, -0.3, 1.0]]) {
-    const sph = new THREE.IcosahedronGeometry(r, 0);
-    sph.translate(x, y, z);
-    parts.push(paint(sph, leaf[(x > 0) | 0]));
+  const parts = [];
+  const blob = (x, y, z, r, c, sy = 1, det = 1) => { const g = new THREE.IcosahedronGeometry(r, det); g.scale(1, sy, 1); g.translate(x, y, z); parts.push(paint(g, c)); };
+  const branch = (x0, y0, z0, x1, y1, z1, r, c) => limbGeo(V(x0, y0, z0), V(x1, y1, z1), r, c, parts);
+  if (kind === 'sakura') {
+    // 벚나무: 짧은 줄기에서 갈라진 가지 + 분홍 꽃송이 여러 겹 + 떨어진 꽃잎
+    const bark = 0x4a3530;
+    branch(0, 0, 0, 0, 1.6, 0, 0.2, bark);
+    for (const [x, z] of [[1.1, 0.4], [-1.0, 0.5], [0.2, -1.1], [-0.3, -0.2]]) branch(0, 1.5, 0, x, 2.7, z, 0.09, bark);
+    const pinks = [0xffb7c5, 0xff9eb5, 0xffd0dc, 0xf78fa7];
+    for (let i = 0; i < 14; i++) {
+      const a = i * 2.4, rr = 0.4 + (i % 4) * 0.35;
+      blob(Math.cos(a) * rr, 2.7 + ((i * 37) % 9) * 0.1, Math.sin(a) * rr, 0.55 + (i % 3) * 0.12, pinks[i % 4], 0.8);
+    }
+    for (let i = 0; i < 10; i++) { const a = i * 0.63; const g = new THREE.CircleGeometry(0.12, 5); g.rotateX(-Math.PI / 2); g.translate(Math.cos(a) * (0.8 + (i % 3) * 0.4), 0.02, Math.sin(a) * (0.8 + (i % 3) * 0.4)); parts.push(paint(g, 0xffc4d2)); }
+    return merge(parts);
   }
+  if (kind === 'ginkgo') {
+    // 은행나무: 곧은 줄기 + 위로 갈수록 좁아지는 원뿔형 노란 잎 층
+    const bark = 0x5b4636;
+    branch(0, 0, 0, 0, 4.6, 0, 0.18, bark);
+    const golds = [0xf6c945, 0xe9b824, 0xffd866];
+    for (let l = 0; l < 5; l++) {
+      const y = 1.8 + l * 0.75, rad = 1.6 - l * 0.28;
+      for (let k = 0; k < 5; k++) { const a = k * 1.26 + l * 0.6; blob(Math.cos(a) * rad * 0.55, y, Math.sin(a) * rad * 0.55, rad * 0.55, golds[(k + l) % 3], 0.7); }
+    }
+    blob(0, 5.4, 0, 0.45, 0xffd866);
+    return merge(parts);
+  }
+  // 둥근 가로수: 굵은 줄기 + 뿌리 퍼짐 + 짙고 촘촘한 둥근 수관 (세 가지 초록)
+  const bark = 0x5b4636;
+  branch(0, 0, 0, 0, 2.4, 0, 0.22, bark);
+  for (let k = 0; k < 4; k++) { const a = k * 1.57 + 0.4; branch(0, 0.35, 0, Math.cos(a) * 0.45, 0.02, Math.sin(a) * 0.45, 0.07, bark); }
+  const greens = [0x3f8f46, 0x2f7d3a, 0x4ea353];
+  blob(0, 3.3, 0, 1.45, greens[1], 0.95);
+  for (let i = 0; i < 9; i++) { const a = i * 0.7, rr = 0.9 + (i % 2) * 0.3; blob(Math.cos(a) * rr, 3.0 + (i % 3) * 0.45, Math.sin(a) * rr, 0.75, greens[i % 3], 0.9); }
   return merge(parts);
 }
 
-export function curbVariant(kind) {
+// 두 점을 잇는 가지 (캡슐)
+function limbGeo(a, b, r, color, list) {
+  const dir = new THREE.Vector3().subVectors(b, a);
+  const g = new THREE.CylinderGeometry(r * 0.75, r, dir.length(), 7);
+  g.translate(0, dir.length() / 2, 0);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()));
+  g.translate(a.x, a.y, a.z);
+  list.push(paint(g, color));
+}
+
+function curbVariantBase(kind) {
   if (kind === 'warung') return warungGeometry();
   const p = [];
   if (kind === 'vending') {
@@ -3499,7 +3623,7 @@ export function curbVariant(kind) {
 export const landmarkMat = new THREE.MeshLambertMaterial({ vertexColors: true, fog: false });
 export const landmarkGlowMat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: false });
 
-export function createLandmark(kind) {
+function createLandmarkBase(kind) {
   const p = [], g = [];
   const cyl = (rt, rb, h, x, y, z, c, seg = 8) => { const q = new THREE.CylinderGeometry(rt, rb, h, seg); q.translate(x, y, z); return paint(q, c); };
   const cone = (r, h, x, y, z, c, seg = 8) => { const q = new THREE.ConeGeometry(r, h, seg); q.translate(x, y, z); return paint(q, c); };
@@ -3857,7 +3981,7 @@ function boardPosts(grp, dims, topY) {
   grp.setSide = (farSign) => posts.forEach((m, i) => { m.position.z = farSign * dims.posts[i]; });
 }
 
-export function createBillboard() {
+function createBillboardBase() {
   const grp = new THREE.Group();
   grp.add(new THREE.Mesh(box(0.3, BILLBOARD.height, BILLBOARD.width, 0, 0, 0, 0x2b2d42), vcMat));
   const panel = new THREE.Mesh(new THREE.PlaneGeometry(8, 4), screenMat());
@@ -3981,7 +4105,7 @@ export const STALL_DEFS = {
   tent: { hw: 0.75, hl: 1.2 },
 };
 
-export function createStall(kind) {
+function createStallBase(kind) {
   const ext = models.instantiate('obstacle.stall');
   if (ext) return ext;
   const p = [];
@@ -4342,4 +4466,130 @@ export function createItemModel(kind, id, color = 0x8b1e2d) {
   add(batik, batikMat());
   if (glass.length) { const m = new THREE.Mesh(merge(glass), glassMat()); m.renderOrder = 2; g.add(m); }
   return g;
+}
+
+
+// ======================================================================
+// 에셋 보강 (점검 후 수준 미달 에셋): 원래 모델의 크기(바운딩 박스)에 맞춰 디테일을 덧붙임
+// ======================================================================
+const bbOf = (o) => (o.isBufferGeometry ? (o.computeBoundingBox(), o.boundingBox.clone()) : new THREE.Box3().setFromObject(o));
+const withExtras = (geo, extras) => (extras.length ? merge([geo, ...extras]) : geo);
+const groupExtras = (grp, extras, mat = vcMat) => { if (extras.length) grp.add(new THREE.Mesh(merge(extras), mat)); return grp; };
+// 줄 전구: a → b 사이에 처진 전선 + 알전구
+function stringLights(a, b, n, out, sag = 0.25, colors = [0xfff3b0, 0xffd166, 0xff9f9f, 0x9fdcff]) {
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const p = a.clone().lerp(b, t);
+    p.y -= sag * 4 * t * (1 - t);
+    const g = new THREE.SphereGeometry(0.06, 6, 5);
+    g.translate(p.x, p.y - 0.05, p.z);
+    out.push(paint(g, colors[i % colors.length]));
+  }
+}
+
+export function createDropZone() {
+  // 드롭존: 네 모서리 깃발 기둥 + 바닥 화살표 + 위에 떠 있는 택배 상자 아이콘
+  const grp = createDropZoneBase();
+  const bb = bbOf(grp), ex = [];
+  const x0 = bb.min.x, x1 = bb.max.x, z0 = bb.min.z, z1 = bb.max.z;
+  for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) {
+    ex.push(box(0.06, 1.4, 0.06, x, 0.7, z, 0xf2f2f2));
+    { const f = new THREE.ConeGeometry(0.22, 0.45, 3); f.rotateZ(-Math.PI / 2); f.scale(1, 1, 0.15); f.translate(x + 0.2, 1.25, z); ex.push(paint(f, 0x00b14f)); }
+  }
+  for (let k = 0; k < 3; k++) for (const sx of [-1, 1]) {
+    const g = new THREE.BoxGeometry(0.7, 0.02, 0.14); g.rotateY(sx * 0.6); g.translate((x0 + x1) / 2 + sx * 0.25, 0.04, z0 + 1.2 + k * 1.6); ex.push(paint(g, 0xffffff));
+  }
+  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+  ex.push(box(0.6, 0.45, 0.6, cx, 2.2, cz, 0xc89b64), box(0.62, 0.08, 0.1, cx, 2.43, cz, 0x00b14f), box(0.1, 0.08, 0.62, cx, 2.43, cz, 0x00b14f));
+  return groupExtras(grp, ex);
+}
+
+export function createBillboard() {
+  // 광고판: 위 조명 2개 + 앞 점검 발판 + 뒤 트러스 받침
+  const grp = createBillboardBase();
+  const bb = bbOf(grp), ex = [];
+  const top = bb.max.y, cx = (bb.min.x + bb.max.x) / 2, front = bb.min.z, back = bb.max.z;
+  const W = bb.max.x - bb.min.x;
+  for (const sx of [-0.28, 0.28]) {
+    ex.push(box(0.06, 0.06, 0.7, cx + sx * W, top + 0.05, front - 0.2, 0x2a2d32));
+    ex.push(box(0.3, 0.18, 0.24, cx + sx * W, top + 0.05, front - 0.55, 0x3a3d42));
+  }
+  ex.push(box(W * 0.9, 0.05, 0.5, cx, bb.min.y + (top - bb.min.y) * 0.42, front - 0.2, 0x5a5f66));
+  for (let k = 0; k < 6; k++) ex.push(box(0.03, 0.25, 0.03, cx - W * 0.44 + k * W * 0.176, bb.min.y + (top - bb.min.y) * 0.42 + 0.14, front - 0.43, 0x5a5f66));
+  for (const sx of [-0.35, 0, 0.35]) ex.push(box(0.06, (top - bb.min.y) * 0.5, 0.06, cx + sx * W, top - (top - bb.min.y) * 0.3, back + 0.1, 0x3a3d42));
+  return groupExtras(grp, ex);
+}
+
+export function createStall(kind) {
+  const grp = createStallBase(kind);
+  if (kind !== 'tent') return grp;
+  // 천막 노점: 지붕 아래 줄전구 + 매달린 바나나 송이 + 가격판
+  const bb = bbOf(grp), ex = [];
+  const y = bb.max.y - 0.12;
+  stringLights(V(bb.min.x + 0.1, y, bb.min.z + 0.05), V(bb.max.x - 0.1, y, bb.min.z + 0.05), 8, ex, 0.15);
+  for (const sx of [-0.25, 0.25]) for (let k = 0; k < 4; k++) {
+    const g = new THREE.CapsuleGeometry(0.035, 0.14, 3, 6); g.rotateZ(0.5 + k * 0.2); g.translate((bb.min.x + bb.max.x) / 2 + sx + k * 0.04, y - 0.3 - k * 0.03, bb.min.z + 0.3); ex.push(paint(g, 0xffd84d));
+  }
+  ex.push(box(0.4, 0.26, 0.03, (bb.min.x + bb.max.x) / 2, bb.min.y + 1.0, bb.min.z - 0.02, 0x2b2d31));
+  ex.push(box(0.3, 0.06, 0.035, (bb.min.x + bb.max.x) / 2, bb.min.y + 1.03, bb.min.z - 0.02, 0xffd60a));
+  return groupExtras(grp, ex);
+}
+
+export function curbVariant(kind) {
+  const geo = curbVariantBase(kind);
+  if (kind !== 'warung' && kind !== 'tent') return geo;
+  // 와룽·천막 가게: 처마 줄전구 + 간판 + 앞 플라스틱 의자
+  const bb = bbOf(geo), ex = [];
+  const front = bb.min.z, y = bb.max.y - 0.1;
+  stringLights(V(bb.min.x + 0.1, y, front + 0.05), V(bb.max.x - 0.1, y, front + 0.05), 9, ex, 0.18);
+  const cx = (bb.min.x + bb.max.x) / 2;
+  ex.push(box(Math.min(1.6, (bb.max.x - bb.min.x) * 0.7), 0.32, 0.05, cx, bb.max.y + 0.2, front + 0.3, kind === 'warung' ? 0xd62828 : 0x2a9df4));
+  ex.push(box(Math.min(1.3, (bb.max.x - bb.min.x) * 0.55), 0.08, 0.06, cx, bb.max.y + 0.2, front + 0.27, 0xffffff));
+  for (const sx of [-0.5, 0.5]) {
+    ex.push(box(0.3, 0.04, 0.3, cx + sx, 0.42, front - 0.45, kind === 'warung' ? 0xe63946 : 0x2a9df4));
+    for (const dx of [-0.12, 0.12]) for (const dz of [-0.12, 0.12]) ex.push(box(0.03, 0.4, 0.03, cx + sx + dx, 0.2, front - 0.45 + dz, 0x8a8f96));
+  }
+  return withExtras(geo, ex);
+}
+
+export function rukoGeometry() {
+  // 루코(상가주택): 에어컨 실외기 + 돌출 간판 (정면 +X)
+  const geo = rukoGeometryBase();
+  const bb = bbOf(geo), ex = [];
+  const fx = bb.max.x, top = bb.max.y, cz = (bb.min.z + bb.max.z) / 2;
+  for (const z of [cz - 2.2, cz + 1.8]) ex.push(box(0.4, 0.45, 0.7, fx + 0.22, top * 0.62, z, 0xe0e3e6), box(0.02, 0.32, 0.32, fx + 0.43, top * 0.62, z, 0x6a6f75));
+  ex.push(box(0.12, 1.2, 0.6, fx + 0.45, top * 0.45, cz + 0.4, 0xffd60a), box(0.13, 0.9, 0.45, fx + 0.46, top * 0.45, cz + 0.4, 0xd62828));
+  return withExtras(geo, ex);
+}
+
+export function buildingStyle(style) {
+  const out = buildingStyleBase(style);
+  if (style !== 'modern' && style !== 'brick') return out;
+  // 모던·벽돌 건물: 옥상 설비(물탱크·실외기·안테나) + 창문 에어컨
+  const bb = bbOf(out.base), ex = [];
+  const top = bb.max.y, cx = (bb.min.x + bb.max.x) / 2, cz = (bb.min.z + bb.max.z) / 2;
+  ex.push(box(1.2, 0.5, 1.0, cx - 0.6, top + 0.25, cz - 1.5, 0xc9ced3));
+  ex.push(box(0.8, 0.4, 0.6, cx + 0.8, top + 0.2, cz + 1.2, 0xe0e3e6), box(0.02, 0.3, 0.3, cx + 1.21, top + 0.2, cz + 1.2, 0x6a6f75));
+  { const g = new THREE.CylinderGeometry(0.03, 0.03, 2.2, 5); g.translate(cx + 0.3, top + 1.1, cz - 0.4); ex.push(paint(g, 0x777777)); }
+  for (let k = 0; k < 4; k++) ex.push(box(0.35, 0.3, 0.5, bb.max.x + 0.17, 2.5 + k * 2.6, cz + (k % 2 ? 1.6 : -1.9), 0xe8eaec));
+  return { base: withExtras(out.base, ex), glow: out.glow };
+}
+
+export function createLandmark(kind) {
+  const grp = createLandmarkBase(kind);
+  if (!['mayon', 'mbs'].includes(kind)) return grp;
+  const bb = bbOf(grp), ex = [], glw = [];
+  const cx = (bb.min.x + bb.max.x) / 2, cz = (bb.min.z + bb.max.z) / 2, H = bb.max.y - bb.min.y, Wd = bb.max.x - bb.min.x;
+  if (kind === 'mayon') {
+    // 마욘 화산: 정상 분화구 용암 빛 + 산기슭 숲
+    { const g = new THREE.CylinderGeometry(H * 0.05, H * 0.07, H * 0.03, 10); g.translate(cx, bb.max.y - H * 0.06, cz); glw.push(paint(g, 0xff5a1f)); }
+    for (let k = 0; k < 14; k++) { const a = k * 0.45, r = Wd * 0.5; const g = new THREE.ConeGeometry(H * 0.03, H * 0.08, 6); g.translate(cx + Math.cos(a) * r, bb.min.y + H * 0.04, cz + Math.sin(a) * r); ex.push(paint(g, 0x2f7d3a)); }
+  } else {
+    // 마리나 베이 샌즈: 옥상 스카이파크 수영장 + 야자수 + 아래 라이트 띠
+    { const g = new THREE.BoxGeometry(Wd * 0.7, H * 0.012, (bb.max.z - bb.min.z) * 0.25); g.translate(cx, bb.max.y + H * 0.005, cz); glw.push(paint(g, 0x39c6ff)); }
+    for (let k = 0; k < 8; k++) { const g = new THREE.ConeGeometry(H * 0.015, H * 0.04, 5); g.translate(cx - Wd * 0.35 + k * Wd * 0.1, bb.max.y + H * 0.02, cz + (bb.max.z - bb.min.z) * 0.15); ex.push(paint(g, 0x2f8f3a)); }
+  }
+  groupExtras(grp, ex, landmarkMat);
+  if (glw.length) grp.add(new THREE.Mesh(merge(glw), landmarkGlowMat));
+  return grp;
 }
