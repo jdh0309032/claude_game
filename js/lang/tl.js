@@ -376,6 +376,7 @@ export default {
 "GET IT ON GOOGLE PLAY": "I-DOWNLOAD SA GOOGLE PLAY",
 "UPDATING TO THE NEW VERSION...": "NAG-A-UPDATE SA BAGONG BERSYON...",
 "BARREL ROLL": "BARREL ROLL",
+"ACCOUNT UPDATED BY SUPPORT": "IN-UPDATE NG SUPPORT ANG ACCOUNT MO",
 "Starter delivery scooter": "Panimulang delivery scooter",
 "Nimble in tight traffic": "Maliksi sa masikip na trapiko",
 "Chrome and leather charm": "Ganda ng chrome at katad",

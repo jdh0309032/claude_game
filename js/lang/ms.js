@@ -376,6 +376,7 @@ export default {
 "GET IT ON GOOGLE PLAY": "DAPATKANNYA DI GOOGLE PLAY",
 "UPDATING TO THE NEW VERSION...": "MENGEMAS KINI KE VERSI BAHARU...",
 "BARREL ROLL": "GULING TONG",
+"ACCOUNT UPDATED BY SUPPORT": "AKAUN DIKEMAS KINI OLEH SOKONGAN",
 "Starter delivery scooter": "Skuter penghantaran permulaan",
 "Nimble in tight traffic": "Lincah dalam trafik sesak",
 "Chrome and leather charm": "Pesona krom dan kulit",

@@ -376,6 +376,7 @@ export default {
 "GET IT ON GOOGLE PLAY": "ดาวน์โหลดบน Google Play",
 "UPDATING TO THE NEW VERSION...": "กำลังอัปเดตเป็นเวอร์ชันใหม่...",
 "BARREL ROLL": "หมุนข้าง",
+"ACCOUNT UPDATED BY SUPPORT": "ฝ่ายสนับสนุนอัปเดตบัญชีของคุณแล้ว",
 "Starter delivery scooter": "สกูตเตอร์ส่งของสำหรับมือใหม่",
 "Nimble in tight traffic": "คล่องตัวในรถติด",
 "Chrome and leather charm": "เสน่ห์โครเมียมและหนัง",

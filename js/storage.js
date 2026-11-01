@@ -125,6 +125,16 @@ let saveTimer = null;
 let saving = null;
 let saveAgain = false;
 export const isServerReady = () => serverReady;
+// 관리자 수정 동기화 (010): 서버 data_rev. 관리자가 재산을 고치면 올라가고, 낮은 rev 로 저장하면 서버가 거절하며 최신 데이터를 돌려줌
+let serverRev = 0;
+let useV2 = true; // 010 미설치 서버면 v1 함수로
+let onOverride = null;
+export function onServerOverride(fn) { onOverride = fn; }
+function adoptServerData(data, rev) {
+  serverRev = Number(rev) || 0;
+  applyData(data || {});
+  try { onOverride?.(); } catch (e) { console.warn('[sync] override handler', e); }
+}
 export const syncState = { lastError: '', lastSavedAt: 0 };
 
 // 변경 즉시 서버로 저장 (짧게 묶어서 전송). 게스트·서버 미준비 상태에선 아무것도 안 함
@@ -144,7 +154,17 @@ export async function flushSave({ keepalive = false } = {}) {
   saving = (async () => {
     try {
       await ensureFreshToken();
-      await sb('/rest/v1/rpc/save_player_data', { method: 'POST', auth: true, body: { p_data: serverData() }, keepalive });
+      if (useV2) {
+        try {
+          const r = await sb('/rest/v1/rpc/save_player_data_v2', { method: 'POST', auth: true, body: { p_data: serverData(), p_rev: serverRev }, keepalive });
+          if (r?.stale) adoptServerData(r.data, r.rev); // 관리자가 고친 값이 우선
+          else if (r && r.rev != null) serverRev = Number(r.rev) || serverRev;
+        } catch (e) {
+          if (!isMissingSchema(e)) throw e;
+          useV2 = false;
+        }
+      }
+      if (!useV2) await sb('/rest/v1/rpc/save_player_data', { method: 'POST', auth: true, body: { p_data: serverData() }, keepalive });
       syncState.lastError = '';
       syncState.lastSavedAt = Date.now();
       return true;
@@ -170,8 +190,18 @@ export async function loadPlayerData() {
   if (!session) return { ok: false, error: 'Sign in required' };
   try {
     await ensureFreshToken();
-    const rows = await sb('/rest/v1/rpc/load_player_data', { method: 'POST', auth: true, body: {} });
-    const row = rows && rows[0];
+    let row = null;
+    useV2 = true;
+    try {
+      row = await sb('/rest/v1/rpc/load_player_data_v2', { method: 'POST', auth: true, body: {} });
+      serverRev = Number(row?.rev) || 0;
+    } catch (e) {
+      if (!isMissingSchema(e)) throw e;
+      useV2 = false;
+      serverRev = 0;
+      const rows = await sb('/rest/v1/rpc/load_player_data', { method: 'POST', auth: true, body: {} });
+      row = rows && rows[0];
+    }
     const empty = !row || !row.data || !Object.keys(row.data).length;
     if (empty) {
       ensureMissions();
@@ -188,6 +218,23 @@ export async function loadPlayerData() {
   } catch (e) {
     return { ok: false, error: isMissingSchema(e) ? 'Server needs the 004 database migration' : friendly(e) };
   }
+}
+
+// 앱으로 돌아왔을 때: 그 사이 관리자가 고친 값이 있으면 받아서 교체. 교체했으면 true
+export async function pullServerChanges() {
+  if (!serverReady || !session || !useV2 || saving) return false;
+  try {
+    await ensureFreshToken();
+    const row = await sb('/rest/v1/rpc/load_player_data_v2', { method: 'POST', auth: true, body: {} });
+    if (row && Number(row.rev) > serverRev) {
+      clearTimeout(saveTimer);
+      adoptServerData(row.data, row.rev);
+      return true;
+    }
+  } catch (e) {
+    if (!isMissingSchema(e)) console.warn('[sync] pull', e);
+  }
+  return false;
 }
 
 // 로그아웃: 메모리 데이터를 게스트 기본값으로
