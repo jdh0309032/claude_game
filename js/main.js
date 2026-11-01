@@ -14,7 +14,7 @@ import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, ECON, GACHA_ODDS, TIERS, DEFAUL
 } from './config.js';
 import { paymentsMode, initPayments, getPacks, buyPack } from './payments.js';
 import { initLiveUpdate, webBuild } from './updater.js';
-import { t, setLang, detectLang, getLang, LANGS, applyI18n, onLangChange } from './i18n.js';
+import { t, setLang, getLang, LANGS, applyI18n, onLangChange } from './i18n.js';
 import {
   save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, PAINTS, getBike,
   replaceDoneMissions, missionText, auth, leaderboard, getSession, ONLINE, detectCountry,
@@ -2431,6 +2431,37 @@ function checkMissions() {
 // ---------- UI 헬퍼
 const SCREENS = ['menu', 'garage', 'ranking', 'missions', 'notices', 'support', 'settings', 'pause', 'gameover', 'auth', 'daily', 'gacha', 'coinshop'];
 let currentScreen = null;
+// 버튼 글자 맞춤: 먼저 한 줄로 두고 넘치면 글자를 최대 72%까지 줄임. 그래도 넘치면 고르게 두 줄로 (CSS text-wrap: balance)
+function fitButton(el) {
+  el.style.fontSize = '';
+  el.classList.add('fit-1');
+  if (el.scrollWidth <= el.clientWidth + 1) return;
+  const base = parseFloat(getComputedStyle(el).fontSize) || 16;
+  const min = Math.max(11, base * 0.72);
+  let f = Math.max(min, Math.floor(base * (el.clientWidth / el.scrollWidth) * 2) / 2);
+  el.style.fontSize = `${f}px`;
+  while (el.scrollWidth > el.clientWidth + 1 && f > min) { f -= 0.5; el.style.fontSize = `${f}px`; }
+  if (el.scrollWidth > el.clientWidth + 1) { el.classList.remove('fit-1'); el.style.fontSize = `${Math.max(11, base * 0.86)}px`; }
+}
+let fitQueued = false;
+function scheduleFit() {
+  if (fitQueued) return;
+  fitQueued = true;
+  requestAnimationFrame(() => {
+    fitQueued = false;
+    for (const el of document.querySelectorAll('.screen:not(.hidden) .btn, .modal:not(.hidden) .btn')) if (el.offsetParent) fitButton(el);
+  });
+}
+window.addEventListener('resize', scheduleFit);
+// 버튼 글자가 바뀌면(번역·가격·카운트 등) 그 화면만 다시 맞춤. 게임 중 HUD 변경은 걸러서 비용 없음
+new MutationObserver((list) => {
+  for (const m of list) {
+    const n = m.target.nodeType === 3 ? m.target.parentElement : m.target;
+    const hit = m.type === 'attributes' ? n.classList.contains('screen') : n?.closest?.('.btn');
+    if (hit) { scheduleFit(); return; }
+  }
+}).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class'] });
+
 function show(id) {
   const changed = currentScreen !== id;
   currentScreen = id;
@@ -3588,6 +3619,7 @@ $('langSelect').addEventListener('change', async (e) => {
   await setLang(e.target.value);
 });
 onLangChange(() => {
+  scheduleFit();
   refreshMenu();
   renderBoostBar();
   if (currentScreen === 'settings') renderSettings();
@@ -4052,6 +4084,8 @@ if (DEBUG) {
   window.__camera = camera;
   window.__save = save;
   window.__dbg = {
+    show: (id) => show(id),
+    gameOver: () => showGameOver(),
     car: (type, lane, z) => spawnCar(z, { type, lane }),
     puddle: (x, z) => spawnInPool(puddlePool, { x, z }),
     sign: (x, z) => spawnInPool(signPool, { x, z }),
@@ -4135,7 +4169,8 @@ initLiveUpdate(); // 앱: 라이브 업데이트 확인 (웹에서는 무시)
   window.addEventListener('unhandledrejection', (e) => report(`Unhandled: ${e.reason?.message || e.reason}`, e.reason?.stack, 'promise'));
 }
 const LOAD_TIPS = ['Brush past cars for NEAR MISS bonuses', 'Land level after a flip to stay on the road', 'Every km pays +50 coins', 'Ride the wrong way for x2 score - carefully!', 'Be #1 in your country to unlock the National Team bike'];
-setLang(save.settings.lang || detectLang()).then(() => { const el = $('loadTip'); if (el) el.textContent = t(pick(LOAD_TIPS)); });
+setLang(save.settings.lang || 'en') // 기본은 항상 영어, 설정에서만 바꿈
+  .then(() => { const el = $('loadTip'); if (el) el.textContent = t(pick(LOAD_TIPS)); });
 // 운영 설정(가격·보상)은 다른 로딩과 병렬로 받고, 도착하면 보이는 화면만 다시 그림
 loadAppConfig().then((cfg) => {
   if (!cfg) return;

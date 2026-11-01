@@ -2,7 +2,7 @@
 // - t('NEAR MISS!') / t('COMBO x{n}', { n: 5 }) → 현재 언어 번역, 없으면 영어 그대로
 // - HTML: data-i18n(텍스트), data-i18n-html(<b> 등 포함), data-i18n-ph(placeholder), data-i18n-aria(aria-label)
 //   처음 적용할 때 영어 원문을 data-src 에 보관해 언어를 몇 번 바꿔도 원문 기준으로 다시 번역
-// - 언어: 저장된 설정 → 기기 언어 → 영어. 태국어·크메르어·미얀마어는 전용 웹폰트를 필요할 때만 불러옴
+// - 언어: 기본은 영어, 설정에서 고른 언어만 저장해 사용 (기기 언어로 자동 전환하지 않음). 태국어·크메르어·미얀마어는 전용 웹폰트를 필요할 때만 불러옴
 export const LANGS = [
   { code: 'en', name: 'English' },
   { code: 'ko', name: '한국어' },
@@ -28,17 +28,6 @@ export function t(src, vars) {
   let s = (lang !== 'en' && dict[src]) || src;
   if (vars) s = s.replace(/\{(\w+)\}/g, (m, k) => (vars[k] ?? m));
   return s;
-}
-
-// 기기 언어로 추정 (fil → tl, zsm/ms-MY → ms, nb 등 미지원 → en)
-export function detectLang() {
-  const list = (typeof navigator !== 'undefined' && (navigator.languages || [navigator.language])) || [];
-  for (const l of list) {
-    const base = String(l || '').toLowerCase().split('-')[0];
-    const code = base === 'fil' ? 'tl' : base === 'zsm' ? 'ms' : base === 'in' ? 'id' : base;
-    if (CODES.has(code)) return code;
-  }
-  return 'en';
 }
 
 function loadFont(code) {

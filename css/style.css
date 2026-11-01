@@ -1267,15 +1267,23 @@ body.touch #menu .help { display: none; }
 /* 다국어: 설정 라벨은 기울이지 않음 / 라틴 문자가 아닌 언어는 굵은 시스템·Noto 글꼴로 대체 (디스플레이 글꼴에 글자가 없어서 가늘게 나오던 것 방지) */
 .st-label { font-style: normal; }
 :root[data-lang="ko"] { --display: 'Russo One', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; --hud: 'Rajdhani', 'Noto Sans KR', 'Apple SD Gothic Neo', system-ui, sans-serif; }
-:root[data-lang="th"] { --display: 'Noto Sans Thai', 'Russo One', system-ui, sans-serif; --hud: 'Noto Sans Thai', 'Rajdhani', system-ui, sans-serif; --brand: 'Noto Sans Thai', 'Nunito', system-ui, sans-serif; }
-:root[data-lang="th"] body { font-family: 'Noto Sans Thai', system-ui, sans-serif; }
-:root[data-lang="km"] { --display: 'Noto Sans Khmer', 'Russo One', system-ui, sans-serif; --hud: 'Noto Sans Khmer', 'Rajdhani', system-ui, sans-serif; --brand: 'Noto Sans Khmer', 'Nunito', system-ui, sans-serif; }
-:root[data-lang="km"] body { font-family: 'Noto Sans Khmer', system-ui, sans-serif; }
-:root[data-lang="my"] { --display: 'Noto Sans Myanmar', 'Russo One', system-ui, sans-serif; --hud: 'Noto Sans Myanmar', 'Rajdhani', system-ui, sans-serif; --brand: 'Noto Sans Myanmar', 'Nunito', system-ui, sans-serif; }
-:root[data-lang="my"] body { font-family: 'Noto Sans Myanmar', system-ui, sans-serif; }
+/* 라틴 글꼴을 앞에 두고 그 글꼴에 없는 태국·크메르·미얀마 글자만 Noto 로 대체 → 숫자·영문·게임 타이틀(--brand)은 어느 언어에서도 그대로 */
+:root[data-lang="th"] { --display: 'Russo One', 'Noto Sans Thai', system-ui, sans-serif; --hud: 'Rajdhani', 'Noto Sans Thai', system-ui, sans-serif; }
+:root[data-lang="km"] { --display: 'Russo One', 'Noto Sans Khmer', system-ui, sans-serif; --hud: 'Rajdhani', 'Noto Sans Khmer', system-ui, sans-serif; }
+:root[data-lang="my"] { --display: 'Russo One', 'Noto Sans Myanmar', system-ui, sans-serif; --hud: 'Rajdhani', 'Noto Sans Myanmar', system-ui, sans-serif; }
 :root:is([data-lang="ko"], [data-lang="th"], [data-lang="km"], [data-lang="my"]) :is(h2, h3, .result-title, .popup, .play-txt, .tut-card b) { font-weight: 800; letter-spacing: 0; }
 /* 태국어·크메르어·미얀마어는 위아래 표시가 길어 줄 간격을 넉넉히 */
 :root:is([data-lang="th"], [data-lang="km"], [data-lang="my"]) body { line-height: 1.55; }
 /* 자간은 태국어·크메르어·미얀마어 글자 결합을 깨뜨림 → 전부 0 */
-:root:is([data-lang="th"], [data-lang="km"], [data-lang="my"]) * { letter-spacing: 0 !important; }
+:root:is([data-lang="th"], [data-lang="km"], [data-lang="my"]) :not(.brand, .brand *) { letter-spacing: 0 !important; }
 :root[data-lang="ko"] .btn, :root[data-lang="ko"] .svc span, :root[data-lang="ko"] .tile .tn { letter-spacing: 0; }
+
+/* 패널 안 요소가 공간 부족할 때 눌려서 잘리지 않게 (패널이 대신 스크롤) */
+.panel > *, .panel .row { flex-shrink: 0; }
+.final-score, .hero-score { line-height: 1.15; }
+/* 버튼 글자: 먼저 한 줄로 글자 크기를 줄여 맞추고(js fitText), 그래도 길면 줄 길이를 고르게 나눠 줄바꿈 */
+.row > .btn { min-width: 0; }
+.btn { max-width: 100%; }
+.btn { overflow-wrap: anywhere; text-wrap: balance; line-height: 1.2; }
+.btn.fit-1 { white-space: nowrap; }
+:root[data-lang="ko"] .btn { word-break: keep-all; }
