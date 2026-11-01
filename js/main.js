@@ -113,7 +113,8 @@ const clips = new ClipRecorder(canvas);
 // 클립이 바이크를 따라 잘리도록 화면 속 바이크 위치(0~1)를 알려 줌
 const clipFocusV = new THREE.Vector3();
 clips.focus = () => {
-  clipFocusV.set(bike.root.position.x, bike.root.position.y + 1.1, bike.root.position.z).project(camera);
+  // 회전하는 차체(회전 중심이 매 프레임 흔들림)가 아니라 실제 위치(차선 x, 점프 높이)를 따라감 → 플레이 화면처럼 안정적
+  clipFocusV.set(G.x, (G.airY || 0) + 1.0, 0).project(camera);
   return { x: (clipFocusV.x + 1) / 2, y: (1 - clipFocusV.y) / 2 };
 };
 clips.audio = () => sfx.recordStream(); // 게임 소리도 함께 녹음

@@ -789,27 +789,85 @@ function rider(det, glow, out) {
     det.push(box(0.11, 0.12, 0.22, s * 0.16, 0.68, -0.13, BOOT));
     det.push(box(0.12, 0.03, 0.24, s * 0.16, 0.61, -0.13, SOLE));
   }
-  if (out.poncho) {
-    // 우비: 어깨에서 퍼지는 판초 + 후드
-    const pon = new THREE.CylinderGeometry(0.17, 0.33, 0.5, 12, 1, true);
-    pon.rotateX(-0.6);
-    pon.translate(0, 1.3, 0.03);
-    det.push(paint(pon, J));
-    { const hood = new THREE.SphereGeometry(0.13, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2); hood.rotateX(0.9); hood.translate(0, 1.5, 0.02); det.push(paint(hood, J)); }
+  // ---- 옷마다 디테일 (몸통 앞판·소매·바지 줄무늬 등). 몸통은 앞으로 약 35° 숙인 자세
+  const TA = V(0, 1.16, 0.13), TB = V(0, 1.42, -0.05);
+  const TN = V(0, -0.578, -0.816); // 몸통 앞면 방향
+  const TBACK = V(0, 0.578, 0.816);
+  const torso = (t, off, x, w, h, d, color, list = det, n = TN) => {
+    const p = TA.clone().lerp(TB, t);
+    const g = new THREE.BoxGeometry(w, h, d);
+    g.rotateX(-0.616);
+    g.translate(p.x + x, p.y + n.y * off, p.z + n.z * off);
+    list.push(paint(g, color));
+  };
+  const band = (a, b, t0, t1, r, color, list = det) => limb(a.clone().lerp(b, t0), a.clone().lerp(b, t1), r, color, list);
+  const arms = [-1, 1].map((sd) => ({ s: sd, sh: V(sd * 0.19, 1.43, -0.04), el: V(sd * 0.25, 1.25, -0.27), wr: V(sd * 0.29, 1.1, -0.45) }));
+  const legs = [-1, 1].map((sd) => ({ s: sd, hp: V(sd * 0.1, 1.1, 0.14), kn: V(sd * 0.17, 1.09, -0.2), an: V(sd * 0.16, 0.74, -0.08) }));
+  const style = out.kind || (out.poncho ? 'raincoat' : out.reflect ? 'hivis' : out.hump ? 'racing' : out.bow ? 'tux' : J === 0x1b1b1f ? 'leather' : 'jacket');
+  if (style === 'jacket') {
+    torso(0.6, 0.128, 0, 0.018, 0.3, 0.012, 0xd8dde2);                 // 앞 지퍼
+    torso(0.78, 0.13, -0.085, 0.07, 0.05, 0.012, 0x0b7a3a);            // 가슴 주머니
+    for (const t of [0.42, 0.58]) torso(t, 0.124, 0, 0.3, 0.022, 0.012, T, glow); // 가슴 반사 띠
+    for (const a of arms) { band(a.sh, a.el, 0.45, 0.6, 0.074, T); band(a.el, a.wr, 0.3, 0.42, 0.064, T); }
+    for (const l of legs) ball(l.kn.clone().add(V(0, 0.01, -0.05)), 0.055, 0x3a3f46, det, 1.1, 1.2, 0.7); // 무릎 패드
   }
-  if (out.reflect) {
-    // 반사 띠: 가슴·허리를 두르는 형광 링
-    for (const [y, z] of [[1.37, -0.02], [1.2, 0.08]]) {
-      const g = new THREE.TorusGeometry(0.15, 0.018, 4, 18);
-      g.scale(1.3, 1, 0.95);
-      g.rotateX(Math.PI / 2 - 0.65);
-      g.translate(0, y, z);
+  if (style === 'raincoat') {
+    // 우비 코트: 허리 아래로 내려오는 치마 자락 + 뒤로 넘긴 후드 + 앞 단추 + 소매 끝 고무밴드
+    const skirt = new THREE.CylinderGeometry(0.2, 0.27, 0.3, 16, 1, true);
+    skirt.rotateX(-0.35);
+    skirt.translate(0, 1.0, 0.1);
+    det.push(paint(skirt, J));
+    const hood = new THREE.SphereGeometry(0.12, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.6);
+    hood.scale(1.2, 0.7, 1);
+    hood.rotateX(1.9);
+    hood.translate(0, 1.47, 0.07);
+    det.push(paint(hood, J));
+    torso(0.6, 0.127, 0, 0.03, 0.32, 0.012, 0xffffff);                 // 앞 여밈
+    for (const t of [0.35, 0.55, 0.75, 0.92]) torso(t, 0.137, 0, 0.026, 0.026, 0.02, 0x333333); // 단추
+    for (const a of arms) band(a.el, a.wr, 0.82, 0.95, 0.07, T);
+    for (const sd of [-1, 1]) { const tg = new THREE.CylinderGeometry(0.008, 0.008, 0.1, 5); tg.translate(sd * 0.04, 1.42, -0.17); det.push(paint(tg, 0xffffff)); } // 후드 끈
+  }
+  if (style === 'hivis') {
+    // 형광 조끼: 어깨 끈 + 앞 세로 반사 띠 2줄 + 허리 반사 띠 + 등 X자
+    for (const sd of [-1, 1]) torso(0.62, 0.126, sd * 0.075, 0.035, 0.34, 0.012, 0xe6ff5c, glow);
+    torso(0.28, 0.12, 0, 0.32, 0.035, 0.012, 0xe6ff5c, glow);
+    for (const sd of [-1, 1]) {
+      const g = new THREE.BoxGeometry(0.035, 0.36, 0.012);
+      g.rotateZ(sd * 0.55); g.rotateX(-0.616);
+      g.translate(0, 1.3 + TBACK.y * 0.12, 0.03 + TBACK.z * 0.12);
       glow.push(paint(g, 0xe6ff5c));
     }
+    torso(0.78, 0.13, 0.085, 0.05, 0.06, 0.012, 0x23272b);             // 무전기 주머니
   }
-  if (out.hump) ball(V(0, 1.47, 0.07), 0.08, 0xffffff, det, 1.1, 0.8, 1.2); // 레이싱 험프
-  if (out.bow) {
-    for (const s of [-1, 1]) { const g = new THREE.ConeGeometry(0.03, 0.06, 4); g.rotateZ(s * Math.PI / 2); g.translate(s * 0.03, 1.45, -0.17); det.push(paint(g, 0xd62828)); }
+  if (style === 'leather') {
+    // 라이더 가죽 재킷: 사선 지퍼 + 은색 스냅 + 어깨·무릎 아머 + 벨트 버클
+    { const g = new THREE.BoxGeometry(0.016, 0.34, 0.012); g.rotateZ(0.32); g.rotateX(-0.616); const p = TA.clone().lerp(TB, 0.6); g.translate(p.x + 0.03, p.y + TN.y * 0.128, p.z + TN.z * 0.128); det.push(paint(g, T)); }
+    for (const sd of [-1, 1]) torso(0.92, 0.12, sd * 0.11, 0.03, 0.03, 0.02, T);
+    for (const a of arms) ball(a.sh.clone().add(V(a.s * 0.02, 0.03, 0)), 0.075, 0x34363c, det, 1, 0.7, 1.1);
+    for (const l of legs) ball(l.kn.clone().add(V(0, 0.0, -0.06)), 0.06, 0x34363c, det, 1.1, 1.3, 0.6);
+    { const b = new THREE.TorusGeometry(0.14, 0.016, 5, 20); b.scale(1.25, 1, 0.92); b.rotateX(Math.PI / 2 - 0.62); b.translate(0, 1.13, 0.13); det.push(paint(b, 0x3a2a1e)); }
+    torso(0.02, 0.125, 0, 0.05, 0.035, 0.02, T);                       // 버클
+  }
+  if (style === 'racing') {
+    // 레이싱 슈트: 팔·다리 흰 줄 + 무릎 슬라이더 + 가슴 번호판 + 험프 줄무늬
+    for (const a of arms) { limb(a.sh.clone().add(V(a.s * 0.05, 0.02, 0)), a.el.clone().add(V(a.s * 0.05, 0.02, 0)), 0.022, T, det); limb(a.el.clone().add(V(a.s * 0.045, 0.02, 0)), a.wr.clone().add(V(a.s * 0.04, 0.02, 0)), 0.02, T, det); }
+    for (const l of legs) {
+      limb(l.hp.clone().add(V(l.s * 0.075, 0.03, 0)), l.kn.clone().add(V(l.s * 0.07, 0.03, 0)), 0.024, T, det);
+      ball(l.kn.clone().add(V(l.s * 0.06, -0.02, -0.04)), 0.045, 0xf2f2f2, det, 0.7, 1.2, 1); // 무릎 슬라이더
+    }
+    { const g = new THREE.CircleGeometry(0.06, 16); g.rotateX(Math.PI + 0.954); const p = TA.clone().lerp(TB, 0.7); g.translate(p.x, p.y + TN.y * 0.137, p.z + TN.z * 0.137); det.push(paint(g, 0xffffff)); }
+    ball(V(0, 1.47, 0.07), 0.08, 0xffffff, det, 1.1, 0.8, 1.2);       // 에어로 험프
+    ball(V(0, 1.47, 0.07), 0.081, 0x111111, det, 0.35, 0.82, 1.22);   // 험프 가운데 줄
+  }
+  if (style === 'tux') {
+    // 턱시도: 흰 셔츠 V + 새틴 라펠 + 큰 나비넥타이 + 허리띠 + 뒤 연미복 꼬리
+    torso(0.82, 0.122, 0, 0.1, 0.17, 0.012, 0xffffff);
+    for (const sd of [-1, 1]) { const g = new THREE.BoxGeometry(0.035, 0.2, 0.012); g.rotateZ(sd * -0.35); g.rotateX(-0.616); const p = TA.clone().lerp(TB, 0.78); g.translate(sd * 0.06, p.y + TN.y * 0.128, p.z + TN.z * 0.128); det.push(paint(g, 0x111318)); }
+    for (const t of [0.6, 0.7]) torso(t, 0.13, 0, 0.018, 0.018, 0.02, 0x111111);
+    torso(0.18, 0.12, 0, 0.3, 0.06, 0.014, 0x111318);                  // 허리띠
+    for (const sd of [-1, 1]) { const g = new THREE.BoxGeometry(0.1, 0.32, 0.02); g.rotateX(0.5); g.translate(sd * 0.06, 1.02, 0.26); det.push(paint(g, J)); } // 꼬리
+    for (const sd of [-1, 1]) { const g = new THREE.ConeGeometry(0.04, 0.08, 4); g.rotateZ(sd * Math.PI / 2); g.translate(sd * 0.045, 1.455, -0.175); det.push(paint(g, 0xd62828)); }
+    ball(V(0, 1.455, -0.175), 0.018, 0xa01818, det);
   }
 }
 
@@ -2570,11 +2628,63 @@ export function createBike(color, opts = {}) {
   det.push(box(0.3, 0.08, 0.42, 0, superbike ? 1.065 : 1.0, 0.22, 0x161616));
   det.push(box(0.64, 0.045, 0.045, 0, 1.06, -0.5, 0x222222));
   if (!superbike) {
-    // 기본 차체
-    det.push(box(0.3, 0.2, 0.04, 0, 1.15, -0.62, 0x223344, -0.9));
-    body.push(box(0.38, 0.42, 0.5, 0, 0.88, -0.42, null, -0.5));
-    body.push(box(0.34, 0.22, 0.5, 0, 0.96, -0.06, null, 0.1));
-    body.push(box(0.28, 0.16, 0.5, 0, 0.94, 0.52, null, -0.25));
+    const st = opts.style || 'scooter';
+    det.push(box(0.3, 0.2, 0.04, 0, 1.15, -0.62, 0x223344, -0.9)); // 윈드스크린
+    if (st === 'scooter') {
+      // 스쿠터: 다리 앞 가림판(에이프런) + 발판 + 둥근 뒷 카울 (스텝스루)
+      body.push(box(0.42, 0.52, 0.06, 0, 0.86, -0.5, null, 0.22));
+      body.push(box(0.36, 0.05, 0.42, 0, 0.62, -0.1));
+      { const g = new THREE.SphereGeometry(1, 16, 10); g.scale(0.21, 0.17, 0.44); g.translate(0, 0.86, 0.42); body.push(g); }
+      { const g = new THREE.SphereGeometry(1, 14, 10); g.scale(0.2, 0.2, 0.22); g.translate(0, 0.98, -0.6); body.push(g); }
+      det.push(box(0.3, 0.03, 0.36, 0, 0.655, -0.1, 0x2a2a2a)); // 발판 고무 매트
+    } else {
+      body.push(box(0.38, 0.42, 0.5, 0, 0.88, -0.42, null, -0.5));
+      { const g = new THREE.SphereGeometry(1, 16, 10); g.scale(0.19, 0.13, 0.32); g.translate(0, 0.99, -0.1); body.push(g); } // 둥근 연료탱크
+      body.push(box(0.28, 0.16, 0.5, 0, 0.94, 0.52, null, -0.25));
+      det.push(cylX(0.035, 0.02, 0, 1.12, -0.12, 0xc0c4c8, 10)); // 주유구 캡
+    }
+    if (st === 'sport') { const g = new THREE.ConeGeometry(0.14, 0.42, 4); g.rotateX(Math.PI / 2); g.rotateZ(Math.PI / 4); g.scale(1, 0.6, 1); g.translate(0, 1.0, 0.86); body.push(g); } // 뾰족한 꼬리 카울
+    // 펜더 (앞: 바퀴 위를 감싸는 곡면 / 뒤: 짧은 허거)
+    for (const [z, a0, len] of [[-0.72, 1.25, 1.75], [0.7, -0.15, 1.55]]) {
+      const g = new THREE.CylinderGeometry(0.45, 0.45, 0.17, 14, 1, true, a0, len);
+      g.rotateZ(Math.PI / 2);
+      g.translate(0, 0.4, z);
+      body.push(g);
+    }
+    // 휠: 알로이 림 + 스포크 (클래식은 가는 와이어 스포크)
+    const wire = st === 'classic';
+    for (const z of [-0.72, 0.7]) {
+      const rim = new THREE.TorusGeometry(0.205, 0.02, 6, 24);
+      rim.rotateY(Math.PI / 2);
+      rim.translate(0, 0.4, z);
+      det.push(paint(rim, wire ? 0xd5d9dd : 0x9aa0a6));
+      const n = wire ? 12 : 5;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        det.push(box(wire ? 0.012 : 0.03, 0.17, wire ? 0.012 : 0.045, 0, 0.4 + Math.cos(a) * 0.12, z + Math.sin(a) * 0.12, wire ? 0xd5d9dd : 0x9aa0a6, a));
+      }
+      det.push(cylX(0.11, 0.015, 0.075, 0.4, z, 0x6a6f75, 16)); // 브레이크 디스크
+    }
+    if (st === 'enduro') {
+      // 오프로드 블록 타이어 돌기
+      for (const z of [-0.72, 0.7]) for (let i = 0; i < 20; i++) {
+        const a = (i / 20) * Math.PI * 2;
+        det.push(box(0.2, 0.05, 0.05, 0, 0.4 + Math.cos(a) * 0.4, z + Math.sin(a) * 0.4, 0x151515, a));
+      }
+    }
+    // 미러 + 발판 + 번호판 + 헤드라이트 테두리
+    for (const sx of [-1, 1]) {
+      const stalk = new THREE.CylinderGeometry(0.012, 0.012, 0.22, 5);
+      stalk.rotateZ(sx * -0.3);
+      stalk.translate(sx * 0.3, 1.17, -0.52);
+      det.push(paint(stalk, 0x222222));
+      det.push(box(0.1, 0.06, 0.02, sx * 0.34, 1.28, -0.52, 0x1a1a1a));
+      det.push(box(0.08, 0.04, 0.005, sx * 0.34, 1.28, -0.509, 0x8fb8d6));
+      det.push(box(0.1, 0.025, 0.04, sx * 0.21, 0.6, 0.18, 0x444444)); // 동승자 발판
+    }
+    det.push(box(0.2, 0.11, 0.012, 0, 0.8, 0.93, 0xf2f2f2, -0.25));    // 번호판
+    det.push(box(0.16, 0.025, 0.014, 0, 0.82, 0.931, 0x222222, -0.25));
+    { const r = new THREE.TorusGeometry(0.1, 0.018, 6, 18); r.translate(0, 0.92, -0.72); det.push(paint(r, 0xc0c4c8)); }
   }
 
   // 라이더 (의상 + 헤드기어)
@@ -2722,13 +2832,25 @@ export function treeGeometry() {
 }
 
 export function lampPoleGeometry() {
-  const pole = new THREE.CylinderGeometry(0.09, 0.13, 7.2, 6);
-  pole.translate(0, 3.6, 0);
-  return merge([paint(pole, 0x7a7f86), box(1.8, 0.09, 0.09, -0.85, 7.15, 0, 0x7a7f86)]);
+  // 받침대 + 테이퍼 기둥 + 장식 링 + 휘어진 팔 + 버팀대
+  const C = 0x6f757c;
+  const parts = [];
+  { const g = new THREE.CylinderGeometry(0.24, 0.3, 0.5, 8); g.translate(0, 0.25, 0); parts.push(paint(g, 0x5a5f66)); }
+  { const g = new THREE.CylinderGeometry(0.08, 0.14, 6.9, 10); g.translate(0, 3.95, 0); parts.push(paint(g, C)); }
+  for (const y of [0.55, 2.4, 6.6]) { const g = new THREE.TorusGeometry(0.13, 0.03, 5, 12); g.rotateX(Math.PI / 2); g.translate(0, y, 0); parts.push(paint(g, 0x8d939a)); }
+  { const arc = new THREE.TorusGeometry(0.9, 0.05, 6, 16, Math.PI / 2); arc.rotateZ(Math.PI / 2); arc.translate(-0.9, 7.2 - 0.9 + 0.2, 0); parts.push(paint(arc, C)); } // 위로 휘어 나가는 팔
+  parts.push(box(0.9, 0.08, 0.08, -1.3, 7.2 + 0.2, 0, C));
+  { const g = new THREE.CylinderGeometry(0.025, 0.025, 1.1, 5); g.rotateZ(0.95); g.translate(-0.45, 6.75, 0); parts.push(paint(g, 0x8d939a)); }
+  return merge(parts);
 }
 
 export function lampHeadGeometry() {
-  return box(0.75, 0.14, 0.34, -1.65, 7.06, 0);
+  // 위가 넓고 아래로 좁아지는 코브라형 등기구 (아래쪽이 빛나는 면)
+  const g = new THREE.CylinderGeometry(0.2, 0.32, 0.16, 4, 1);
+  g.rotateY(Math.PI / 4);
+  g.scale(1.6, 1, 0.75);
+  g.translate(-1.75, 7.3, 0);
+  return g;
 }
 
 export function buildingGeometry() {
@@ -2833,7 +2955,22 @@ export function createJumpRamp() {
   const glow = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.6, L + 0.8).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.18, depthWrite: false }));
   glow.position.set(0, 0.03, -L / 2);
-  grp.add(glow, body, neon);
+  // 철제 옆 난간(경사 모서리) + 뒷면 경고 줄무늬 + 받침대
+  const steel = [];
+  for (const sx of [-1, 1]) {
+    const r = new THREE.BoxGeometry(0.1, 0.12, len);
+    r.rotateX(slope);
+    r.translate(sx * (W / 2 + 0.03), H / 2 + 0.06, -L / 2);
+    steel.push(paint(r, 0x3a3f46));
+    for (const t of [0.35, 0.7]) steel.push(box(0.08, H * t, 0.08, sx * (W / 2 - 0.1), (H * t) / 2, -L * t, 0x2a2e33));
+  }
+  for (let i = 0; i < 7; i++) {
+    const g = new THREE.BoxGeometry(W / 7, H, 0.03);
+    g.translate(-W / 2 + W / 14 + (i * W) / 7, H / 2, -L - 0.016);
+    steel.push(paint(g, i % 2 ? 0x161616 : 0xffc300));
+  }
+  steel.push(box(W + 0.2, 0.06, 0.3, 0, 0.03, -0.1, 0x3a3f46)); // 앞 진입판
+  grp.add(glow, body, neon, new THREE.Mesh(merge(steel), vcMat));
   grp.neon = lineMat;
   return grp;
 }
@@ -2889,9 +3026,21 @@ export function createDropZone() {
 }
 
 export function coinGeometry() {
-  const g = new THREE.CylinderGeometry(0.42, 0.42, 0.09, 20);
+  // 테두리가 도톰하고 가운데가 살짝 들어간 동전 + 양면 별 문양
+  const prof = [[0, 0.03], [0.3, 0.03], [0.33, 0.055], [0.42, 0.055], [0.44, 0.03], [0.44, -0.03], [0.42, -0.055], [0.33, -0.055], [0.3, -0.03], [0, -0.03]]
+    .map(([x, y]) => new THREE.Vector2(x, y));
+  const g = new THREE.LatheGeometry(prof, 24);
   g.rotateX(Math.PI / 2);
-  return g;
+  const star = new THREE.Shape();
+  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i / 10) * Math.PI * 2, r = i % 2 ? 0.08 : 0.19; (i ? star.lineTo : star.moveTo).call(star, Math.cos(a) * r, -Math.sin(a) * r); }
+  const parts = [g];
+  for (const sz of [1, -1]) {
+    const e = new THREE.ExtrudeGeometry(star, { depth: 0.03, bevelEnabled: false });
+    if (sz < 0) e.rotateY(Math.PI);
+    e.translate(0, 0, sz * 0.03);
+    parts.push(e);
+  }
+  return merge(parts);
 }
 
 export function createRails(len, zCenter) {
@@ -3498,22 +3647,30 @@ export function createLandmark(kind) {
 
 // ---------- 도로 위 축제 장식 (나라별: 랜턴 줄 / 삼각 깃발 줄 / 불교 깃발). 도로 양쪽 기둥 사이에 처진 줄
 export function overheadGeometry(kind) {
+  // 도로 위 축제 장식: 장식 기둥 2개 + 두 줄 가랜드(깃발 줄 + 전구 줄). 멀리서도 보이게 큼직하게
   const p = [];
-  const X = 9.6, Y = 8.4, SAG = 1.1, N = 15;
+  const X = 9.6, Y = 8.4, SAG = 1.1;
   for (const sx of [-1, 1]) {
-    p.push(box(0.14, Y + 0.3, 0.14, sx * X, (Y + 0.3) / 2, 0, 0x6c757d));
-    p.push(box(0.3, 0.12, 0.3, sx * X, Y + 0.36, 0, 0x6c757d));
+    { const g = new THREE.CylinderGeometry(0.1, 0.14, Y + 0.3, 8); g.translate(sx * X, (Y + 0.3) / 2, 0); p.push(paint(g, 0x6c757d)); }
+    { const g = new THREE.CylinderGeometry(0.28, 0.32, 0.4, 8); g.translate(sx * X, 0.2, 0); p.push(paint(g, 0x555b62)); }
+    { const g = new THREE.SphereGeometry(0.2, 10, 8); g.translate(sx * X, Y + 0.5, 0); p.push(paint(g, 0xffd166)); }
+    for (const y of [2.5, 5]) { const g = new THREE.TorusGeometry(0.15, 0.04, 5, 12); g.rotateX(Math.PI / 2); g.translate(sx * X, y, 0); p.push(paint(g, 0xd4a017)); }
   }
-  const yAt = (t) => Y - SAG * (1 - (2 * t - 1) ** 2);
-  for (let i = 0; i < N; i++) { // 줄 (짧은 원기둥 조각)
-    const t0 = i / N, t1 = (i + 1) / N;
-    const a = V(-X + 2 * X * t0, yAt(t0), 0), b = V(-X + 2 * X * t1, yAt(t1), 0);
-    const len = a.distanceTo(b);
-    const g = new THREE.CylinderGeometry(0.02, 0.02, len, 4);
-    g.rotateZ(Math.PI / 2 + Math.atan2(b.y - a.y, b.x - a.x));
-    g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, 0);
-    p.push(paint(g, 0x333333));
-  }
+  const strand = (Yb, sag, z) => {
+    const yAt = (t) => Yb - sag * (1 - (2 * t - 1) ** 2);
+    const N = 18;
+    for (let i = 0; i < N; i++) {
+      const t0 = i / N, t1 = (i + 1) / N;
+      const a = V(-X + 2 * X * t0, yAt(t0), z), b = V(-X + 2 * X * t1, yAt(t1), z);
+      const g = new THREE.CylinderGeometry(0.025, 0.025, a.distanceTo(b), 4);
+      g.rotateZ(Math.PI / 2 + Math.atan2(b.y - a.y, b.x - a.x));
+      g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, z);
+      p.push(paint(g, 0x333333));
+    }
+    return yAt;
+  };
+  const yA = strand(Y, SAG, 0);
+  const yB = strand(Y - 0.15, SAG * 1.45, 0.25);
   const pal = {
     lanterns: [0xe63946, 0xffb703, 0xe63946, 0xfb8500],
     bunting_ph: [0xe63946, 0xffd60a, 0x2a9df4, 0x2ec27e, 0xff70a6, 0xffffff],
@@ -3523,26 +3680,41 @@ export function overheadGeometry(kind) {
     flags_kh: [0x032ea1, 0xe00025, 0xffffff, 0xffd60a],
     flags_mm: [0xffd60a, 0xffffff, 0xe6b422, 0x2a9d8f, 0xe63946],
   }[kind] || [0xffffff];
-  const M = 26;
+  const banners = kind.startsWith('flags_');
+  const M = 22;
   for (let i = 1; i < M; i++) {
-    const t = i / M, x = -X + 2 * X * t, y = yAt(t);
+    const t = i / M, x = -X + 2 * X * t, y = yA(t);
     const c = pal[i % pal.length];
     if (kind === 'lanterns') {
       if (i % 2) continue;
-      const l = new THREE.SphereGeometry(0.32, 10, 8);
-      l.scale(1, 1.25, 1);
-      l.translate(x, y - 0.5, 0);
+      // 등롱: 세로 골이 있는 몸통 + 금색 위·아래 테 + 술
+      const l = new THREE.SphereGeometry(0.42, 12, 10);
+      l.scale(1, 1.2, 1);
+      l.translate(x, y - 0.62, 0);
       p.push(paint(l, c));
-      p.push(box(0.36, 0.06, 0.36, x, y - 0.06, 0, 0xd4a017), box(0.36, 0.06, 0.36, x, y - 0.94, 0, 0xd4a017));
-      p.push(box(0.04, 0.3, 0.04, x, y - 1.15, 0, 0xffd166));
+      for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI; const r = new THREE.TorusGeometry(0.42, 0.012, 3, 16); r.scale(1, 1.2, 1); r.rotateY(a); r.translate(x, y - 0.62, 0); p.push(paint(r, 0x8a1c1c)); }
+      for (const dy of [-0.08, -1.16]) { const g = new THREE.CylinderGeometry(0.24, 0.24, 0.1, 10); g.translate(x, y + dy, 0); p.push(paint(g, 0xd4a017)); }
+      { const g = new THREE.CylinderGeometry(0.03, 0.09, 0.5, 6); g.translate(x, y - 1.45, 0); p.push(paint(g, 0xffd166)); }
+    } else if (banners) {
+      // 세로 사각 깃발 (사원 깃발 느낌) + 아래 갈라진 꼬리
+      p.push(box(0.5, 0.8, 0.03, x, y - 0.45, 0, c));
+      p.push(box(0.5, 0.07, 0.035, x, y - 0.12, 0, 0xd4a017));
+      for (const sx of [-1, 1]) { const g = new THREE.ConeGeometry(0.13, 0.22, 3); g.rotateX(Math.PI); g.scale(1, 1, 0.15); g.translate(x + sx * 0.12, y - 0.95, 0); p.push(paint(g, c)); }
     } else {
-      // 삼각 깃발 (앞뒤로 보이는 납작한 삼각뿔)
-      const f = new THREE.ConeGeometry(0.28, 0.55, 3);
+      // 삼각 깃발 (크게)
+      const f = new THREE.ConeGeometry(0.38, 0.75, 3);
       f.rotateX(Math.PI);
-      f.scale(1, 1, 0.12);
-      f.translate(x, y - 0.3, 0);
+      f.scale(1, 1, 0.1);
+      f.translate(x, y - 0.4, 0);
       p.push(paint(f, c));
     }
+  }
+  // 아래 줄: 전구 (밤에도 보이는 흰·노랑 알)
+  for (let i = 1; i < 30; i++) {
+    const t = i / 30, x = -X + 2 * X * t, y = yB(t);
+    const g = new THREE.SphereGeometry(0.11, 6, 5);
+    g.translate(x, y - 0.13, 0.25);
+    p.push(paint(g, i % 2 ? 0xfff3b0 : 0xffffff));
   }
   return merge(p);
 }
@@ -3847,14 +4019,26 @@ export function createStall(kind) {
 
 // ---------- 중앙선 공사 표지판 (바리케이드)
 export function signGeometry() {
+  // 도로 공사 바리케이드: 반사 줄무늬 가로대 + 마름모 '공사 중' 표지 + 호박색 경광등 + 모래주머니
   const p = [];
   for (const sx of [-1, 1]) {
     p.push(box(0.08, 1.1, 0.08, sx * 0.55, 0.55, 0, 0x555555));
     p.push(box(0.3, 0.06, 0.5, sx * 0.55, 0.03, 0, 0x333333));
+    { const g = new THREE.SphereGeometry(0.16, 8, 6); g.scale(1.3, 0.55, 0.9); g.translate(sx * 0.55, 0.1, 0.2); p.push(paint(g, 0x9c8a5a)); } // 모래주머니
   }
-  for (let i = 0; i < 6; i++) p.push(box(0.2, 0.4, 0.06, -0.5 + i * 0.2, 0.85, 0, i % 2 ? 0xffffff : 0xff6a00));
-  p.push(box(0.5, 0.3, 0.06, 0, 1.25, 0, 0xffc400));
-  p.push(box(0.16, 0.16, 0.08, 0, 1.25, -0.01, 0x222222));
+  for (let i = 0; i < 6; i++) {
+    p.push(box(0.2, 0.3, 0.06, -0.5 + i * 0.2, 0.85, 0, i % 2 ? 0xffffff : 0xff6a00));
+    p.push(box(0.2, 0.18, 0.06, -0.5 + i * 0.2, 0.5, 0, i % 2 ? 0xff6a00 : 0xffffff));
+  }
+  // 마름모 표지 (검은 테두리 + 주황 바탕 + 삽질하는 사람 실루엣)
+  { const g = new THREE.BoxGeometry(0.5, 0.5, 0.04); g.rotateZ(Math.PI / 4); g.translate(0, 1.45, 0); p.push(paint(g, 0x111111)); }
+  { const g = new THREE.BoxGeometry(0.44, 0.44, 0.05); g.rotateZ(Math.PI / 4); g.translate(0, 1.45, -0.005); p.push(paint(g, 0xff8a00)); }
+  p.push(box(0.05, 0.05, 0.06, -0.03, 1.56, -0.01, 0x111111));        // 머리
+  p.push(box(0.06, 0.14, 0.06, -0.02, 1.46, -0.01, 0x111111, 0));      // 몸
+  { const g = new THREE.BoxGeometry(0.03, 0.2, 0.06); g.rotateZ(-0.7); g.translate(0.07, 1.42, -0.01); p.push(paint(g, 0x111111)); } // 삽
+  p.push(box(0.12, 0.03, 0.06, 0.02, 1.34, -0.01, 0x111111));          // 흙더미
+  p.push(box(0.05, 0.22, 0.05, 0, 1.15, 0.03, 0x555555));               // 표지 기둥
+  { const g = new THREE.CylinderGeometry(0.07, 0.08, 0.12, 10); g.translate(0.55, 1.18, 0); p.push(paint(g, 0xffb000)); } // 경광등
   return merge(p);
 }
 
@@ -3897,14 +4081,73 @@ const POWER_STYLE = {
 export function createPowerUp(type) {
   const { color, icon } = POWER_STYLE[type];
   const group = new THREE.Group();
-  const mat = new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.7 });
-  let geo;
-  if (type === 'shield') geo = new THREE.IcosahedronGeometry(0.55, 0);
-  else if (type === 'magnet') geo = new THREE.TorusGeometry(0.42, 0.15, 8, 16, Math.PI);
-  else if (type === 'x2') geo = new THREE.OctahedronGeometry(0.6);
-  else if (type === 'giant') geo = new THREE.BoxGeometry(0.75, 0.75, 0.75);
-  else { geo = new THREE.CylinderGeometry(0.5, 0.5, 0.18, 20); geo.rotateX(Math.PI / 2); }
-  const core = new THREE.Mesh(geo, mat);
+  // 3D 아이콘 코어: 의미가 바로 보이는 모양 (방패·말굽 자석·x2 글자·위 화살표 블록·모래시계)
+  const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.45, roughness: 0.35, metalness: 0.1 });
+  const silver = new THREE.MeshStandardMaterial({ color: 0xe8edf2, emissive: 0x555a60, roughness: 0.25, metalness: 0.6 });
+  const white = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x888888, roughness: 0.4 });
+  const ext = (shape, depth, bev = 0.05) => {
+    const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 2, curveSegments: 10 });
+    g.translate(0, 0, -depth / 2);
+    return g;
+  };
+  const core = new THREE.Group();
+  if (type === 'shield') {
+    const sh = new THREE.Shape();
+    sh.moveTo(0, 0.55); sh.quadraticCurveTo(0.3, 0.5, 0.48, 0.42); sh.lineTo(0.44, -0.05);
+    sh.quadraticCurveTo(0.35, -0.42, 0, -0.62); sh.quadraticCurveTo(-0.35, -0.42, -0.44, -0.05); sh.lineTo(-0.48, 0.42); sh.quadraticCurveTo(-0.3, 0.5, 0, 0.55);
+    core.add(new THREE.Mesh(ext(sh, 0.16), mat));
+    const inner = new THREE.Shape();
+    inner.moveTo(0, 0.36); inner.lineTo(0.28, 0.28); inner.lineTo(0.25, -0.05); inner.quadraticCurveTo(0.18, -0.3, 0, -0.42);
+    inner.quadraticCurveTo(-0.18, -0.3, -0.25, -0.05); inner.lineTo(-0.28, 0.28); inner.lineTo(0, 0.36);
+    const ig = ext(inner, 0.06, 0.02); ig.translate(0, 0, 0.12);
+    core.add(new THREE.Mesh(ig, white));
+    const star = new THREE.Shape();
+    for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i / 10) * Math.PI * 2, r = i % 2 ? 0.07 : 0.16; (i ? star.lineTo : star.moveTo).call(star, Math.cos(a) * r, -Math.sin(a) * r); }
+    const sg = ext(star, 0.04, 0.01); sg.translate(0, 0, 0.17);
+    core.add(new THREE.Mesh(sg, mat));
+  } else if (type === 'magnet') {
+    const u = new THREE.TorusGeometry(0.34, 0.13, 10, 20, Math.PI);
+    u.rotateZ(Math.PI);
+    u.translate(0, 0.12, 0);
+    core.add(new THREE.Mesh(u, mat));
+    for (const sx of [-1, 1]) {
+      const leg = new THREE.CylinderGeometry(0.13, 0.13, 0.22, 14); leg.translate(sx * 0.34, 0.23, 0);
+      core.add(new THREE.Mesh(leg, mat));
+      const tip = new THREE.CylinderGeometry(0.135, 0.135, 0.16, 14); tip.translate(sx * 0.34, 0.42, 0);
+      core.add(new THREE.Mesh(tip, silver));
+    }
+  } else if (type === 'x2') {
+    const disc = new THREE.CylinderGeometry(0.6, 0.6, 0.14, 28); disc.rotateX(Math.PI / 2);
+    core.add(new THREE.Mesh(disc, mat));
+    const rim = new THREE.TorusGeometry(0.6, 0.05, 6, 28);
+    core.add(new THREE.Mesh(rim, white));
+    for (const r of [0.75, -0.75]) { const g = new THREE.BoxGeometry(0.07, 0.42, 0.08); g.rotateZ(r); g.translate(-0.2, 0, 0.1); core.add(new THREE.Mesh(g, white)); }
+    const two = new THREE.Shape();
+    two.moveTo(-0.13, 0.12); two.quadraticCurveTo(-0.12, 0.25, 0.02, 0.25); two.quadraticCurveTo(0.16, 0.25, 0.16, 0.11);
+    two.quadraticCurveTo(0.16, 0.02, 0.03, -0.08); two.lineTo(-0.06, -0.15); two.lineTo(0.17, -0.15); two.lineTo(0.17, -0.23);
+    two.lineTo(-0.15, -0.23); two.lineTo(-0.15, -0.16); two.lineTo(-0.02, -0.04); two.quadraticCurveTo(0.08, 0.04, 0.08, 0.11);
+    two.quadraticCurveTo(0.08, 0.18, 0.02, 0.18); two.quadraticCurveTo(-0.05, 0.18, -0.06, 0.1); two.lineTo(-0.13, 0.12);
+    const tg = ext(two, 0.08, 0.012); tg.scale(1.1, 1.1, 1); tg.translate(0.2, 0, 0.1);
+    core.add(new THREE.Mesh(tg, white));
+  } else if (type === 'giant') {
+    const blk = new THREE.BoxGeometry(0.62, 0.36, 0.62); blk.translate(0, -0.25, 0);
+    core.add(new THREE.Mesh(blk, mat));
+    const ar = new THREE.Shape();
+    ar.moveTo(0, 0.5); ar.lineTo(0.3, 0.12); ar.lineTo(0.12, 0.12); ar.lineTo(0.12, -0.12); ar.lineTo(-0.12, -0.12); ar.lineTo(-0.12, 0.12); ar.lineTo(-0.3, 0.12); ar.lineTo(0, 0.5);
+    const ag = ext(ar, 0.18, 0.03); ag.translate(0, 0.0, 0);
+    core.add(new THREE.Mesh(ag, white));
+  } else {
+    // 슬로모: 모래시계 (위·아래 유리 + 모래 + 나무 틀)
+    for (const sy of [1, -1]) {
+      const g = new THREE.ConeGeometry(0.3, 0.42, 16, 1, true); if (sy > 0) g.rotateX(Math.PI); g.translate(0, sy * 0.21, 0);
+      core.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, roughness: 0.1, emissive: color, emissiveIntensity: 0.2 })));
+      const cap = new THREE.CylinderGeometry(0.38, 0.38, 0.07, 16); cap.translate(0, sy * 0.46, 0);
+      core.add(new THREE.Mesh(cap, mat));
+    }
+    const sand = new THREE.ConeGeometry(0.22, 0.2, 14); sand.translate(0, -0.3, 0);
+    core.add(new THREE.Mesh(sand, new THREE.MeshStandardMaterial({ color: 0xffd36a, emissive: 0x8a6a10 })));
+    for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2; const g = new THREE.CylinderGeometry(0.025, 0.025, 0.92, 6); g.translate(Math.cos(a) * 0.33, 0, Math.sin(a) * 0.33); core.add(new THREE.Mesh(g, mat)); }
+  }
   core.position.y = 1.2;
   group.add(core);
 
@@ -3921,10 +4164,14 @@ export function createPowerUp(type) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const x = c.getContext('2d');
-  x.fillStyle = 'rgba(0,0,0,0.45)';
+  // 아이콘 배지: 파워업 색 원 + 흰 테두리 (아이콘 이미지는 불러오는 대로 얹음)
+  x.fillStyle = `#${new THREE.Color(color).getHexString()}`;
   x.beginPath();
-  x.arc(64, 64, 58, 0, Math.PI * 2);
+  x.arc(64, 64, 56, 0, Math.PI * 2);
   x.fill();
+  x.lineWidth = 6;
+  x.strokeStyle = '#ffffff';
+  x.stroke();
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   // 라인 아이콘 SVG 를 캔버스에 그려서 스프라이트 라벨로 사용

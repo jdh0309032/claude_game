@@ -1,0 +1,67 @@
+<!doctype html><html><head><meta charset="utf-8"><title>asset sheet</title>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.min.js","three/addons/":"../vendor/addons/"}}</script>
+<style>body{margin:0;background:#e9eef0;font:12px system-ui} #grid{display:flex;flex-wrap:wrap;gap:6px;padding:6px}
+.c{width:220px;background:#fff;border-radius:8px;overflow:hidden} .c canvas{display:block;width:220px;height:220px} .c b{display:block;padding:3px 6px}</style></head>
+<body><div id="grid"></div><script type="module">
+// 에셋 점검용 시트: ?cat=bikes|helmets|outfits|boxes|items|cars|map|landmarks — 모든 모델을 이름과 함께 격자로 렌더
+import * as THREE from 'three';
+import * as M from '../js/models.js';
+import { BIKES, BOXES, OUTFITS, HELMETS } from '../js/config.js';
+const cat = new URLSearchParams(location.search).get('cat') || 'bikes';
+const R = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+R.setSize(440, 440, false);
+R.setClearColor(0xcfe3ea, 1);
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 2.2));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(4, 8, -5); scene.add(sun);
+const fill = new THREE.DirectionalLight(0xbfe8ff, 0.8); fill.position.set(-5, 3, 4); scene.add(fill);
+const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 2000);
+const meshOf = (g, mat = M.vcMat) => {
+  if (g.isBufferGeometry) return new THREE.Mesh(g, mat);
+  if (g.isObject3D) return g;
+  if (g.group) return g.group;
+  if (g.base) { const grp = new THREE.Group(); grp.add(new THREE.Mesh(g.base, M.vcMat)); if (g.glow) grp.add(new THREE.Mesh(g.glow, M.glowMat)); return grp; }
+  return g;
+};
+function shot(label, obj, view = [3.2, 2.0, -3.8]) {
+  const holder = new THREE.Group(); holder.add(obj); scene.add(holder);
+  const bb = new THREE.Box3().setFromObject(obj); const c = bb.getCenter(new THREE.Vector3()); const sz = bb.getSize(new THREE.Vector3());
+  const r = Math.max(sz.x, sz.y, sz.z) || 1; const d = r * 2.2;
+  const v = new THREE.Vector3(...view).normalize().multiplyScalar(d);
+  cam.position.copy(c).add(v); cam.near = d / 50; cam.far = d * 20; cam.updateProjectionMatrix(); cam.lookAt(c);
+  R.render(scene, cam);
+  const cell = document.createElement('div'); cell.className = 'c';
+  const cv = document.createElement('canvas'); cv.width = 440; cv.height = 440; cv.getContext('2d').drawImage(R.domElement, 0, 0);
+  const b = document.createElement('b'); b.textContent = label; cell.append(cv, b); document.getElementById('grid').append(cell);
+  scene.remove(holder);
+}
+const L = {
+  bikes: () => BIKES.map((b) => [b.id, () => M.createBike(b.color, { style: b.style || b.id, national: b.id === 'national' ? 'TH' : undefined }).root]),
+  helmets: () => HELMETS.map((h) => [h.id, () => M.createItemModel('helmet', h.id)]),
+  outfits: () => OUTFITS.map((o) => [o.id, () => M.createItemModel('outfit', o.id)]),
+  boxes: () => BOXES.map((x) => [x.id, () => M.createItemModel('box', x.id)]),
+  items: () => [
+    ...['shield', 'magnet', 'giant', 'x2', 'slow'].map((t) => ['power:' + t, () => M.createPowerUp(t)]),
+    ['coin', () => meshOf(M.coinGeometry(), M.coinMat)], ['cone', () => meshOf(M.coneGeometry())], ['pothole', () => meshOf(M.potholeGeometry())],
+    ['manhole', () => meshOf(M.manholeGeometry())], ['cargo', () => meshOf(M.cargoGeometry())], ['sign', () => meshOf(M.signGeometry())],
+    ['jumpramp', () => M.createJumpRamp()], ['dropzone', () => M.createDropZone()],
+    ...Object.keys(M.STALL_DEFS).map((k) => ['stall:' + k, () => M.createStall(k)]),
+  ],
+  cars: () => Object.keys(M.CAR_DEFS).map((k) => [k, () => M.createCar(k)]),
+  map: () => [
+    ...['ruko', 'tube', 'neon', 'modern', 'brick', 'haussmann', 'peranakan', 'colonial', 'teak'].map((k) => ['bld:' + k, () => meshOf(M.buildingStyle(k))]),
+    ...['palm', 'sakura', 'ginkgo', 'round', 'raintree', 'frangipani'].map((k) => ['tree:' + k, () => meshOf(M.treeVariant(k))]),
+    ...['warung', 'vending', 'cafe', 'tent', 'planter', 'mamak', 'sarisari', 'juicecart', 'teashop'].map((k) => ['curb:' + k, () => meshOf(M.curbVariant(k))]),
+    ...['lanterns', 'bunting_ph', 'bunting_my', 'bunting_id', 'flags_th', 'flags_kh', 'flags_mm'].map((k) => ['over:' + k, () => meshOf(M.overheadGeometry(k))]),
+    ['lamp', () => { const g = new THREE.Group(); g.add(new THREE.Mesh(M.lampPoleGeometry(), M.vcMat), new THREE.Mesh(M.lampHeadGeometry(), M.lampHeadMat)); return g; }], ['billboard', () => M.createBillboard()],
+  ],
+  landmarks: () => ['mbs', 'petronas', 'monas', 'temple', 'pagoda', 'mayon', 'angkor', 'shwedagon'].map((k) => [k, () => M.createLandmark(k)]),
+}[cat]();
+(async () => {
+  for (const [name, mk] of L) {
+    try { shot(name, meshOf(mk())); } catch (e) { const d = document.createElement('div'); d.className = 'c'; d.textContent = name + ' ERROR ' + e.message; document.getElementById('grid').append(d); }
+    await new Promise((r) => setTimeout(r, cat === 'items' ? 120 : 0));
+  }
+  document.title = 'done';
+})();
+</script></body></html>
