@@ -126,3 +126,7 @@ details summary { cursor: pointer; }
 }
 .drawer td { white-space: nowrap; }
 .drawer td code { white-space: normal; }
+.mt-engine { color: #9fb3a8; font-size: 11px; }
+.mt-engine select { font-size: 12px; padding: 5px 8px; background: #1b2a22; color: #dfe8e3; border-color: #2c3e34; }
+.live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; animation: live 1.6s infinite; }
+@keyframes live { 50% { opacity: 0.3; } }

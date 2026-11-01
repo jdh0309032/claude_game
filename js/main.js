@@ -14,6 +14,7 @@ import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, ECON, GACHA_ODDS, TIERS, DEFAUL
 } from './config.js';
 import { paymentsMode, initPayments, getPacks, buyPack } from './payments.js';
 import { initLiveUpdate, webBuild } from './updater.js';
+import { machineTranslate } from './mt.js';
 import { t, setLang, getLang, LANGS, applyI18n, onLangChange } from './i18n.js';
 import {
   save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, PAINTS, getBike,
@@ -51,7 +52,17 @@ const LANE_BLINK = 1.0, LANE_MOVE = 1.5;
 const AIR_FLIP = 9.5, AIR_SPIN = 9.5, LAND_TOL = 0.68, LAND_IFRAMES = 1.8;
 // 착지 보조: 땅에 닿기 0.25초 전부터, 수평과의 각도가 40° 안이면 바퀴가 바닥을 향하도록 자동으로 돌려 줌 (여러 축으로 돌려도 착지가 쉬움)
 const LAND_ASSIST_TIME = 0.25, LAND_ASSIST_ANGLE = 0.7, LAND_ASSIST_RATE = 8;
-const TRICK_POINTS = { jump: 200, flip: 500, spin: 1200, diagonal: 3000 };
+// 공중 묘기 점수 = (바퀴마다 기본 점수의 합) × 회전 수 배수 × 콤보 배수 × TRICK_UNIT
+//   기본 점수(1바퀴): 전진(뒤로 돌기) 1.0 · 전진 사선 1.3 · 좌/우(옆으로 돌기) 1.6 · 후진(앞으로 돌기) 1.8 · 후진 사선 2.2
+//   회전 수 배수: 1바퀴 x1.0 · 2바퀴 x2.5 · 3바퀴 이상 x5.0
+//   콤보 배수(서로 다른 동작 수): 1가지 x1.0 · 2가지 x1.5 · 3가지 이상 x2.2
+//   예) 전진 2바퀴 = 2.0×2.5×1.0 = 5 → 1,500점 / 전진+후진 = 2.8×2.5×1.5 = 10.5 → 3,150점 / 전진+좌우+후진 = 4.4×5.0×2.2 = 48.4 → 14,520점
+const TRICK_BASE = { back: 1.0, backDiag: 1.3, side: 1.6, front: 1.8, frontDiag: 2.2 };
+const TRICK_ROT_MULT = [0, 1.0, 2.5, 5.0];
+const TRICK_COMBO_MULT = [0, 1.0, 1.5, 2.2];
+const TRICK_UNIT = 300; // 기본 점수 1.0 = 게임 점수 300
+const TRICK_JUMP = 200; // 회전 없이 점프만
+const TRICK_NAMES = { back: 'BACKFLIP', backDiag: 'DIAGONAL BACKFLIP', side: 'SIDE FLIP', front: 'FRONT FLIP', frontDiag: 'DIAGONAL FRONT FLIP' };
 
 // ---------- 시드 기반 월드 난수 (PRNG: mulberry32)
 // 멀티플레이 시 방장이 만든 시드로 두 기기의 도로/교통/날씨를 동일하게 생성.
@@ -1793,7 +1804,7 @@ function resetRun(seed) {
     speed: 21, x: 3.5 * driveSign(0), vx: 0, lean: 0, distance: 0, score: 0, mult: 1, time: 0,
     coinsRun: 0, nearMiss: 0, combo: 0, comboTimer: 0, maxCombo: 0,
     shield: false, secondChance: false, boostsUsed: [], headT: 0, magnetTime: 0, x2Time: 0, slowTime: 0, giantT: 0, invuln: 0, oncomingDist: 0,
-    rotAngle: 0, rotPitchAmt: 0, rotSpinAmt: 0, rotationCount: 0, rotShown: 0, tricks: 0, landInv: 0,
+    rotAngle: 0, rotSeg: {}, rotTypes: [], rotationCount: 0, rotShown: 0, tricks: 0, landInv: 0,
     maxKmh: 0, smashed: 0, jumps: 0, continued: false, finalized: false,
     nextSpawn: 25, nextCoins: 60, nextPower: wrand('power', 120, 180), nextCones: wrand('cone', 350, 600),
     nextStall: wrand('stall', 300, 500), nextHazard: wrand('hazard', 350, 500), nextDrop: wrand('hazard', 400, 600), nextRamp: wrand('ramp', 250, 400), nextPuddle: wrand('puddle', 400, 700), nextSquall: wrand('weather', 1200, 2000),
@@ -2100,7 +2111,9 @@ function startJump(c) {
   G.airY = 0.4;
   G.airVy = 9 + G.speed * 0.12; // 공중 묘기를 할 수 있도록 체공 시간 확보
   airQ.identity();
-  G.rotAngle = G.rotPitchAmt = G.rotSpinAmt = 0;
+  G.rotAngle = 0;
+  G.rotSeg = {}; // 지금 돌고 있는 바퀴에서 동작별로 돈 각도
+  G.rotTypes = []; // 완성한 바퀴마다의 동작
   G.rotationCount = 0;
   G.rotShown = 0;
   G.jumps++;
@@ -2144,38 +2157,54 @@ function updateAirTricks(rdt, steer, throttle, brake) {
     airDq.setFromAxisAngle(airAxis, ang);
     airQ.premultiply(airDq);
     G.rotAngle += ang;
-    G.rotPitchAmt += ang * Math.abs(airAxis.x);
-    G.rotSpinAmt += ang * Math.abs(airAxis.y);
+    const dir = trickDir(ix, iy);
+    G.rotSeg[dir] = (G.rotSeg[dir] || 0) + ang;
   } else if (offLevelAngle() < 0.6) {
     // 입력을 놓으면 가까운 수평 자세로 살짝 맞춰 줌 (착지 보조)
     airQ.slerp(levelQ, Math.min(1, 4 * rdt));
   }
   G.rotationCount = Math.floor(G.rotAngle / TAU + 0.08);
   if (G.rotationCount > G.rotShown) {
+    // 한 바퀴 완성: 그 바퀴 동안 가장 많이 돈 동작으로 기록
+    while (G.rotTypes.length < G.rotationCount) {
+      let best = 'back', most = -1;
+      for (const k in G.rotSeg) if (G.rotSeg[k] > most) { most = G.rotSeg[k]; best = k; }
+      G.rotTypes.push(best);
+      G.rotSeg = {};
+    }
     G.rotShown = G.rotationCount;
-    popup(trickName(trickKind(), G.rotationCount), 'combo', `${G.rotationCount * 360}°`);
+    popup(t(TRICK_NAMES[G.rotTypes[G.rotTypes.length - 1]]), 'combo', `${G.rotationCount * 360}°`);
     sfx.near(true);
   }
 }
 
-// 어느 축 위주로 돌았는지: 두 성분이 비슷하면 대각선
-function trickKind() {
-  const tot = G.rotPitchAmt + G.rotSpinAmt || 1;
-  const pr = G.rotPitchAmt / tot;
-  if (pr > 0.3 && pr < 0.7) return 'diagonal';
-  return pr >= 0.7 ? 'flip' : 'spin';
+// 입력 방향 → 동작: 위(가속) = 전진(뒤로 돌기), 아래(브레이크) = 후진(앞으로 돌기), 좌/우 = 옆으로 돌기, 그 사이 = 사선
+function trickDir(ix, iy) {
+  const a = Math.atan2(Math.abs(iy), Math.abs(ix)); // 0 = 위·아래, π/2 = 좌·우
+  if (a > 1.18) return 'side'; // 67.5° 넘으면 좌/우
+  const fwd = ix >= 0;
+  if (a < 0.39) return fwd ? 'back' : 'front'; // 22.5° 안이면 앞뒤
+  return fwd ? 'backDiag' : 'frontDiag';
 }
 
-function trickName(kind, n) {
-  if (!n) return t('AIR JUMP');
-  if (kind === 'diagonal') return n > 1 ? t('{n}x DIAGONAL MEGA FLIP', { n }) : t('DIAGONAL MEGA FLIP');
-  if (kind === 'spin') return t('{n} SPIN', { n: n * 360 });
-  return n > 1 ? t('{n}x FLIP', { n }) : t('FLIP');
+// 착지 점수: (기본 점수 합) × 회전 수 배수 × 콤보 배수 × TRICK_UNIT
+function trickScore(types) {
+  const n = types.length;
+  if (!n) return { pts: TRICK_JUMP, rot: 0, combo: 0 };
+  const sum = types.reduce((acc, k) => acc + TRICK_BASE[k], 0);
+  const rot = TRICK_ROT_MULT[Math.min(n, 3)];
+  const kinds = new Set(types).size;
+  const combo = TRICK_COMBO_MULT[Math.min(kinds, 3)];
+  return { pts: Math.round(sum * rot * combo * TRICK_UNIT), rot, combo, kinds };
 }
 
-// 회전 종류별 차등 점수 (1바퀴당): 앞뒤 플립 < 옆으로 도는 스핀 < 대각선 다축 회전
-function trickPoints(kind, n) {
-  return n ? TRICK_POINTS[kind] * n : TRICK_POINTS.jump;
+function trickTitle(types) {
+  const n = types.length;
+  if (!n) return t('AIR JUMP!');
+  const kinds = new Set(types).size;
+  if (kinds > 1) return t('{n}-WAY COMBO', { n: kinds });
+  const name = t(TRICK_NAMES[types[0]]);
+  return n > 1 ? t('{n}x {trick}', { n, trick: name }) : name;
 }
 
 function land() {
@@ -2185,7 +2214,7 @@ function land() {
   G.airVy = 0;
   // 착지 판정: 차체가 수평 자세에 가까워야 성공, 아니면 크래시
   const clean = offLevelAngle() < LAND_TOL;
-  const n = G.rotationCount, kind = trickKind();
+  const types = G.rotTypes.slice(0, G.rotationCount);
   if (!clean) {
     popup(t('CRASH LANDING!'), 'big');
     crash({ x: G.x - 0.5 });
@@ -2195,10 +2224,12 @@ function land() {
   // 착지 무적: 1.8초 동안 차·장애물과 부딪혀도 통과 (보호막처럼 은은하게 점멸)
   G.invuln = Math.max(G.invuln, LAND_IFRAMES);
   G.landInv = LAND_IFRAMES;
-  const pts = Math.round(trickPoints(kind, n) * (G.x2Time > 0 ? 2 : 1));
+  const sc = trickScore(types);
+  const pts = Math.round(sc.pts * (G.x2Time > 0 ? 2 : 1));
   G.score += pts;
-  if (n > 0) G.tricks += n;
-  popup(n ? trickName(kind, n) : t('AIR JUMP!'), 'perfect', t('CLEAN LANDING · +{n}', { n: fmt(pts) }));
+  if (types.length > 0) G.tricks += types.length;
+  const mult = types.length ? ` · x${sc.rot}${sc.combo > 1 ? ` · ${t('COMBO x{n}', { n: sc.combo })}` : ''}` : '';
+  popup(trickTitle(types), 'perfect', t('CLEAN LANDING · +{n}', { n: fmt(pts) }) + mult);
   G.shake = 0.5;
   sfx.land();
   vibrate(40);
@@ -2694,11 +2725,38 @@ function setNotices(raw) {
 function updateNoticeDot() {
   $('noticeDot').classList.toggle('hidden', !notices.length || save.noticeSeen === notices[0].id);
 }
+// 관리자가 번역해 두지 않은 언어는 기계 번역으로 채움 (기기에 캐시)
+const NTR_KEY = 'gr.noticeTr';
+let noticeTr = {};
+try { noticeTr = JSON.parse(localStorage.getItem(NTR_KEY)) || {}; } catch (e) { noticeTr = {}; }
+const ntrPending = new Set();
+const looksLatin = (s) => /^[\u0000-\u024f\u1e00-\u1eff\u2000-\u206f\s]*$/.test(s);
+function noticeText(n) {
+  const lang = getLang();
+  const loc = n.i18n?.[lang];
+  if (loc?.title) return loc;
+  if (t(n.title) !== n.title) return { title: t(n.title), body: t(n.body) }; // 게임에 들어 있는 기본 공지
+  const src = n.i18n?.ko?.title ? { ...n.i18n.ko, lang: 'ko' } : { title: n.title, body: n.body, lang: 'auto' };
+  if (lang === 'en' && looksLatin(n.title)) return n;
+  const key = `${lang}|${n.id}|${src.title.length}|${src.body.length}`;
+  if (noticeTr[key]) return noticeTr[key];
+  if (!ntrPending.has(key)) {
+    ntrPending.add(key);
+    Promise.all([machineTranslate(src.title, src.lang, lang), src.body ? machineTranslate(src.body, src.lang, lang) : ''])
+      .then(([title, body]) => {
+        noticeTr[key] = { title, body };
+        try { localStorage.setItem(NTR_KEY, JSON.stringify(noticeTr)); } catch (e) { /* ignore */ }
+        if (currentScreen === 'notices') renderNotices();
+      })
+      .catch(() => {})
+      .finally(() => ntrPending.delete(key));
+  }
+  return lang === 'ko' && n.i18n?.ko ? n.i18n.ko : n; // 번역이 오기 전엔 원문
+}
 function renderNotices() {
   $('noticeList').innerHTML = notices.length
     ? notices.map((n) => {
-      const loc = n.i18n?.[getLang()];
-      const title = loc?.title || t(n.title), body = loc?.body || t(n.body);
+      const { title, body } = noticeText(n);
       return `<article class="notice tag-${n.tag.toLowerCase()}"><div class="nt-head"><em>${escapeHtml(t(n.tag))}</em><small>${escapeHtml(n.date)}</small></div>
       <h3>${escapeHtml(title)}</h3><p>${escapeHtml(body).replace(/\n/g, '<br>')}</p></article>`;
     }).join('')
@@ -2706,6 +2764,7 @@ function renderNotices() {
 }
 $('btnNotices').addEventListener('click', () => {
   renderNotices();
+  pollConfig(); // 열 때마다 최신 공지 확인
   openScreen('notices');
   if (notices.length && save.noticeSeen !== notices[0].id) {
     save.noticeSeen = notices[0].id;
@@ -3515,6 +3574,45 @@ let supportView = 'list', supportList = [], supportSel = null, supportUnread = f
 const deviceInfo = () => `${window.Capacitor?.getPlatform?.() || 'web'} · ${(navigator.userAgent.match(/Android [\d.]+|iPhone OS [\d_]+|Windows NT [\d.]+|Mac OS X [\d_]+/) || [''])[0]}`.slice(0, 160);
 const fmtDate = (iso) => { try { return new Date(iso).toLocaleString(getLang(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
 
+// 운영자 답변: 내 언어 번역이 있으면 그것, 없으면 기계 번역(도착하면 다시 그림), 그전엔 원문
+const staffTr = new Map();
+function staffText(m) {
+  const lang = getLang();
+  if (m.translated && m.translated_lang === lang) return m.translated;
+  if (lang === 'ko') return m.body; // 운영자는 한국어로 씀
+  const key = `${lang}|${m.created_at}|${m.body.length}`;
+  if (staffTr.has(key)) return staffTr.get(key) || m.translated || m.body;
+  staffTr.set(key, '');
+  machineTranslate(m.body, 'ko', lang)
+    .then((tx) => { staffTr.set(key, tx); if (currentScreen === 'support' && supportView === 'thread') renderSupport(); })
+    .catch(() => {});
+  return m.translated || m.body;
+}
+// 실시간: 고객지원 화면이 열려 있으면 6초마다, 아니면 1분마다 새 답변 확인 (화면이 꺼져 있거나 게임 중이면 쉼)
+let supportSig = '', supportPolling = false, supportLast = 0;
+async function pollSupport(force = false) {
+  if (supportPolling || document.hidden || !getSession() || !isServerReady() || G.state === 'playing') return;
+  const open = currentScreen === 'support';
+  if (!force && !open && Date.now() - supportLast < 60000) return;
+  supportPolling = true;
+  supportLast = Date.now();
+  try {
+    const res = await myInquiries(open && supportView === 'thread');
+    if (!res.ok) return;
+    const sg = JSON.stringify(res.list.map((i) => [i.id, i.status, i.messages.length, i.user_unread]));
+    const changed = sg !== supportSig;
+    supportSig = sg;
+    const wasUnread = supportUnread;
+    supportList = res.list;
+    supportUnread = !open && supportList.some((i) => i.user_unread);
+    $('settingsDot').classList.toggle('hidden', !supportUnread);
+    $('supportDot').classList.toggle('hidden', !supportUnread);
+    if (supportUnread && !wasUnread) toast(t('SUPPORT REPLIED  ·  CHECK SETTINGS → HELP & SUPPORT'));
+    if (open && changed && supportView !== 'new') renderSupport();
+  } finally { supportPolling = false; }
+}
+setInterval(pollSupport, 6000);
+
 async function refreshSupportBadge() {
   if (!getSession() || !isServerReady()) { supportUnread = false; } else {
     const res = await myInquiries(false);
@@ -3577,12 +3675,16 @@ async function renderSupport(reload = false) {
     const inq = supportList.find((i) => i.id === supportSel);
     if (!inq) { supportView = 'list'; renderSupport(); return; }
     inq.user_unread = false; // 열어 본 문의는 읽음 (서버는 목록을 불러올 때 이미 읽음 처리)
+    // 다시 그려도 쓰던 답장은 유지
+    const draft = $('supReplyMsg')?.value || '';
+    const hadFocus = document.activeElement?.id === 'supReplyMsg';
     const msgs = inq.messages.map((m) => {
       const mine = m.sender === 'user';
-      const translated = !mine && m.translated && m.translated_lang === getLang();
+      const shown = mine ? m.body : staffText(m);
+      const translated = !mine && shown !== m.body;
       return `<div class="sup-msg ${mine ? 'me' : 'staff'}">
         <small>${mine ? t('You') : t('Grub Rider Support')} · ${fmtDate(m.created_at)}</small>
-        <p>${escapeHtml(translated ? m.translated : (m.translated || m.body)).replace(/\n/g, '<br>')}</p>
+        <p>${escapeHtml(shown).replace(/\n/g, '<br>')}</p>
         ${translated ? `<details><summary>${t('Original')}</summary><p>${escapeHtml(m.body).replace(/\n/g, '<br>')}</p></details>` : ''}
       </div>`;
     }).join('');
@@ -3601,6 +3703,7 @@ async function renderSupport(reload = false) {
     });
     const th = body.querySelector('.sup-thread');
     if (th) th.scrollTop = th.scrollHeight;
+    if ($('supReplyMsg')) { $('supReplyMsg').value = draft; if (hadFocus) $('supReplyMsg').focus(); }
     return;
   }
   body.innerHTML = `<button class="btn primary" id="supNew" data-icon="next"><span>${t('NEW INQUIRY')}</span></button>
@@ -4088,6 +4191,8 @@ if (DEBUG) {
   window.__save = save;
   window.__dbg = {
     show: (id) => show(id),
+    trickScore, trickDir, trickTitle,
+    jump: () => startJump({}),
     gameOver: () => showGameOver(),
     car: (type, lane, z) => spawnCar(z, { type, lane }),
     puddle: (x, z) => spawnInPool(puddlePool, { x, z }),
@@ -4175,12 +4280,35 @@ const LOAD_TIPS = ['Brush past cars for NEAR MISS bonuses', 'Land level after a 
 setLang(save.settings.lang || 'en') // 기본은 항상 영어, 설정에서만 바꿈
   .then(() => { const el = $('loadTip'); if (el) el.textContent = t(pick(LOAD_TIPS)); });
 // 운영 설정(가격·보상)은 다른 로딩과 병렬로 받고, 도착하면 보이는 화면만 다시 그림
-loadAppConfig().then((cfg) => {
+function applyAppConfig(cfg) {
   if (!cfg) return;
-  if (cfg.notices) { setNotices(cfg.notices); updateNoticeDot(); }
+  if (cfg.notices) {
+    const before = JSON.stringify(notices);
+    setNotices(cfg.notices);
+    updateNoticeDot();
+    if (currentScreen === 'notices' && JSON.stringify(notices) !== before) {
+      renderNotices();
+      if (notices.length && save.noticeSeen !== notices[0].id) { save.noticeSeen = notices[0].id; persist(); updateNoticeDot(); }
+    }
+  }
+  // 가격·보상이 바뀌었을 때만 다시 그림 (1분마다 확인할 때 차고 화면이 튀지 않게)
+  const eco = JSON.stringify(cfg.economy || null);
+  if (eco === lastEconomy) return;
+  lastEconomy = eco;
   if (G.state === 'menu') refreshMenu();
-  if (!$('garage').classList.contains('hidden')) renderGarage();
-});
+  if (currentScreen === 'garage') renderGarage();
+}
+let lastEconomy = '';
+loadAppConfig().then(applyAppConfig);
+// 공지·가격은 실행 중에도 1분마다(게임 플레이 중에는 쉼), 앱으로 돌아올 때 다시 확인 → 다시 켜지 않아도 새 공지가 뜸
+let configBusy = false;
+function pollConfig() {
+  if (configBusy || document.hidden || G.state === 'playing') return;
+  configBusy = true;
+  loadAppConfig().then(applyAppConfig).finally(() => { configBusy = false; });
+}
+setInterval(pollConfig, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { pollConfig(); pollSupport(true); } });
 detectCountry()
   .then(() => auth.restore())
   .then((s) => (s ? onSignedIn() : refreshMenu()));
