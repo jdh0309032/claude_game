@@ -13,6 +13,7 @@ import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, ECON, GACHA_ODDS, TIERS, DEFAUL
   FLAG_SHOP_CODES, FLAG_PRICE_THEME, FLAG_PRICE_OTHER, ADMIN_DEBUG_TOGGLE, APP_INFO, BOOSTS, BOOST_BUNDLE, BOOST_START_TIME, HEAD_START_TIME,
 } from './config.js';
 import { paymentsMode, initPayments, getPacks, buyPack } from './payments.js';
+import { initLiveUpdate, webBuild } from './updater.js';
 import {
   save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, PAINTS, getBike,
   replaceDoneMissions, missionText, auth, leaderboard, getSession, ONLINE, detectCountry,
@@ -3465,6 +3466,7 @@ function renderSettings() {
   $('btnAdmin').textContent = isAdminMode() ? 'ON' : 'OFF';
   $('btnAdmin').disabled = serverAdmin;
   $('appVersion').textContent = `${APP_INFO.name} v${APP_INFO.version}`;
+  webBuild().then((n) => { if (n) $('appVersion').textContent = `${APP_INFO.name} v${APP_INFO.version} · build ${n}`; });
   $('btnDeleteAccount').classList.toggle('hidden', !getSession());
 }
 // 계정 삭제 (스토어 정책 필수): 두 번 확인 → 서버에서 계정·기록·데이터 삭제
@@ -3913,6 +3915,7 @@ function showDailyStreak() {
 preloadFlags([...THEMES.map((t) => t.code), ...FLAG_SHOP_CODES]);
 
 // 시작: IP 로 국가 판별 → 자동 로그인 → 서버 데이터 → 국가 고정 → 국가대표 검증
+initLiveUpdate(); // 앱: 라이브 업데이트 확인 (웹에서는 무시)
 // 운영 설정(가격·보상)은 다른 로딩과 병렬로 받고, 도착하면 보이는 화면만 다시 그림
 loadAppConfig().then((cfg) => {
   if (!cfg) return;

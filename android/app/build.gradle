@@ -9,7 +9,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // CI 가 빌드 번호로 올려줌 (스토어·직접 설치 업데이트는 versionCode 가 커야 함)
         versionCode((System.getenv("VERSION_CODE") ?: "1") as int)
-        versionName "1.0.${System.getenv("VERSION_CODE") ?: "0"}"
+        versionName "${System.getenv("NATIVE_LEVEL") ?: "1"}.${System.getenv("VERSION_CODE") ?: "0"}" // 앞자리 = 네이티브 수준 (라이브 업데이트 호환 판단)
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

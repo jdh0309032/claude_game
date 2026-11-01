@@ -173,6 +173,11 @@ python3 -m http.server 8000
   1. `keytool -genkeypair -v -keystore grubrider.keystore -alias grubrider -keyalg RSA -keysize 2048 -validity 10000`
   2. `base64 -w0 grubrider.keystore` 출력값을 저장소 Settings → Secrets and variables → Actions 에 `ANDROID_KEYSTORE_BASE64` 로,
      비밀번호·별칭을 `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS`(grubrider) / `ANDROID_KEY_PASSWORD` 로 등록
+- **라이브 업데이트(스토어 없이 게임 파일 교체)**: `main` 에 푸시하면 CI 가 `web.zip` 을 GitHub Release(`web-<빌드 번호>`)로 올립니다.
+  설치된 앱은 켤 때·다시 열 때(10분 간격) 최신 릴리스를 확인해, 내 웹 빌드보다 새것이면 백그라운드로 받아 두고 **다음에 앱을 내렸다 올리거나 다시 켤 때** 적용합니다(`js/updater.js`, Capgo 업데이터 자체 호스팅 모드).
+  새 묶음이 오류로 시작하지 못하면(`notifyAppReady` 미호출) 10초 뒤 이전 묶음으로 자동 복구. 설정 화면 하단에 `build N` 으로 현재 웹 빌드 번호 표시.
+  - 네이티브(플러그인·권한) 변경이 있으면 `package.json` 의 `nativeLevel` 을 올리세요. 그 릴리스는 옛 앱에는 적용되지 않고(새 APK·스토어 업데이트 필요), 새 앱부터 받습니다.
+  - 브랜치(`ccr-*`) 푸시는 APK 만 만들고 릴리스는 올리지 않습니다 → 라이브 업데이트는 머지된 것만 나갑니다.
 - 로컬 빌드: `npm install` → `npm run android:sync`(웹 파일을 `www/` 로 복사 후 동기화) → `npm run android:open`(Android Studio).
 - 버전: `versionCode` = 빌드 번호(자동 증가), `versionName` = `1.0.<빌드 번호>`.
 
