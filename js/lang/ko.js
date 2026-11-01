@@ -374,6 +374,7 @@ export default {
 "HIGHLIGHT CLIPS": "하이라이트 영상",
 "PLAY FREE NOW": "지금 무료로 플레이",
 "GET IT ON GOOGLE PLAY": "Google Play에서 다운로드",
+"UPDATING TO THE NEW VERSION...": "새 버전으로 업데이트 중...",
 "Starter delivery scooter": "입문용 배달 스쿠터",
 "Nimble in tight traffic": "꽉 막힌 도로에서도 날렵하게",
 "Chrome and leather charm": "크롬과 가죽의 클래식한 멋",

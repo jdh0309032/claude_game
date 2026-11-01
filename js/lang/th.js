@@ -374,6 +374,7 @@ export default {
 "HIGHLIGHT CLIPS": "คลิปไฮไลต์",
 "PLAY FREE NOW": "เล่นฟรีเลย",
 "GET IT ON GOOGLE PLAY": "ดาวน์โหลดบน Google Play",
+"UPDATING TO THE NEW VERSION...": "กำลังอัปเดตเป็นเวอร์ชันใหม่...",
 "Starter delivery scooter": "สกูตเตอร์ส่งของสำหรับมือใหม่",
 "Nimble in tight traffic": "คล่องตัวในรถติด",
 "Chrome and leather charm": "เสน่ห์โครเมียมและหนัง",

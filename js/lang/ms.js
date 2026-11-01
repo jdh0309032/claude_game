@@ -374,6 +374,7 @@ export default {
 "HIGHLIGHT CLIPS": "KLIP SOROTAN",
 "PLAY FREE NOW": "MAIN PERCUMA SEKARANG",
 "GET IT ON GOOGLE PLAY": "DAPATKANNYA DI GOOGLE PLAY",
+"UPDATING TO THE NEW VERSION...": "MENGEMAS KINI KE VERSI BAHARU...",
 "Starter delivery scooter": "Skuter penghantaran permulaan",
 "Nimble in tight traffic": "Lincah dalam trafik sesak",
 "Chrome and leather charm": "Pesona krom dan kulit",

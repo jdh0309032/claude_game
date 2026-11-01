@@ -374,6 +374,7 @@ export default {
 "HIGHLIGHT CLIPS": "VIDEO HIGHLIGHT",
 "PLAY FREE NOW": "CHƠI MIỄN PHÍ NGAY",
 "GET IT ON GOOGLE PLAY": "TẢI TRÊN GOOGLE PLAY",
+"UPDATING TO THE NEW VERSION...": "ĐANG CẬP NHẬT PHIÊN BẢN MỚI...",
 "Starter delivery scooter": "Xe tay ga giao hàng cho người mới",
 "Nimble in tight traffic": "Linh hoạt giữa dòng xe đông",
 "Chrome and leather charm": "Nét cổ điển của crôm và da",
