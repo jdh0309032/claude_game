@@ -1862,7 +1862,7 @@ function resetRun(seed) {
     speed: 21, x: 3.5 * driveSign(0), vx: 0, lean: 0, distance: 0, score: 0, mult: 1, time: 0,
     coinsRun: 0, nearMiss: 0, combo: 0, comboTimer: 0, maxCombo: 0,
     shield: false, secondChance: false, boostsUsed: [], headT: 0, magnetTime: 0, x2Time: 0, slowTime: 0, giantT: 0, invuln: 0, oncomingDist: 0,
-    rotAngle: 0, rotSeg: {}, rotTypes: [], rotationCount: 0, rotShown: 0, tricks: 0, landInv: 0,
+    rotAngle: 0, rotTypes: [], rotTurns: 0, rotationCount: 0, rotShown: 0, tricks: 0, landInv: 0,
     maxKmh: 0, smashed: 0, jumps: 0, continued: false, finalized: false,
     nextSpawn: 25, nextCoins: 60, nextPower: wrand('power', 120, 180), nextCones: wrand('cone', 350, 600),
     nextStall: wrand('stall', 300, 500), nextHazard: wrand('hazard', 350, 500), nextDrop: wrand('hazard', 400, 600), nextRamp: wrand('ramp', 250, 400), nextPuddle: wrand('puddle', 400, 700), nextSquall: wrand('weather', 1200, 2000),
@@ -2189,8 +2189,8 @@ function startJump(c) {
   G.airVy = 9 + G.speed * 0.12; // 공중 묘기를 할 수 있도록 체공 시간 확보
   airQ.identity();
   G.rotAngle = 0;
-  G.rotSeg = {}; // 지금 돌고 있는 바퀴에서 동작별로 돈 각도
-  G.rotTypes = []; // 완성한 바퀴마다의 동작
+  trickReset();
+  G.rotTypes = trk.types; // 완성한 바퀴마다의 동작
   G.rotationCount = 0;
   G.rotShown = 0;
   G.jumps++;
@@ -2236,24 +2236,83 @@ function updateAirTricks(rdt, steer, throttle, brake) {
     airDq.setFromAxisAngle(airAxis, ang);
     airQ.premultiply(airDq);
     G.rotAngle += ang;
-    const dir = trickDir(ix, iy);
-    G.rotSeg[dir] = (G.rotSeg[dir] || 0) + ang;
+    trickFeed(ix, iy, ang);
   } else if (offLevelAngle() < 0.6) {
     // 입력을 놓으면 가까운 수평 자세로 살짝 맞춰 줌 (착지 보조)
     airQ.slerp(levelQ, Math.min(1, 4 * rdt));
   }
-  G.rotationCount = Math.floor(G.rotAngle / TAU + 0.08);
+  G.rotTypes = trk.types;
+  G.rotTurns = trk.turns;
+  G.rotationCount = trk.types.length;
   if (G.rotationCount > G.rotShown) {
-    // 한 바퀴 완성: 그 바퀴 동안 가장 많이 돈 동작으로 기록
-    while (G.rotTypes.length < G.rotationCount) {
-      let best = 'back', most = -1;
-      for (const k in G.rotSeg) if (G.rotSeg[k] > most) { most = G.rotSeg[k]; best = k; }
-      G.rotTypes.push(best);
-      G.rotSeg = {};
-    }
     G.rotShown = G.rotationCount;
     popup(t(TRICK_NAMES[G.rotTypes[G.rotTypes.length - 1]]), 'combo', `${G.rotationCount * 360}°`);
     sfx.near(true);
+  }
+}
+
+// ---------- 공중 회전 판정
+// - 바퀴 수: 실제로 한 방향으로 338°(94%) 이상 돌아야 1바퀴. 반대로 밀면 진행 중이던 회전을 되감음
+//   (반 바퀴 뒤로 → 반 바퀴 앞으로 = 제자리 = 0바퀴. 좌우로 흔들어도 바퀴 수가 늘지 않음)
+// - 바퀴마다의 동작: 그 바퀴 동안 가장 많이 돈 방향
+// - 꺾기(방향 전환): 새 방향을 90° 이상 유지했을 때만 1회. 바퀴 수 - 1 을 넘지 않음 (1바퀴로는 꺾기 배수 없음)
+//   완성한 바퀴까지의 꺾기만 셈 (착지 전에 못 채운 마지막 반 바퀴는 제외)
+const TRICK_FULL = TAU * 0.94;
+const TRICK_SEG_MIN = Math.PI / 2;
+const trk = { p: 0, ax: 0, ay: 0, votes: {}, segs: [], types: [], turns: 0 };
+function trickReset() {
+  trk.p = 0;
+  trk.ax = trk.ay = 0;
+  trk.votes = {};
+  trk.segs = [];
+  trk.types = [];
+  trk.turns = 0;
+}
+function trickTurnsFromSegs() {
+  let turns = 0, prev = null;
+  for (const sg of trk.segs) {
+    if (sg.ang < TRICK_SEG_MIN) continue; // 잠깐 스친 방향은 꺾기가 아님
+    if (prev && sg.type !== prev) turns++;
+    prev = sg.type;
+  }
+  return turns;
+}
+function trickFeed(ix, iy, ang) {
+  const m = Math.hypot(ix, iy) || 1;
+  const ux = ix / m, uy = iy / m;
+  const dir = trickDir(ix, iy);
+  const last = trk.segs[trk.segs.length - 1];
+  if (last && last.type === dir) last.ang += ang; else trk.segs.push({ type: dir, ang });
+  if (!trk.ax && !trk.ay) { trk.ax = ux; trk.ay = uy; }
+  const dot = ux * trk.ax + uy * trk.ay;
+  if (dot < -0.35) {
+    // 반대 방향: 진행 중이던 바퀴를 되감음. 다 되감고 더 돌면 새 방향의 바퀴가 됨
+    trk.p -= ang;
+    if (trk.p < 0) {
+      trk.p = -trk.p;
+      trk.ax = ux;
+      trk.ay = uy;
+      trk.votes = { [dir]: trk.p };
+    }
+    return;
+  }
+  trk.p += ang;
+  trk.votes[dir] = (trk.votes[dir] || 0) + ang;
+  if (dot > 0.35) { // 같은 방향 계열: 축을 현재 입력 쪽으로 천천히
+    const nx = trk.ax * 0.85 + ux * 0.15, ny = trk.ay * 0.85 + uy * 0.15, n = Math.hypot(nx, ny) || 1;
+    trk.ax = nx / n;
+    trk.ay = ny / n;
+  } else { // 직각으로 꺾음: 돌던 바퀴는 이어서, 기준 축은 새 방향
+    trk.ax = ux;
+    trk.ay = uy;
+  }
+  while (trk.p >= TRICK_FULL) {
+    let best = dir, most = -1;
+    for (const k in trk.votes) if (trk.votes[k] > most) { most = trk.votes[k]; best = k; }
+    trk.types.push(best);
+    trk.p = Math.max(0, trk.p - TAU);
+    trk.votes = {};
+    trk.turns = Math.min(trickTurnsFromSegs(), trk.types.length - 1);
   }
 }
 
@@ -2267,12 +2326,12 @@ function trickDir(ix, iy) {
 }
 
 // 착지 점수: (기본 점수 합) × 회전 수 배수 × 콤보 배수 × TRICK_UNIT
-function trickScore(types) {
+function trickScore(types, turnsIn) {
   const n = types.length;
   if (!n) return { pts: TRICK_JUMP, rot: 0, combo: 0 };
   const sum = types.reduce((acc, k) => acc + TRICK_BASE[k], 0);
   const rot = TRICK_ROT_MULT[Math.min(n, 3)];
-  const turns = trickTurns(types);
+  const turns = Math.min(turnsIn ?? trickTurns(types), Math.max(0, n - 1));
   const combo = TRICK_TURN_MULT[Math.min(turns, 2)];
   return { pts: Math.round(sum * rot * combo * TRICK_UNIT), rot, combo, turns };
 }
@@ -2284,10 +2343,10 @@ function trickTurns(types) {
   return turns;
 }
 
-function trickTitle(types) {
+function trickTitle(types, turnsIn) {
   const n = types.length;
   if (!n) return t('AIR JUMP!');
-  const turns = trickTurns(types);
+  const turns = Math.min(turnsIn ?? trickTurns(types), Math.max(0, n - 1));
   if (turns > 0) return t('{n}-WAY COMBO', { n: turns + 1 });
   const name = t(TRICK_NAMES[types[0]]);
   return n > 1 ? t('{n}x {trick}', { n, trick: name }) : name;
@@ -2311,13 +2370,13 @@ function land() {
   // 착지 무적: 1.8초 동안 차·장애물과 부딪혀도 통과 (보호막처럼 은은하게 점멸)
   G.invuln = Math.max(G.invuln, LAND_IFRAMES);
   G.landInv = LAND_IFRAMES;
-  const sc = trickScore(types);
+  const sc = trickScore(types, G.rotTurns);
   const pts = Math.round(sc.pts * (G.x2Time > 0 ? 2 : 1));
   G.score += pts;
   if (types.length > 0) G.tricks += types.length;
   const mult = types.length ? ` · x${sc.rot}${sc.combo > 1 ? ` · ${t('COMBO x{n}', { n: sc.combo })}` : ''}` : '';
-  popup(trickTitle(types), 'perfect', t('CLEAN LANDING · +{n}', { n: fmt(pts) }) + mult);
-  clips.finish(pts, trickTitle(types), `+${fmt(pts)}`);
+  popup(trickTitle(types, G.rotTurns), 'perfect', t('CLEAN LANDING · +{n}', { n: fmt(pts) }) + mult);
+  clips.finish(pts, trickTitle(types, G.rotTurns), `+${fmt(pts)}`);
   G.shake = 0.5;
   sfx.land();
   vibrate(40);
@@ -4409,6 +4468,15 @@ if (DEBUG) {
   window.__dbg = {
     show: (id) => show(id),
     trickScore, trickDir, trickTitle,
+    trickSim: (seq) => {
+      trickReset();
+      for (const [ix, iy, deg] of seq) {
+        let left = (deg * Math.PI) / 180;
+        while (left > 1e-9) { const a = Math.min(left, AIR_SPIN / 60); trickFeed(ix, iy, a); left -= a; }
+      }
+      const sc = trickScore(trk.types, trk.turns);
+      return { types: [...trk.types], turns: trk.turns, pts: sc.pts, title: trickTitle(trk.types, trk.turns) };
+    },
     jump: () => startJump({}),
     gameOver: () => showGameOver(),
     car: (type, lane, z) => spawnCar(z, { type, lane }),
