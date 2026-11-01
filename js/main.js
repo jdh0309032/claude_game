@@ -21,7 +21,7 @@ import { t, setLang, getLang, LANGS, applyI18n, onLangChange } from './i18n.js';
 import {
   save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, PAINTS, getBike,
   replaceDoneMissions, missionText, auth, leaderboard, getSession, ONLINE, detectCountry,
-  loadPlayerData, flushSave, lockCountry, isServerReady, adminSetCountry, claimPendingCoins, deleteAccount, loadAppConfig,
+  loadPlayerData, flushSave, lockCountry, isServerReady, pullServerChanges, onServerOverride, adminSetCountry, claimPendingCoins, deleteAccount, loadAppConfig,
   submitInquiry, replyInquiry, myInquiries, logRun, logClientError,
 } from './storage.js';
 
@@ -3626,6 +3626,13 @@ function onDataReplaced() {
   if (currentScreen === 'settings') renderSettings();
 }
 
+// 관리자가 재산·기록을 고쳐서 서버 데이터로 교체됐을 때 (저장 거절 또는 앱 복귀 시 확인)
+onServerOverride(() => {
+  onDataReplaced();
+  refreshCoinLabels();
+  toast(t('ACCOUNT UPDATED BY SUPPORT'));
+});
+
 // 로그인(자동 로그인 포함) 직후: 서버 데이터 → 국가 고정 → 국가대표 검증 → 출석 보상
 async function onSignedIn({ uploadBest = false } = {}) {
   const res = await loadPlayerData();
@@ -3720,7 +3727,7 @@ setInterval(() => {
   if (document.visibilityState === 'visible') checkNationalStatus();
 }, FLAG_CHECK_INTERVAL_SEC * 1000);
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') { checkNationalStatus(); claimCoins(); }
+  if (document.visibilityState === 'visible') { checkNationalStatus(); pullServerChanges().then(() => claimCoins()); }
   else flushSave({ keepalive: true }); // 앱 전환·종료 직전 서버에 저장
 });
 window.addEventListener('pagehide', () => flushSave({ keepalive: true }));

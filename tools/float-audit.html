@@ -1,0 +1,93 @@
+<!doctype html><html><head><meta charset="utf-8"><title>float audit</title>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.min.js","three/addons/":"../vendor/addons/"}}</script></head>
+<body><pre id="out">running…</pre><script type="module">
+// 공중에 혼자 떠 있는 조각 찾기: 모델을 이어진 조각(같은 위치 정점을 공유하는 삼각형 묶음)으로 나누고,
+// 바닥(또는 가장 큰 조각)에서부터 서로 닿는(바운딩 박스가 겹치는) 조각을 따라가 닿지 않는 조각을 보고
+import * as THREE from 'three';
+import * as M from '../js/models.js';
+import { BIKES, BOXES, OUTFITS, HELMETS } from '../js/config.js';
+const EPS = 0.03;
+function pieces(obj) {
+  obj.updateMatrixWorld(true);
+  const out = [];
+  obj.traverse((m) => {
+    if (!m.isMesh || !m.geometry?.attributes?.position || m.isSprite) return;
+    if (m.renderOrder === -1) return; // 바닥 그림자
+    const g = m.geometry, pos = g.attributes.position, idx = g.index;
+    const n = pos.count, par = new Int32Array(n).map((_, i) => i);
+    const find = (a) => { while (par[a] !== a) { par[a] = par[par[a]]; a = par[a]; } return a; };
+    const uni = (a, b) => { a = find(a); b = find(b); if (a !== b) par[a] = b; };
+    const key = new Map(), v = new THREE.Vector3();
+    const wp = [];
+    for (let i = 0; i < n; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+      wp.push(v.clone());
+      const k = `${Math.round(v.x * 500)},${Math.round(v.y * 500)},${Math.round(v.z * 500)}`;
+      if (key.has(k)) uni(i, key.get(k)); else key.set(k, i);
+    }
+    const tri = idx ? idx.count / 3 : n / 3;
+    for (let t = 0; t < tri; t++) {
+      const a = idx ? idx.getX(t * 3) : t * 3, b = idx ? idx.getX(t * 3 + 1) : t * 3 + 1, c = idx ? idx.getX(t * 3 + 2) : t * 3 + 2;
+      uni(a, b); uni(b, c);
+    }
+    const groups = new Map();
+    for (let i = 0; i < n; i++) { const r = find(i); if (!groups.has(r)) groups.set(r, { box: new THREE.Box3(), pts: [] }); const gr = groups.get(r); gr.box.expandByPoint(wp[i]); gr.pts.push(wp[i]); }
+    for (const gr of groups.values()) out.push(gr);
+  });
+  return out;
+}
+function floating(obj, groundY = null) {
+  const pcs = pieces(obj);
+  if (!pcs.length) return [];
+  const ps = pcs.map((p) => p.box);
+  const all = new THREE.Box3(); ps.forEach((b) => all.union(b));
+  const diag = all.getSize(new THREE.Vector3()).length();
+  const EPSr = Math.max(EPS, diag * 0.004);
+  const gy = groundY ?? all.min.y;
+  const seen = new Array(ps.length).fill(false), q = [];
+  // 시작: 바닥에 닿은 조각 + 가장 큰 조각
+  let big = 0, bigV = -1;
+  ps.forEach((b, i) => { const s = b.getSize(new THREE.Vector3()); const vol = s.x * s.y * s.z + s.x + s.y + s.z; if (vol > bigV) { bigV = vol; big = i; } if (b.min.y <= gy + EPSr) { seen[i] = true; q.push(i); } });
+  if (!seen[big]) { seen[big] = true; q.push(big); }
+  const ex = ps.map((b) => b.clone().expandByScalar(EPSr));
+  // 닿음: 한 조각의 실제 정점이 다른 조각의 (조금 넓힌) 범위 안에 있을 때 — 비스듬한 막대의 큰 범위로 잘못 이어 주지 않게
+  const touch = (i, j) => ex[i].intersectsBox(ps[j]) && (pcs[i].pts.some((v) => ex[j].containsPoint(v)) || pcs[j].pts.some((v) => ex[i].containsPoint(v)));
+  while (q.length) { const i = q.pop(); for (let j = 0; j < ps.length; j++) if (!seen[j] && touch(i, j)) { seen[j] = true; q.push(j); } }
+  const size = all.getSize(new THREE.Vector3());
+  const gapTo = (b) => { let g = Infinity; ps.forEach((o, j) => { if (!seen[j]) return; const d = Math.max(0, o.min.x - b.max.x, b.min.x - o.max.x) ** 2 + Math.max(0, o.min.y - b.max.y, b.min.y - o.max.y) ** 2 + Math.max(0, o.min.z - b.max.z, b.min.z - o.max.z) ** 2; g = Math.min(g, Math.sqrt(d)); }); return g; };
+  return ps.map((b, i) => [b, i]).filter(([, i]) => !seen[i]).map(([b]) => {
+    const c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
+    return `@(${c.x.toFixed(2)},${c.y.toFixed(2)},${c.z.toFixed(2)}) size(${s.x.toFixed(2)},${s.y.toFixed(2)},${s.z.toFixed(2)}) gap ${gapTo(b).toFixed(3)}`;
+  }).slice(0, 14);
+}
+const unwrap = (g) => {
+  if (g.isBufferGeometry) return new THREE.Mesh(g, M.vcMat);
+  if (g.isObject3D) return g;
+  if (g.group) return g.group;
+  if (g.base) { const grp = new THREE.Group(); grp.add(new THREE.Mesh(g.base, M.vcMat)); if (g.glow) grp.add(new THREE.Mesh(g.glow, M.vcMat)); return grp; }
+  return g;
+};
+const cases = [];
+for (const b of BIKES) cases.push(['bike:' + b.id, () => M.createBike(b.color, { style: b.style || b.id, national: b.id === 'national' ? 'TH' : undefined }).root, 0]);
+for (const h of HELMETS) cases.push(['helmet:' + h.id, () => M.createBike(0xffffff, { style: 'scooter', helmet: h.id }).root, 0]);
+for (const o of OUTFITS) cases.push(['outfit:' + o.id, () => M.createBike(0xffffff, { style: 'scooter', outfit: o.id }).root, 0]);
+for (const x of BOXES) cases.push(['box:' + x.id, () => M.createBike(0xffffff, { style: 'scooter', box: x.id, nationalCode: 'TH' }).root, 0]);
+for (const t of ['shield', 'magnet', 'giant', 'x2', 'slow']) cases.push(['power:' + t, () => { const p = M.createPowerUp(t); const g = new THREE.Group(); g.add(p.core); return g; }, null]);
+cases.push(['coin', () => unwrap(M.coinGeometry()), null], ['cone', () => unwrap(M.coneGeometry()), 0], ['pothole', () => unwrap(M.potholeGeometry()), null], ['manhole', () => unwrap(M.manholeGeometry()), null], ['cargo', () => unwrap(M.cargoGeometry()), 0], ['sign', () => unwrap(M.signGeometry()), 0], ['jumpramp', () => M.createJumpRamp(), 0], ['dropzone', () => M.createDropZone(), 0]);
+for (const k of Object.keys(M.STALL_DEFS)) cases.push(['stall:' + k, () => M.createStall(k), 0]);
+for (const k of Object.keys(M.CAR_DEFS)) cases.push(['car:' + k, () => unwrap(M.createCar(k)), 0]);
+for (const k of ['ruko', 'tube', 'neon', 'modern', 'brick', 'haussmann', 'peranakan', 'colonial', 'teak']) cases.push(['bld:' + k, () => unwrap(M.buildingStyle(k)), null]);
+for (const k of ['palm', 'sakura', 'ginkgo', 'round', 'raintree', 'frangipani']) cases.push(['tree:' + k, () => unwrap(M.treeVariant(k)), null]);
+for (const k of ['warung', 'vending', 'cafe', 'tent', 'planter', 'mamak', 'sarisari', 'juicecart', 'teashop']) cases.push(['curb:' + k, () => unwrap(M.curbVariant(k)), null]);
+for (const k of ['lanterns', 'bunting_ph', 'bunting_my', 'bunting_id', 'flags_th', 'flags_kh', 'flags_mm']) cases.push(['over:' + k, () => unwrap(M.overheadGeometry(k)), null]);
+cases.push(['lamp', () => { const g = new THREE.Group(); g.add(new THREE.Mesh(M.lampPoleGeometry(), M.vcMat), new THREE.Mesh(M.lampHeadGeometry(), M.vcMat)); return g; }, 0], ['billboard', () => M.createBillboard(), null]);
+for (const k of ['mbs', 'petronas', 'monas', 'temple', 'pagoda', 'mayon', 'angkor', 'shwedagon']) cases.push(['landmark:' + k, () => M.createLandmark(k), null]);
+const lines = [];
+for (const [name, mk, gy] of cases) {
+  try { const f = floating(mk(), gy); if (f.length) lines.push(`${name}: ${f.length} floating ${f.join(' ')}`); }
+  catch (e) { lines.push(`${name}: ERROR ${e.message}`); }
+  await new Promise((r) => setTimeout(r, 0));
+}
+document.getElementById('out').textContent = lines.join('\n') || 'no floating parts';
+document.title = 'done';
+</script></body></html>

@@ -376,6 +376,7 @@ export default {
 "GET IT ON GOOGLE PLAY": "TẢI TRÊN GOOGLE PLAY",
 "UPDATING TO THE NEW VERSION...": "ĐANG CẬP NHẬT PHIÊN BẢN MỚI...",
 "BARREL ROLL": "XOAY THÙNG",
+"ACCOUNT UPDATED BY SUPPORT": "BỘ PHẬN HỖ TRỢ ĐÃ CẬP NHẬT TÀI KHOẢN",
 "Starter delivery scooter": "Xe tay ga giao hàng cho người mới",
 "Nimble in tight traffic": "Linh hoạt giữa dòng xe đông",
 "Chrome and leather charm": "Nét cổ điển của crôm và da",

@@ -376,6 +376,7 @@ export default {
 "GET IT ON GOOGLE PLAY": "DAPATKAN DI GOOGLE PLAY",
 "UPDATING TO THE NEW VERSION...": "MEMPERBARUI KE VERSI BARU...",
 "BARREL ROLL": "BARREL ROLL",
+"ACCOUNT UPDATED BY SUPPORT": "AKUN DIPERBARUI OLEH DUKUNGAN",
 "Starter delivery scooter": "Skuter antar untuk pemula",
 "Nimble in tight traffic": "Lincah di jalanan padat",
 "Chrome and leather charm": "Pesona krom dan kulit",
