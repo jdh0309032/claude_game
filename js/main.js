@@ -55,16 +55,18 @@ const AIR_FLIP = 9.5, AIR_SPIN = 9.5, LAND_TOL = 0.68, LAND_IFRAMES = 1.8;
 // 착지 보조: 땅에 닿기 0.25초 전부터, 수평과의 각도가 40° 안이면 바퀴가 바닥을 향하도록 자동으로 돌려 줌 (여러 축으로 돌려도 착지가 쉬움)
 const LAND_ASSIST_TIME = 0.25, LAND_ASSIST_ANGLE = 0.7, LAND_ASSIST_RATE = 8;
 // 공중 묘기 점수 = (바퀴마다 기본 점수의 합) × 회전 수 배수 × 콤보 배수 × TRICK_UNIT
-//   기본 점수(1바퀴): 전진(뒤로 돌기) 1.0 · 전진 사선 1.3 · 좌/우(옆으로 돌기) 1.6 · 후진(앞으로 돌기) 1.8 · 후진 사선 2.2
+//   기본 점수(1바퀴): 전진(뒤로 돌기, Backflip) 1.0 · 전진 사선 1.3 · 좌/우(옆으로 돌기, Barrel Roll) 1.6
+//                    · 후진(앞으로 돌기, Frontflip) 1.8 · 후진 사선 2.2
 //   회전 수 배수: 1바퀴 x1.0 · 2바퀴 x2.5 · 3바퀴 이상 x5.0
-//   콤보 배수(서로 다른 동작 수): 1가지 x1.0 · 2가지 x1.5 · 3가지 이상 x2.2
-//   예) 전진 2바퀴 = 2.0×2.5×1.0 = 5 → 1,500점 / 전진+후진 = 2.8×2.5×1.5 = 10.5 → 3,150점 / 전진+좌우+후진 = 4.4×5.0×2.2 = 48.4 → 14,520점
+//   공중 방향 전환 배수(중간 꺾기 = 바로 앞 바퀴와 다른 동작으로 바꾼 횟수): 유지 x1.0 · 1회 x3.0 · 2회 이상 x5.0
+//   예) 전진 2연속 = 2.0×2.5×1.0 = 5 → 1,500점 / 전진→후진 = 2.8×2.5×3.0 = 21 → 6,300점
+//       전진 사선 3연속 = 3.9×5.0×1.0 = 19.5 → 5,850점 / 전진→후진→후진 사선 = 5.0×5.0×5.0 = 125 → 37,500점
 const TRICK_BASE = { back: 1.0, backDiag: 1.3, side: 1.6, front: 1.8, frontDiag: 2.2 };
 const TRICK_ROT_MULT = [0, 1.0, 2.5, 5.0];
-const TRICK_COMBO_MULT = [0, 1.0, 1.5, 2.2];
+const TRICK_TURN_MULT = [1.0, 3.0, 5.0]; // 방향 전환 0 · 1 · 2회 이상
 const TRICK_UNIT = 300; // 기본 점수 1.0 = 게임 점수 300
 const TRICK_JUMP = 200; // 회전 없이 점프만
-const TRICK_NAMES = { back: 'BACKFLIP', backDiag: 'DIAGONAL BACKFLIP', side: 'SIDE FLIP', front: 'FRONT FLIP', frontDiag: 'DIAGONAL FRONT FLIP' };
+const TRICK_NAMES = { back: 'BACKFLIP', backDiag: 'DIAGONAL BACKFLIP', side: 'BARREL ROLL', front: 'FRONT FLIP', frontDiag: 'DIAGONAL FRONT FLIP' };
 
 // ---------- 시드 기반 월드 난수 (PRNG: mulberry32)
 // 멀티플레이 시 방장이 만든 시드로 두 기기의 도로/교통/날씨를 동일하게 생성.
@@ -2270,16 +2272,23 @@ function trickScore(types) {
   if (!n) return { pts: TRICK_JUMP, rot: 0, combo: 0 };
   const sum = types.reduce((acc, k) => acc + TRICK_BASE[k], 0);
   const rot = TRICK_ROT_MULT[Math.min(n, 3)];
-  const kinds = new Set(types).size;
-  const combo = TRICK_COMBO_MULT[Math.min(kinds, 3)];
-  return { pts: Math.round(sum * rot * combo * TRICK_UNIT), rot, combo, kinds };
+  const turns = trickTurns(types);
+  const combo = TRICK_TURN_MULT[Math.min(turns, 2)];
+  return { pts: Math.round(sum * rot * combo * TRICK_UNIT), rot, combo, turns };
+}
+
+// 공중에서 방향을 꺾은 횟수 (바로 앞 바퀴와 다른 동작이면 1회)
+function trickTurns(types) {
+  let turns = 0;
+  for (let i = 1; i < types.length; i++) if (types[i] !== types[i - 1]) turns++;
+  return turns;
 }
 
 function trickTitle(types) {
   const n = types.length;
   if (!n) return t('AIR JUMP!');
-  const kinds = new Set(types).size;
-  if (kinds > 1) return t('{n}-WAY COMBO', { n: kinds });
+  const turns = trickTurns(types);
+  if (turns > 0) return t('{n}-WAY COMBO', { n: turns + 1 });
   const name = t(TRICK_NAMES[types[0]]);
   return n > 1 ? t('{n}x {trick}', { n, trick: name }) : name;
 }
