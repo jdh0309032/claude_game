@@ -271,20 +271,22 @@
 
     <!-- Result -->
     <section id="gameover" class="screen hidden">
-      <div class="panel center">
+      <div class="panel center result-panel">
         <h2 id="goTitle" class="result-title crash">CRASHED!</h2>
-        <div id="goScore" class="final-score">0</div>
-        <div id="goNew" class="new-record hidden" data-i18n>NEW RECORD</div>
+        <div class="res-score"><div id="goScore" class="final-score">0</div><div id="goNew" class="new-record hidden" data-i18n>NEW RECORD</div></div>
         <div id="goStats" class="go-stats"></div>
         <div id="goMissions"></div>
         <div id="goGlobal" class="rank-entry hidden"></div>
         <div class="row result-ads">
-          <button id="btnAdRevive" class="btn ad-btn" data-icon="play"><span data-i18n>WATCH AD TO REVIVE</span></button>
+          <button id="btnAdRevive" class="btn ad-btn" data-icon="play" aria-label="Watch ad to revive" data-i18n-aria><span data-i18n>REVIVE</span></button>
           <button id="btnAdminRevive" class="btn admin-btn hidden" data-icon="retry"><span data-i18n>ADMIN REVIVE</span></button>
-          <button id="btnAdDouble" class="btn ad-btn" data-icon="coin"><span data-i18n>WATCH AD TO DOUBLE COINS</span></button>
+          <button id="btnAdDouble" class="btn ad-btn" data-icon="play" aria-label="Watch ad to double coins" data-i18n-aria><span data-i18n>COINS x2</span></button>
+          <button id="btnContinue" class="btn gold" data-icon="coin"><span><span id="contCost">500</span> <span data-i18n>CONTINUE</span></span></button>
         </div>
-        <button id="btnContinue" class="btn gold" data-icon="coin"><span><span id="contCost">500</span> <span data-i18n>CONTINUE</span></span></button>
-        <button id="btnWhatsApp" class="btn whatsapp" data-icon="users"><span data-i18n>CHALLENGE ON WHATSAPP</span></button>
+        <div class="row share-row">
+          <button id="btnWhatsApp" class="btn whatsapp" data-icon="users"><span>WhatsApp</span></button>
+          <button id="btnShareCard" class="btn share-btn" data-icon="share"><span data-i18n>SHARE MY RESULT</span></button>
+        </div>
         <div class="row">
           <button id="btnRetry" class="btn primary" data-icon="retry"><span id="retryLabel">RETRY</span></button>
           <button id="btnHome" class="btn" data-icon="next"><span data-i18n>NEXT</span></button>

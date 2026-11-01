@@ -15,6 +15,7 @@ import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, ECON, GACHA_ODDS, TIERS, DEFAUL
 import { paymentsMode, initPayments, getPacks, buyPack } from './payments.js';
 import { initLiveUpdate, webBuild } from './updater.js';
 import { machineTranslate } from './mt.js';
+import { makeResultCard, shareImage } from './sharecard.js';
 import { t, setLang, getLang, LANGS, applyI18n, onLangChange } from './i18n.js';
 import {
   save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, PAINTS, getBike,
@@ -4020,6 +4021,8 @@ function showGameOver() {
     [t('COINS'), fmt(G.earned)],
   ];
   $('goStats').innerHTML = stats.map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join('');
+  G.resultStats = stats;
+  G.resultRecord = isRecord;
   $('goMissions').innerHTML = G.missionsDone.map((m) => `<div>${icon('check')} ${escapeHtml(missionText(m))} +${m.reward}</div>`).join('');
 
   // 이어달리기 (멀티에선 불가)
@@ -4041,7 +4044,8 @@ function showGameOver() {
 // 국가 랭킹 전송 (로그인 상태) / 로그인 유도 (게스트)
 async function submitGlobal() {
   const box = $('goGlobal');
-  box.classList.remove('hidden');
+  box.classList.remove('hidden', 'ge-signin');
+  G.rankLine = '';
   const s = getSession();
   const score = Math.floor(G.score);
   const cname = escapeHtml(countryName(save.country));
@@ -4050,6 +4054,7 @@ async function submitGlobal() {
     return;
   }
   if (!s) {
+    box.classList.add('ge-signin');
     box.innerHTML = `<p class="ge-msg">${flagBadge(save.country)} ${t('Sign in to post your score to the {country} ranking', { country: cname })}</p><button class="btn primary small ge-btn" id="goLogin">${t('SIGN IN')}</button>`;
     $('goLogin').addEventListener('click', () => { renderAuth(); openScreen('auth', 'gameover'); });
     return;
@@ -4075,7 +4080,8 @@ async function submitGlobal() {
     applyNationalStatus(Boolean(r && r.rank === 1), r?.country || save.country);
   } catch (e) { /* 순위 조회 실패 시 표시만 생략 */ }
   regionTopsDirty(save.country);
-  box.innerHTML = `${flagBadge(save.country)} ${t('{country} RANK', { country: cname.toUpperCase() })} <b>${rank}</b> · ${t('BEST')} <b>${fmt(res.best)}</b>`;
+  box.innerHTML = `<span class="ge-line">${flagBadge(save.country)} ${t('{country} RANK', { country: cname.toUpperCase() })} <b>${rank}</b> · ${t('BEST')} <b>${fmt(res.best)}</b></span>`;
+  G.rankLine = `${t('{country} RANK', { country: countryName(save.country).toUpperCase() })} ${rank}`;
 }
 
 function finalizeRun() {
@@ -4137,10 +4143,54 @@ $('btnAdDouble').addEventListener('click', async () => {
 });
 // WhatsApp 챌린지: 내 점수 + 같은 도로 시드 링크
 $('btnWhatsApp').addEventListener('click', () => {
-  const base = SHARE_BASE_URL || `${location.origin}${location.pathname}`;
-  const url = `${base}${base.includes('?') ? '&' : '?'}seed=${G.seed}`;
-  const text = `I scored ${fmt(G.score)} (${fmt(G.distance)} m) on Grub Rider! Ride the exact same road and beat me: ${url}`;
+  const url = challengeUrl();
+  const text = t('I scored {score} on Grub Rider! Ride the same road and beat me: {url}', { score: fmt(Math.floor(G.score)), url });
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+});
+
+// 결과 자랑: 장면 스냅샷이 들어간 스토리 크기 카드 이미지 → 공유 시트(왓츠앱·인스타 스토리 등)
+const SCRIPT_FONTS = { ko: 'Noto Sans KR', th: 'Noto Sans Thai', km: 'Noto Sans Khmer', my: 'Noto Sans Myanmar' };
+function challengeUrl() {
+  const base = SHARE_BASE_URL || `${location.origin}${location.pathname}`;
+  return `${base}${base.includes('?') ? '&' : '?'}seed=${G.seed}`;
+}
+let sharing = false;
+$('btnShareCard').addEventListener('click', async (e) => {
+  if (sharing) return;
+  sharing = true;
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    renderer.render(scene, camera); // 지금 장면을 바로 그려서 스냅샷 (그리기 버퍼가 비기 전에 복사)
+    const snap = document.createElement('canvas');
+    snap.width = renderer.domElement.width;
+    snap.height = renderer.domElement.height;
+    snap.getContext('2d').drawImage(renderer.domElement, 0, 0);
+    const url = challengeUrl();
+    const blob = await makeResultCard({
+      title: $('goTitle').textContent,
+      delivered: $('goTitle').classList.contains('delivered'),
+      score: fmt(Math.floor(G.score)),
+      record: G.resultRecord,
+      recordLabel: t('NEW RECORD'),
+      stats: G.resultStats || [],
+      country: save.country,
+      countryName: countryName(save.country),
+      rankLine: G.rankLine || countryName(save.country),
+      tagline: t('Can you beat my score?'),
+      url: url.replace(/^https?:\/\//, ''),
+      scene: snap,
+      scriptFont: SCRIPT_FONTS[getLang()],
+    });
+    const text = t('I scored {score} on Grub Rider! Ride the same road and beat me: {url}', { score: fmt(Math.floor(G.score)), url });
+    const r = await shareImage(blob, text, `grub-rider-${Math.floor(G.score)}.png`);
+    if (r === 'saved') toast(t('IMAGE SAVED  ·  POST IT TO YOUR STORY'));
+  } catch (err) {
+    toast(t('Could not share'));
+  } finally {
+    sharing = false;
+    btn.disabled = false;
+  }
 });
 
 function reviveRun() {
