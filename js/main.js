@@ -1629,7 +1629,9 @@ function updateCamera(rdt) {
 const keys = {};
 const held = { left: false, right: false, throttle: false, brake: false };
 const holdPointers = new Map(); // pointerId → 'left' | 'right' | 'throttle' | 'brake'
-const pad = { id: null, originX: 0, originY: 0, value: 0, throttle: false, brake: false };
+const pad = { id: null, originX: 0, originY: 0, value: 0, throttle: false, brake: false, thrAmt: 0, brkAmt: 0 };
+// 페달(스로틀 그립·브레이크 레버)을 얼마나 당겼는지 0~1: 누른 높이(위쪽일수록 많이), 누른 채 위로 밀면 더 당김
+const pedalAmt = { throttle: 0, brake: 0 };
 const isTouchDevice = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 const holdButtons = { left: $('btnLeft'), right: $('btnRight'), throttle: $('btnThrottle'), brake: $('btnBrake') };
 
@@ -1659,6 +1661,7 @@ function releaseAllInput() {
   pad.id = null;
   pad.value = 0;
   pad.throttle = pad.brake = false;
+  pad.thrAmt = pad.brkAmt = 0;
   pad.rawX = pad.rawUp = 0;
   refreshHeld();
 }
@@ -1673,6 +1676,16 @@ function refreshHeld() {
   dot.classList.toggle('on', pad.id !== null);
   dot.classList.toggle('gas', pad.throttle);
   dot.classList.toggle('brk', pad.brake);
+  dot.style.setProperty('--amt', (pad.thrAmt || pad.brkAmt || 0).toFixed(2));
+}
+
+// 페달 당긴 양: 버튼 아래쪽을 누르면 30%, 위쪽 끝(또는 그 위로 밀면) 100%
+function setPedal(el, key, e) {
+  if (!(key in pedalAmt)) return;
+  const r = el.getBoundingClientRect();
+  const a = clamp(0.3 + 0.7 * ((r.bottom - e.clientY) / r.height), 0.3, 1);
+  pedalAmt[key] = a;
+  el.style.setProperty('--amt', a.toFixed(2));
 }
 
 // 버튼마다 포인터 ID 를 따로 추적 → 조향·가속·브레이크·니트로 동시 입력
@@ -1682,11 +1695,14 @@ function bindHold(el, key) {
     if (e.pointerType === 'touch') enableTouchUI();
     try { el.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
     holdPointers.set(e.pointerId, key);
+    setPedal(el, key, e);
     refreshHeld();
   });
+  el.addEventListener('pointermove', (e) => { if (holdPointers.get(e.pointerId) === key) setPedal(el, key, e); });
   const up = (e) => {
     if (holdPointers.get(e.pointerId) !== key) return;
     holdPointers.delete(e.pointerId);
+    if (key in pedalAmt) { pedalAmt[key] = 0; el.style.setProperty('--amt', 0); }
     refreshHeld();
   };
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(ev, up);
@@ -1697,7 +1713,8 @@ for (const [k, el] of Object.entries(holdButtons)) bindHold(el, k);
 // 한 손 조작(설정 ONE-HAND SLIDE): 기준점에서 위로 밀면 스로틀, 아래로 밀면 브레이크
 const STEER_RANGE = 80; // 기준점에서 이만큼(px) 밀면 최대 조향
 const STEER_DEAD = 6;   // 손떨림 무시 구간(px)
-const PEDAL_DEAD = 24;  // 위/아래로 이만큼(px) 넘게 밀어야 스로틀/브레이크
+const PEDAL_DEAD = 18;  // 위/아래로 이만큼(px) 넘게 밀어야 스로틀/브레이크
+const PEDAL_FULL = 78;  // 여기까지 밀면 스로틀/브레이크 100% (그 사이는 민 만큼 비례)
 const JOY_R = 46;      // 조이스틱 손잡이가 움직이는 반경(px)
 function padFromPointer(e) {
   const dx = e.clientX - pad.originX, dy = pad.originY - e.clientY;
@@ -1708,6 +1725,9 @@ function padFromPointer(e) {
   const oneHand = (save.settings.controls || 'onehand') === 'onehand';
   pad.throttle = oneHand && dy > PEDAL_DEAD;
   pad.brake = oneHand && dy < -PEDAL_DEAD;
+  // 얼마나 밀었는지(0~1): 데드존을 넘은 만큼, PEDAL_FULL 까지 밀면 최대
+  pad.thrAmt = pad.throttle ? clamp((dy - PEDAL_DEAD) / (PEDAL_FULL - PEDAL_DEAD), 0.15, 1) : 0;
+  pad.brkAmt = pad.brake ? clamp((-dy - PEDAL_DEAD) / (PEDAL_FULL - PEDAL_DEAD), 0.15, 1) : 0;
   const m = Math.hypot(dx, dy), k = m > JOY_R ? JOY_R / m : 1;
   pad.knobX = dx * k;
   pad.knobY = oneHand ? -dy * k : 0;
@@ -1728,6 +1748,7 @@ steerZone.addEventListener('pointerdown', (e) => {
   pad.originY = e.clientY;
   pad.value = 0;
   pad.throttle = pad.brake = false;
+  pad.thrAmt = pad.brkAmt = 0;
   pad.rawX = pad.rawUp = 0;
   pad.knobX = pad.knobY = 0;
   steerDot.style.left = `${e.clientX - r.left}px`;
@@ -1745,6 +1766,7 @@ for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     pad.id = null;
     pad.value = 0;
     pad.throttle = pad.brake = false;
+  pad.thrAmt = pad.brkAmt = 0;
     pad.rawX = pad.rawUp = 0;
     pad.knobX = pad.knobY = 0;
     refreshHeld();
@@ -2019,22 +2041,26 @@ function updatePlaying(rdt) {
   const bk = getBike(save.bike);
   const maxSpd = bk.maxKmh / 3.6;
   // 한 손 조작: 터치 영역에서 위로 밀면 스로틀, 아래로 밀면 브레이크
-  const throttle = keys.ArrowUp || keys.KeyW || held.throttle || pad.throttle;
-  const brake = keys.ArrowDown || keys.KeyS || held.brake || pad.brake;
+  // 아날로그: 키보드는 100%, 조이스틱은 민 만큼, 페달은 당긴 만큼 (0~1)
+  const thrAmt = Math.max(keys.ArrowUp || keys.KeyW ? 1 : 0, held.throttle ? pedalAmt.throttle || 1 : 0, pad.thrAmt || 0);
+  const brkAmt = Math.max(keys.ArrowDown || keys.KeyS ? 1 : 0, held.brake ? pedalAmt.brake || 1 : 0, pad.brkAmt || 0);
+  const throttle = thrAmt > 0, brake = brkAmt > 0;
+  G.thrAmt = thrAmt;
   const manual = false;
   const cruise = Math.min(maxSpd * 0.85, (75 + G.distance / 45) / 3.6);
   let target = manual ? 40 / 3.6 : cruise;
-  if (throttle) target = maxSpd;
-  if (brake) target = 50 / 3.6;
+  // 순항 속도에서 최고 속도까지 당긴 만큼 / 브레이크는 순항에서 50 km/h 까지 누른 만큼
+  if (throttle) target = cruise + (maxSpd - cruise) * thrAmt;
+  if (brake) target = cruise + (50 / 3.6 - cruise) * brkAmt;
   // 소모성 부스트 HEAD START: 몇 초 동안 최고속의 1.5배로 무적 질주 (코인 자석 포함)
   if (G.headT > 0) target = maxSpd * 1.5;
   if (G.draftT > 0 && !brake) target *= 1 + 0.1 * clamp(G.draftT / 0.6, 0, 1); // 슬립스트림 가속
-  const accel = G.headT > 0 ? 30 : target > G.speed ? 7 * bk.accel : brake ? 22 : manual ? 5 : 6;
+  const accel = G.headT > 0 ? 30 : target > G.speed ? 7 * bk.accel * (throttle ? 0.55 + 0.45 * thrAmt : 1) : brake ? 22 * (0.35 + 0.65 * brkAmt) : manual ? 5 : 6;
   if (!G.air) G.speed = approach(G.speed, target, accel * rdt); // 공중에선 속도 유지
   G.braking = Boolean(brake);
   // RPM: 스로틀을 감으면 빠르게 치솟고, 놓으면 떨어짐
   const spdRatio = clamp(G.speed / (maxSpd * 1.35), 0, 1);
-  const rpmTarget = throttle ? clamp(0.72 + spdRatio * 0.25 + Math.sin(G.time * 40) * 0.03, 0, 1) : 0;
+  const rpmTarget = throttle ? clamp((0.35 + 0.37 * thrAmt) + spdRatio * 0.25 + Math.sin(G.time * 40) * 0.03, 0, 1) : 0;
   G.rpm = approach(G.rpm, rpmTarget, rdt * (rpmTarget > G.rpm ? 3.2 : 2.2));
 
   // 조향 (물웅덩이에 미끄러지면 반응이 둔해지고 옆으로 밀림)
@@ -2468,7 +2494,15 @@ function fitButton(el) {
   const tg = el.querySelector(':scope > .play-txt') || el;
   tg.style.fontSize = '';
   el.classList.add('fit-1');
-  const over = () => el.scrollWidth > el.clientWidth + 1 || tg.scrollWidth > tg.clientWidth + 1;
+  // 글자가 안쪽 여백(padding)까지 넘쳐도 잡히도록 실제 글자·아이콘 범위로 잼
+  const rg = document.createRange();
+  const over = () => {
+    if (el.scrollWidth > el.clientWidth + 1 || tg.scrollWidth > tg.clientWidth + 1) return true;
+    const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+    rg.selectNodeContents(el);
+    const c = rg.getBoundingClientRect();
+    return c.right > r.right - (parseFloat(cs.paddingRight) || 0) * 0.5 + 0.5 || c.left < r.left + (parseFloat(cs.paddingLeft) || 0) * 0.5 - 0.5;
+  };
   if (!over()) return;
   const base = parseFloat(getComputedStyle(tg).fontSize) || 16;
   const min = Math.max(11, base * 0.72);
@@ -2901,7 +2935,6 @@ function renderActionBar() {
   }
   const st = itemState(sel.kind, it);
   let desc = it.desc || '';
-  if (sel.kind === 'bike' && !it.special) desc = `${t(desc)} · ${t('TOP {n} KM/H', { n: it.maxKmh })}`;
   if (it.special === 'national') desc = save.nationalUnlocked || isAdminMode() ? t('Painted in {country} colors', { country: countryName(myNationalCode()) }) : t('Be #1 in {country} to unlock', { country: countryName(save.country) });
   if (it.finish) desc = t('{finish} finish · bike and headgear', { finish: t(it.finish.toUpperCase()) });
   let btn;
@@ -2910,7 +2943,14 @@ function renderActionBar() {
   else if (st === 'buy') btn = `<button class="btn gold" data-act="buy" ${save.coins < it.price ? 'disabled' : ''}>${icon('coin')}${fmtCoins(it.price)}</button>`;
   else btn = `<button class="btn" disabled>${it.special === 'national' ? t('#1 ONLY') : t('7-DAY STREAK')}</button>`;
   const tr = it.tier && TIERS[it.tier];
-  bar.innerHTML = `<div class="ga-info"><small>${t(KINDS[sel.kind].label)}${tr ? ` · <em class="tier-tag" style="--tc:${tr.color}">${t(tr.label)}</em>` : ''}</small><b>${escapeHtml(t(it.name))}</b><span>${escapeHtml(t(desc))}</span></div>${btn}`;
+  // 바이크 스펙: 최고 속도·가속·핸들링 막대 (모든 바이크 중 최고치 기준)
+  let spec = '';
+  if (sel.kind === 'bike' && it.maxKmh) {
+    const max = (k) => Math.max(...BIKES.map((x) => x[k] || 0));
+    const row = (label, v, top, val) => `<div class="ga-spec-row"><span>${t(label)}</span><i><b style="width:${Math.round(clamp(v / top, 0.08, 1) * 100)}%"></b></i><em>${val}</em></div>`;
+    spec = `<div class="ga-spec">${row('TOP SPEED', it.maxKmh, max('maxKmh'), `${it.maxKmh} km/h`)}${row('ACCEL', it.accel || 1, max('accel'), `${Math.round((it.accel || 1) * 100)}`)}${row('HANDLING', it.handling || 1, max('handling'), `${Math.round((it.handling || 1) * 100)}`)}</div>`;
+  }
+  bar.innerHTML = `<div class="ga-info"><small>${t(KINDS[sel.kind].label)}${tr ? ` · <em class="tier-tag" style="--tc:${tr.color}">${t(tr.label)}</em>` : ''}</small><b>${escapeHtml(t(it.name))}</b><span>${escapeHtml(t(desc))}</span>${spec}</div>${btn}`;
 }
 
 function renderGarage() {
@@ -3038,13 +3078,16 @@ $('btnGachaClose').addEventListener('click', () => {
 // 소모성 부스트: 메뉴에서 장착(보유 시) / 두 번 눌러 구매 → 다음 판 시작 시 1개 소모
 // ======================================================================
 let boostBuyArm = null; // 구매 확인 대기 중인 부스트 id (2.5초)
+let boostInfo = null; // 마지막으로 누른 부스트 → 설명을 위에 보여 줌
 let boostBuyTimer = 0;
 const boostCount = (id) => Math.max(0, Math.floor(save.boosts?.[id] || 0));
 function renderBoostBar() {
   const bar = $('boostBar');
   if (!bar) return;
   const armed = new Set(save.armedBoosts);
+  const info = boostInfo && BOOSTS.find((x) => x.id === boostInfo);
   bar.innerHTML = `<div class="boost-head"><b>${t('BOOSTS')}</b><small>${armed.size ? t('{n} ready for the next ride', { n: armed.size }) : t('Tap to equip for the next ride')}</small></div>
+    ${info ? `<p class="boost-desc"><b>${escapeHtml(t(info.name))}</b> — ${escapeHtml(t(info.desc))}</p>` : ''}
     <div class="boost-row">${BOOSTS.map((b) => {
     const n = boostCount(b.id);
     const on = armed.has(b.id);
@@ -3075,6 +3118,7 @@ $('boostBar').addEventListener('click', (e) => {
   const b = BOOSTS.find((x) => x.id === id);
   sfx.init();
   sfx.click();
+  boostInfo = id;
   const armed = save.armedBoosts.includes(id);
   if (armed) {
     save.armedBoosts = save.armedBoosts.filter((x) => x !== id);
@@ -4006,7 +4050,7 @@ async function submitGlobal() {
     return;
   }
   if (!s) {
-    box.innerHTML = `${flagBadge(save.country)} ${t('Sign in to post your score to the {country} ranking', { country: cname })} <button class="btn primary" id="goLogin">${t('SIGN IN')}</button>`;
+    box.innerHTML = `<p class="ge-msg">${flagBadge(save.country)} ${t('Sign in to post your score to the {country} ranking', { country: cname })}</p><button class="btn primary small ge-btn" id="goLogin">${t('SIGN IN')}</button>`;
     $('goLogin').addEventListener('click', () => { renderAuth(); openScreen('auth', 'gameover'); });
     return;
   }
