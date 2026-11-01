@@ -14,6 +14,7 @@ import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, ECON, GACHA_ODDS, TIERS, DEFAUL
 } from './config.js';
 import { paymentsMode, initPayments, getPacks, buyPack } from './payments.js';
 import { initLiveUpdate, webBuild } from './updater.js';
+import { machineTranslate } from './mt.js';
 import { t, setLang, getLang, LANGS, applyI18n, onLangChange } from './i18n.js';
 import {
   save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, PAINTS, getBike,
@@ -2724,11 +2725,38 @@ function setNotices(raw) {
 function updateNoticeDot() {
   $('noticeDot').classList.toggle('hidden', !notices.length || save.noticeSeen === notices[0].id);
 }
+// 관리자가 번역해 두지 않은 언어는 기계 번역으로 채움 (기기에 캐시)
+const NTR_KEY = 'gr.noticeTr';
+let noticeTr = {};
+try { noticeTr = JSON.parse(localStorage.getItem(NTR_KEY)) || {}; } catch (e) { noticeTr = {}; }
+const ntrPending = new Set();
+const looksLatin = (s) => /^[\u0000-\u024f\u1e00-\u1eff\u2000-\u206f\s]*$/.test(s);
+function noticeText(n) {
+  const lang = getLang();
+  const loc = n.i18n?.[lang];
+  if (loc?.title) return loc;
+  if (t(n.title) !== n.title) return { title: t(n.title), body: t(n.body) }; // 게임에 들어 있는 기본 공지
+  const src = n.i18n?.ko?.title ? { ...n.i18n.ko, lang: 'ko' } : { title: n.title, body: n.body, lang: 'auto' };
+  if (lang === 'en' && looksLatin(n.title)) return n;
+  const key = `${lang}|${n.id}|${src.title.length}|${src.body.length}`;
+  if (noticeTr[key]) return noticeTr[key];
+  if (!ntrPending.has(key)) {
+    ntrPending.add(key);
+    Promise.all([machineTranslate(src.title, src.lang, lang), src.body ? machineTranslate(src.body, src.lang, lang) : ''])
+      .then(([title, body]) => {
+        noticeTr[key] = { title, body };
+        try { localStorage.setItem(NTR_KEY, JSON.stringify(noticeTr)); } catch (e) { /* ignore */ }
+        if (currentScreen === 'notices') renderNotices();
+      })
+      .catch(() => {})
+      .finally(() => ntrPending.delete(key));
+  }
+  return lang === 'ko' && n.i18n?.ko ? n.i18n.ko : n; // 번역이 오기 전엔 원문
+}
 function renderNotices() {
   $('noticeList').innerHTML = notices.length
     ? notices.map((n) => {
-      const loc = n.i18n?.[getLang()];
-      const title = loc?.title || t(n.title), body = loc?.body || t(n.body);
+      const { title, body } = noticeText(n);
       return `<article class="notice tag-${n.tag.toLowerCase()}"><div class="nt-head"><em>${escapeHtml(t(n.tag))}</em><small>${escapeHtml(n.date)}</small></div>
       <h3>${escapeHtml(title)}</h3><p>${escapeHtml(body).replace(/\n/g, '<br>')}</p></article>`;
     }).join('')
@@ -2736,6 +2764,7 @@ function renderNotices() {
 }
 $('btnNotices').addEventListener('click', () => {
   renderNotices();
+  pollConfig(); // 열 때마다 최신 공지 확인
   openScreen('notices');
   if (notices.length && save.noticeSeen !== notices[0].id) {
     save.noticeSeen = notices[0].id;
@@ -3545,6 +3574,45 @@ let supportView = 'list', supportList = [], supportSel = null, supportUnread = f
 const deviceInfo = () => `${window.Capacitor?.getPlatform?.() || 'web'} · ${(navigator.userAgent.match(/Android [\d.]+|iPhone OS [\d_]+|Windows NT [\d.]+|Mac OS X [\d_]+/) || [''])[0]}`.slice(0, 160);
 const fmtDate = (iso) => { try { return new Date(iso).toLocaleString(getLang(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
 
+// 운영자 답변: 내 언어 번역이 있으면 그것, 없으면 기계 번역(도착하면 다시 그림), 그전엔 원문
+const staffTr = new Map();
+function staffText(m) {
+  const lang = getLang();
+  if (m.translated && m.translated_lang === lang) return m.translated;
+  if (lang === 'ko') return m.body; // 운영자는 한국어로 씀
+  const key = `${lang}|${m.created_at}|${m.body.length}`;
+  if (staffTr.has(key)) return staffTr.get(key) || m.translated || m.body;
+  staffTr.set(key, '');
+  machineTranslate(m.body, 'ko', lang)
+    .then((tx) => { staffTr.set(key, tx); if (currentScreen === 'support' && supportView === 'thread') renderSupport(); })
+    .catch(() => {});
+  return m.translated || m.body;
+}
+// 실시간: 고객지원 화면이 열려 있으면 6초마다, 아니면 1분마다 새 답변 확인 (화면이 꺼져 있거나 게임 중이면 쉼)
+let supportSig = '', supportPolling = false, supportLast = 0;
+async function pollSupport(force = false) {
+  if (supportPolling || document.hidden || !getSession() || !isServerReady() || G.state === 'playing') return;
+  const open = currentScreen === 'support';
+  if (!force && !open && Date.now() - supportLast < 60000) return;
+  supportPolling = true;
+  supportLast = Date.now();
+  try {
+    const res = await myInquiries(open && supportView === 'thread');
+    if (!res.ok) return;
+    const sg = JSON.stringify(res.list.map((i) => [i.id, i.status, i.messages.length, i.user_unread]));
+    const changed = sg !== supportSig;
+    supportSig = sg;
+    const wasUnread = supportUnread;
+    supportList = res.list;
+    supportUnread = !open && supportList.some((i) => i.user_unread);
+    $('settingsDot').classList.toggle('hidden', !supportUnread);
+    $('supportDot').classList.toggle('hidden', !supportUnread);
+    if (supportUnread && !wasUnread) toast(t('SUPPORT REPLIED  ·  CHECK SETTINGS → HELP & SUPPORT'));
+    if (open && changed && supportView !== 'new') renderSupport();
+  } finally { supportPolling = false; }
+}
+setInterval(pollSupport, 6000);
+
 async function refreshSupportBadge() {
   if (!getSession() || !isServerReady()) { supportUnread = false; } else {
     const res = await myInquiries(false);
@@ -3607,12 +3675,16 @@ async function renderSupport(reload = false) {
     const inq = supportList.find((i) => i.id === supportSel);
     if (!inq) { supportView = 'list'; renderSupport(); return; }
     inq.user_unread = false; // 열어 본 문의는 읽음 (서버는 목록을 불러올 때 이미 읽음 처리)
+    // 다시 그려도 쓰던 답장은 유지
+    const draft = $('supReplyMsg')?.value || '';
+    const hadFocus = document.activeElement?.id === 'supReplyMsg';
     const msgs = inq.messages.map((m) => {
       const mine = m.sender === 'user';
-      const translated = !mine && m.translated && m.translated_lang === getLang();
+      const shown = mine ? m.body : staffText(m);
+      const translated = !mine && shown !== m.body;
       return `<div class="sup-msg ${mine ? 'me' : 'staff'}">
         <small>${mine ? t('You') : t('Grub Rider Support')} · ${fmtDate(m.created_at)}</small>
-        <p>${escapeHtml(translated ? m.translated : (m.translated || m.body)).replace(/\n/g, '<br>')}</p>
+        <p>${escapeHtml(shown).replace(/\n/g, '<br>')}</p>
         ${translated ? `<details><summary>${t('Original')}</summary><p>${escapeHtml(m.body).replace(/\n/g, '<br>')}</p></details>` : ''}
       </div>`;
     }).join('');
@@ -3631,6 +3703,7 @@ async function renderSupport(reload = false) {
     });
     const th = body.querySelector('.sup-thread');
     if (th) th.scrollTop = th.scrollHeight;
+    if ($('supReplyMsg')) { $('supReplyMsg').value = draft; if (hadFocus) $('supReplyMsg').focus(); }
     return;
   }
   body.innerHTML = `<button class="btn primary" id="supNew" data-icon="next"><span>${t('NEW INQUIRY')}</span></button>
@@ -4207,12 +4280,35 @@ const LOAD_TIPS = ['Brush past cars for NEAR MISS bonuses', 'Land level after a 
 setLang(save.settings.lang || 'en') // 기본은 항상 영어, 설정에서만 바꿈
   .then(() => { const el = $('loadTip'); if (el) el.textContent = t(pick(LOAD_TIPS)); });
 // 운영 설정(가격·보상)은 다른 로딩과 병렬로 받고, 도착하면 보이는 화면만 다시 그림
-loadAppConfig().then((cfg) => {
+function applyAppConfig(cfg) {
   if (!cfg) return;
-  if (cfg.notices) { setNotices(cfg.notices); updateNoticeDot(); }
+  if (cfg.notices) {
+    const before = JSON.stringify(notices);
+    setNotices(cfg.notices);
+    updateNoticeDot();
+    if (currentScreen === 'notices' && JSON.stringify(notices) !== before) {
+      renderNotices();
+      if (notices.length && save.noticeSeen !== notices[0].id) { save.noticeSeen = notices[0].id; persist(); updateNoticeDot(); }
+    }
+  }
+  // 가격·보상이 바뀌었을 때만 다시 그림 (1분마다 확인할 때 차고 화면이 튀지 않게)
+  const eco = JSON.stringify(cfg.economy || null);
+  if (eco === lastEconomy) return;
+  lastEconomy = eco;
   if (G.state === 'menu') refreshMenu();
-  if (!$('garage').classList.contains('hidden')) renderGarage();
-});
+  if (currentScreen === 'garage') renderGarage();
+}
+let lastEconomy = '';
+loadAppConfig().then(applyAppConfig);
+// 공지·가격은 실행 중에도 1분마다(게임 플레이 중에는 쉼), 앱으로 돌아올 때 다시 확인 → 다시 켜지 않아도 새 공지가 뜸
+let configBusy = false;
+function pollConfig() {
+  if (configBusy || document.hidden || G.state === 'playing') return;
+  configBusy = true;
+  loadAppConfig().then(applyAppConfig).finally(() => { configBusy = false; });
+}
+setInterval(pollConfig, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { pollConfig(); pollSupport(true); } });
 detectCountry()
   .then(() => auth.restore())
   .then((s) => (s ? onSignedIn() : refreshMenu()));

@@ -1,9 +1,11 @@
 // Grub Rider 관리자 페이지
 // - 로그인: 게임과 같은 계정(아이디@도메인). 관리자(player_data.is_admin)만 통과
 // - 데이터는 Supabase 관리자 전용 RPC(009_ops.sql)로만 읽고 씀 → 공개 키만 사용, 비밀 키 없음
-// - 번역: 오픈소스 M2M100 을 브라우저 워커에서 실행 (js/admin-mt-worker.js)
+// - 번역: 기본은 온라인 번역(js/mt.js, 빠르고 휴대폰에서도 됨). 선택하면 오픈소스 M2M100 을 브라우저 워커에서 실행 (js/admin-mt-worker.js)
+// - 실시간: 문의·공지는 몇 초마다 서버를 다시 확인해 새로고침 없이 갱신
 import { SUPABASE_URL, SUPABASE_ANON_KEY, ID_EMAIL_DOMAIN, ECON, DEFAULT_NOTICES, BIKES, BOXES, OUTFITS, HELMETS } from './config.js';
 import { THEMES, countryName } from './themes.js';
+import { machineTranslate } from './mt.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -96,8 +98,25 @@ function ensureWorker() {
   };
   worker.onerror = (e) => mtStatus(`번역 엔진 오류: ${esc(e.message || '')}`);
 }
-function translate(text, src, tgt) {
-  if (!text || src === tgt) return Promise.resolve(text);
+// 번역 엔진 선택 (기기에 저장). 온라인 번역이 기본: 수 초 안에 끝나고 휴대폰에서도 됨
+const ENGINE_KEY = 'gr.admin.mt';
+let engine = 'online';
+try { engine = localStorage.getItem(ENGINE_KEY) || 'online'; } catch (e) { /* ignore */ }
+$('mtEngine').value = engine;
+$('mtEngine').addEventListener('change', (e) => {
+  engine = e.target.value;
+  try { localStorage.setItem(ENGINE_KEY, engine); } catch (err) { /* ignore */ }
+  mtStatus(engine === 'm2m' ? (mtReady ? '번역 엔진: M2M100 준비됨 ✓' : '번역 엔진: M2M100 (처음 쓸 때 약 630MB 받음)') : '번역: 온라인 번역 사용');
+});
+if (engine === 'm2m') mtStatus('번역 엔진: M2M100 (처음 쓸 때 약 630MB 받음)');
+async function translate(text, src, tgt) {
+  if (!text || !text.trim() || src === tgt) return text;
+  if (engine !== 'm2m') {
+    try { return await machineTranslate(text, src, tgt); } catch (e) { throw new Error(`온라인 번역 실패 (${e.message}). 인터넷 연결을 확인하거나 번역 엔진을 바꿔 보세요.`); }
+  }
+  return m2mTranslate(text, src, tgt);
+}
+function m2mTranslate(text, src, tgt) {
   ensureWorker();
   const id = ++mtSeq;
   return new Promise((resolve, reject) => {
@@ -146,6 +165,7 @@ let tab = 'dash';
 $('nav').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) go(b.dataset.tab); });
 function go(t) {
   tab = t;
+  if (t === 'notice') notices = null; // 공지 탭을 열 때마다 서버의 최신 공지를 다시 받음
   for (const b of $('nav').children) b.classList.toggle('on', b.dataset.tab === t);
   ({ dash: renderDash, inq: renderInq, notice: renderNotices, players: renderPlayers, rank: renderRank, errors: renderErrors, econ: renderEcon })[t]();
 }
@@ -199,22 +219,68 @@ async function refreshInqBadge() {
   } catch (e) { /* ignore */ }
 }
 async function renderInq() {
-  main().innerHTML = `<div class="head"><h2>1:1 문의</h2><div class="row">
+  curInq = null;
+  main().innerHTML = `<div class="head"><h2>1:1 문의 <span class="small muted" style="font-weight:400"><span class="live-dot"></span>실시간</span></h2><div class="row">
     ${['open', 'answered', 'closed', ''].map((s) => `<button class="btn small ${inqFilter === s ? 'primary' : ''}" data-f="${s}">${s ? STATUS[s] : '전체'}</button>`).join('')}
     <button class="btn small" id="iRe">새로고침</button></div></div>
     <div class="inq"><div id="inqList" class="inq-list"><p class="muted">불러오는 중…</p></div><div id="inqDetail" class="card"><p class="muted">왼쪽에서 문의를 고르세요.</p></div></div>`;
   for (const b of main().querySelectorAll('[data-f]')) b.onclick = () => { inqFilter = b.dataset.f; renderInq(); };
   $('iRe').onclick = renderInq;
-  let list;
-  try { list = await rpc('admin_list_inquiries', { p_status: inqFilter || null, p_limit: 200, p_offset: 0 }); } catch (e) { $('inqList').innerHTML = `<p class="msg">${esc(e.message)}</p>`; return; }
-  $('inqList').innerHTML = list.length ? list.map((i) => `<button class="inq-item ${i.id === inqSel ? 'on' : ''}" data-id="${i.id}">
+  try { await paintInqList(); } catch (e) { $('inqList').innerHTML = `<p class="msg">${esc(e.message)}</p>`; return; }
+  if (inqSel) showInq(inqSel);
+  refreshInqBadge();
+}
+let inqListSig = '';
+async function paintInqList() {
+  const list = await rpc('admin_list_inquiries', { p_status: inqFilter || null, p_limit: 200, p_offset: 0 });
+  const box = $('inqList');
+  if (!box) return;
+  const sg = JSON.stringify(list.map((i) => [i.id, i.status, i.updated_at, i.message_count]));
+  if (sg === inqListSig && box.dataset.painted) return; // 바뀐 게 없으면 다시 그리지 않음 (스크롤 유지)
+  inqListSig = sg;
+  box.dataset.painted = '1';
+  box.innerHTML = list.length ? list.map((i) => `<button class="inq-item ${i.id === inqSel ? 'on' : ''}" data-id="${i.id}">
       <div class="top"><b>#${i.id} ${esc(i.subject || CATS[i.category])}</b><span class="chip ${i.status}">${STATUS[i.status]}</span></div>
       <div class="small muted">${flag(i.country_code)}${esc(i.nickname)} · ${LANGS[i.lang] || i.lang} · ${CATS[i.category]} · ${when(i.updated_at)}</div>
       <div class="last">${i.last_sender === 'admin' ? '↪ ' : ''}${esc(i.last_message)}</div></button>`).join('')
     : '<p class="muted">문의가 없습니다.</p>';
-  for (const b of $('inqList').querySelectorAll('[data-id]')) b.onclick = () => { inqSel = Number(b.dataset.id); for (const x of $('inqList').children) x.classList.toggle('on', x === b); showInq(inqSel); };
-  if (inqSel) showInq(inqSel);
-  refreshInqBadge();
+  for (const b of box.querySelectorAll('[data-id]')) b.onclick = () => { inqSel = Number(b.dataset.id); for (const x of box.children) x.classList.toggle('on', x === b); showInq(inqSel); };
+}
+let curInq = null; // 지금 열어 둔 문의 (실시간 갱신용)
+const sig = (q) => (q ? `${q.status}|${q.messages.length}|${q.messages[q.messages.length - 1]?.id}` : '');
+function threadHtml(q) {
+  const lang = q.lang || 'en', needTr = lang !== ADMIN_LANG;
+  return q.messages.map((m) => {
+    const tr = trCache.get(m.id);
+    return `<div class="bubble ${m.sender}" data-mid="${m.id}">
+      <small>${m.sender === 'user' ? '플레이어' : '관리자'} · ${when(m.created_at)}${m.sender === 'user' && needTr && !tr ? ` · <a href="#" data-tr="${m.id}">한국어로 번역</a>` : ''}</small>
+      <p>${esc(m.body)}</p>
+      ${m.sender === 'admin' && m.translated ? `<div class="tr"><b>${LANGS[m.translated_lang] || m.translated_lang}로 보낸 번역</b><p>${esc(m.translated)}</p></div>` : ''}
+      ${tr ? `<div class="tr"><b>한국어 번역 (기계 번역)</b><p>${esc(tr)}</p></div>` : ''}</div>`;
+  }).join('');
+}
+// 대화만 다시 그림 (답변 입력칸은 그대로 → 쓰던 글이 지워지지 않음)
+function paintThread(q, stick = true) {
+  const th = $('qThread');
+  if (!th) return;
+  const atBottom = th.scrollHeight - th.scrollTop - th.clientHeight < 40;
+  th.innerHTML = threadHtml(q);
+  if (stick || atBottom) th.scrollTop = 1e6;
+  for (const a of th.querySelectorAll('[data-tr]')) a.onclick = async (e) => {
+    e.preventDefault();
+    a.textContent = '번역 중…';
+    const m = q.messages.find((x) => String(x.id) === a.dataset.tr);
+    try { await trMsg(q, m); paintThread(q, false); } catch (err) { a.textContent = `번역 실패: ${err.message}`; }
+  };
+}
+async function trMsg(q, m) { trCache.set(m.id, await translate(m.body, m.lang || q.lang || 'auto', ADMIN_LANG)); }
+// 온라인 번역이면 플레이어 메시지를 열자마자 한국어로 자동 번역
+async function autoTranslate(q) {
+  if (engine === 'm2m' || (q.lang || 'en') === ADMIN_LANG) return;
+  const todo = q.messages.filter((m) => m.sender === 'user' && !trCache.has(m.id));
+  if (!todo.length) return;
+  await Promise.all(todo.map((m) => trMsg(q, m).catch(() => {})));
+  if (curInq?.id === q.id) paintThread(curInq, false);
 }
 async function showInq(id) {
   const box = $('inqDetail');
@@ -222,55 +288,55 @@ async function showInq(id) {
   let q;
   try { q = await rpc('admin_get_inquiry', { p_id: id }); } catch (e) { box.innerHTML = `<p class="msg">${esc(e.message)}</p>`; return; }
   if (!q) { box.innerHTML = '<p class="msg">없는 문의</p>'; return; }
+  curInq = q;
   const lang = q.lang || 'en';
   const needTr = lang !== ADMIN_LANG;
   box.innerHTML = `<div class="head"><div><h3>#${q.id} ${esc(q.subject || CATS[q.category])}</h3>
       <div class="small muted">${flag(q.country_code)}${esc(q.nickname)} · ${LANGS[lang] || lang} · ${CATS[q.category]} · ${esc(q.app_build)} · ${esc(q.device)}</div></div>
-      <div class="row"><span class="chip ${q.status}">${STATUS[q.status]}</span><button class="btn small" id="qPlayer">플레이어 보기</button>
-      ${q.status !== 'closed' ? '<button class="btn small" id="qClose">종료</button>' : '<button class="btn small" id="qOpen">다시 열기</button>'}</div></div>
-    <div class="thread" id="qThread">${q.messages.map((m) => `<div class="bubble ${m.sender}" data-mid="${m.id}">
-      <small>${m.sender === 'user' ? '플레이어' : '관리자'} · ${when(m.created_at)}${m.sender === 'user' && needTr ? ` · <a href="#" data-tr="${m.id}">한국어로 번역</a>` : ''}</small>
-      <p>${esc(m.body)}</p>
-      ${m.sender === 'admin' && m.translated ? `<div class="tr"><b>${LANGS[m.translated_lang] || m.translated_lang}로 보낸 번역</b><p>${esc(m.translated)}</p></div>` : ''}
-      ${trCache.has(m.id) ? `<div class="tr"><b>한국어 번역 (M2M100)</b><p>${esc(trCache.get(m.id))}</p></div>` : ''}</div>`).join('')}</div>
-    ${needTr ? '<div class="row"><button class="btn small" id="qTrAll">플레이어 메시지 모두 한국어로 번역</button><span class="small muted">번역은 오픈소스 M2M100 기계번역이라 뜻 위주로 참고하세요.</span></div>' : ''}
+      <div class="row"><span class="chip ${q.status}" id="qChip">${STATUS[q.status]}</span><button class="btn small" id="qPlayer">플레이어 보기</button>
+      <button class="btn small" id="qClose" ${q.status === 'closed' ? 'hidden' : ''}>종료</button><button class="btn small" id="qOpen" ${q.status === 'closed' ? '' : 'hidden'}>다시 열기</button></div></div>
+    <div class="small muted"><span class="live-dot"></span>실시간 — 새 메시지가 오면 바로 나타납니다</div>
+    <div class="thread" id="qThread"></div>
+    ${needTr ? '<div class="row"><button class="btn small" id="qTrAll">플레이어 메시지 모두 한국어로 번역</button><span class="small muted">기계 번역이라 뜻 위주로 참고하세요.</span></div>' : ''}
     <div class="reply">
       <label class="full">답변 (한국어)<textarea id="rBody" rows="4" placeholder="플레이어에게 보낼 답변을 한국어로 쓰세요"></textarea></label>
-      ${needTr ? `<div class="full row"><button class="btn" id="rTr">↓ ${LANGS[lang]}로 번역</button><span class="small muted">번역문은 고칠 수 있습니다. 플레이어에게는 번역문이 먼저 보이고 원문은 '원문'을 눌러 볼 수 있습니다.</span></div>
+      ${needTr ? `<div class="full row"><button class="btn" id="rTr">↓ ${LANGS[lang]}로 번역</button><span class="small muted">번역문은 고칠 수 있습니다. 비워 두고 보내도 보낼 때 자동으로 번역합니다.</span></div>
       <label>${LANGS[lang]} 번역 (플레이어에게 보이는 글)<textarea id="rTrText" rows="4"></textarea></label>
       <label>역번역 확인 (번역문 → 한국어)<textarea id="rBack" rows="4" readonly placeholder="번역 후 자동으로 채워집니다"></textarea></label>` : ''}
       <div class="full row"><button class="btn primary" id="rSend">답변 보내기</button><button class="btn" id="rSendClose">답변 후 종료</button>
         <button class="btn" id="rGrant">💰 코인 지급</button></div>
     </div>`;
-  box.querySelector('#qThread').scrollTop = 1e6;
-  const trOne = async (m) => { trCache.set(m.id, await translate(m.body, m.lang || lang, ADMIN_LANG)); };
-  for (const a of box.querySelectorAll('[data-tr]')) a.onclick = async (e) => {
-    e.preventDefault();
-    a.textContent = '번역 중…';
-    const m = q.messages.find((x) => String(x.id) === a.dataset.tr);
-    try { await trOne(m); showInq(id); } catch (err) { a.textContent = `실패: ${err.message}`; }
-  };
+  paintThread(q);
+  autoTranslate(q);
   $('qTrAll')?.addEventListener('click', (e) => withBusy(e.target, '번역 중…', async () => {
-    for (const m of q.messages) if (m.sender === 'user' && !trCache.has(m.id)) await trOne(m);
-    showInq(id);
-  }));
-  $('rTr')?.addEventListener('click', (e) => withBusy(e.target, '번역 중…', async () => {
+    for (const m of curInq.messages) if (m.sender === 'user' && !trCache.has(m.id)) await trMsg(curInq, m);
+    paintThread(curInq, false);
+  }).catch((err) => toast(err.message)));
+  const doTr = async () => {
     const ko = $('rBody').value.trim();
-    if (!ko) return toast('답변을 먼저 쓰세요');
+    if (!ko) { toast('답변을 먼저 쓰세요'); return ''; }
     $('rTrText').value = await translate(ko, ADMIN_LANG, lang);
     $('rBack').value = await translate($('rTrText').value, lang, ADMIN_LANG);
-  }));
-  $('rTrText')?.addEventListener('change', async () => { $('rBack').value = '역번역 중…'; $('rBack').value = await translate($('rTrText').value, lang, ADMIN_LANG); });
+    return $('rTrText').value;
+  };
+  $('rTr')?.addEventListener('click', (e) => withBusy(e.target, '번역 중…', doTr).catch((err) => toast(err.message)));
+  $('rTrText')?.addEventListener('change', async () => {
+    $('rBack').value = '역번역 중…';
+    try { $('rBack').value = await translate($('rTrText').value, lang, ADMIN_LANG); } catch (err) { $('rBack').value = err.message; }
+  });
   const send = async (close, btn) => {
     const body = $('rBody').value.trim();
     if (!body) return toast('답변을 쓰세요');
-    let translated = needTr ? $('rTrText').value.trim() : '';
-    if (needTr && !translated) {
-      if (!confirm(`${LANGS[lang]} 번역 없이 한국어로만 보낼까요? (자동 번역하려면 취소 후 번역 버튼)`)) return;
-      translated = '';
-    }
     await withBusy(btn, '보내는 중…', async () => {
-      await rpc('admin_reply_inquiry', { p_id: id, p_body: body, p_translated: translated, p_translated_lang: needTr ? lang : '', p_close: close });
+      let translated = needTr ? $('rTrText').value.trim() : '';
+      if (needTr && !translated) {
+        // 번역을 안 했으면 보낼 때 자동 번역 (실패하면 한국어로만 보낼지 물음)
+        try { translated = await translate(body, ADMIN_LANG, lang); } catch (err) {
+          if (!confirm(`${err.message}\n\n번역 없이 한국어로만 보낼까요?`)) return;
+          translated = '';
+        }
+      }
+      await rpc('admin_reply_inquiry', { p_id: id, p_body: body, p_translated: translated, p_translated_lang: needTr && translated ? lang : '', p_close: close });
       toast('답변을 보냈습니다');
       renderInq();
     });
@@ -279,10 +345,43 @@ async function showInq(id) {
   $('rSendClose').onclick = (e) => send(true, e.target).catch((err) => toast(err.message));
   $('rGrant').onclick = () => grantCoins(q.user_id, `문의 #${q.id}`);
   $('qPlayer').onclick = () => openPlayer(q.user_id);
-  const setStatus = async (s) => { await rpc('admin_set_inquiry_status', { p_id: id, p_status: s }); toast(STATUS[s]); renderInq(); };
-  $('qClose')?.addEventListener('click', () => setStatus('closed').catch((e) => toast(e.message)));
-  $('qOpen')?.addEventListener('click', () => setStatus('open').catch((e) => toast(e.message)));
+  const setStatus = async (st) => { await rpc('admin_set_inquiry_status', { p_id: id, p_status: st }); toast(STATUS[st]); renderInq(); };
+  $('qClose').addEventListener('click', () => setStatus('closed').catch((e) => toast(e.message)));
+  $('qOpen').addEventListener('click', () => setStatus('open').catch((e) => toast(e.message)));
 }
+
+// ---------------------------------------------------------------- 실시간 갱신 (문의 목록·열린 대화·배지)
+// 탭이 보일 때만 몇 초마다 확인. 입력 중인 답변·번역문은 건드리지 않음
+let lastOpen = -1;
+async function pollInq() {
+  if (document.hidden || !session || $('app').classList.contains('hidden')) return;
+  try {
+    const open = await rpc('admin_list_inquiries', { p_status: 'open', p_limit: 200, p_offset: 0 });
+    $('navInq').textContent = open.length;
+    $('navInq').classList.toggle('hidden', !open.length);
+    if (lastOpen >= 0 && open.length > lastOpen) toast(`새 문의·메시지 ${open.length - lastOpen}건`);
+    lastOpen = open.length;
+    if (tab !== 'inq') return;
+    await paintInqList();
+    if (curInq && $('qThread')) {
+      const q = await rpc('admin_get_inquiry', { p_id: curInq.id });
+      if (q && sig(q) !== sig(curInq)) {
+        const statusChanged = q.status !== curInq.status;
+        curInq = q;
+        paintThread(q, false);
+        autoTranslate(q);
+        if (statusChanged) {
+          $('qChip').className = `chip ${q.status}`;
+          $('qChip').textContent = STATUS[q.status];
+          $('qClose').hidden = q.status === 'closed';
+          $('qOpen').hidden = q.status !== 'closed';
+        }
+      }
+    }
+  } catch (e) { /* 다음 주기에 다시 */ }
+}
+setInterval(pollInq, 5000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) pollInq(); });
 
 // ---------------------------------------------------------------- 공지
 let notices = null, editIdx = -1;
@@ -321,7 +420,7 @@ async function saveNotices(arr) {
   try {
     await rpc('admin_set_config', { p_key: 'notices', p_value: arr });
     notices = arr;
-    toast('공지를 저장했습니다. 게임을 다시 켜면 보입니다.');
+    toast('공지를 게시했습니다. 게임에는 1분 안에 자동으로 나타납니다.');
     renderNotices();
   } catch (e) { toast(e.message); }
 }
@@ -337,7 +436,7 @@ function editNotice(idx) {
       <label>종류<select id="neTag">${TAGS.map((t) => `<option ${n?.tag === t ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       <label class="full">제목 (한국어로 쓰고 아래에서 번역)<input id="neTitle" maxlength="80" value="${esc(ko.title)}"></label>
       <label class="full">내용<textarea id="neBody" rows="5" maxlength="2000">${esc(ko.body)}</textarea></label>
-      <div class="full row"><button class="btn" id="neTr">🌏 모든 언어로 번역 (M2M100)</button><span class="small muted">게임은 플레이어 언어의 번역을 보여 주고, 없으면 영어를 보여 줍니다. 번역은 아래에서 고칠 수 있습니다.</span></div>
+      <div class="full row"><button class="btn" id="neTr">🌏 모든 언어로 번역</button><span class="small muted">게임은 플레이어 언어의 번역을 보여 주고, 없으면 영어를 보여 줍니다. 번역은 아래에서 고칠 수 있습니다.</span></div>
       <div class="full tr-grid" id="neTrs">${Object.keys(LANGS).filter((l) => l !== 'ko').map((l) => {
         const v = l === 'en' ? { title: n?.title || '', body: n?.body || '' } : n?.i18n?.[l] || { title: '', body: '' };
         return `<div class="card"><b>${LANGS[l]}</b><input data-l="${l}" data-f="title" maxlength="80" value="${esc(v.title)}" placeholder="제목"><textarea data-l="${l}" data-f="body" rows="3" placeholder="내용">${esc(v.body)}</textarea></div>`;
@@ -350,12 +449,16 @@ function editNotice(idx) {
   $('neTr').onclick = (e) => withBusy(e.target, '번역 중… (언어 8개)', async () => {
     const title = $('neTitle').value.trim(), body = $('neBody').value.trim();
     if (!title) return toast('제목을 먼저 쓰세요');
-    for (const l of Object.keys(LANGS).filter((x) => x !== 'ko')) {
+    const one = async (l) => {
       const ti = $('neTrs').querySelector(`input[data-l="${l}"]`), bo = $('neTrs').querySelector(`textarea[data-l="${l}"]`);
       ti.value = await translate(title, 'ko', l);
       bo.value = body ? await translate(body, 'ko', l) : '';
-    }
-    toast('번역 완료. 고칠 부분을 확인하고 저장하세요.');
+    };
+    const targets = Object.keys(LANGS).filter((x) => x !== 'ko');
+    try {
+      if (engine === 'm2m') { for (const l of targets) await one(l); } else await Promise.all(targets.map(one));
+      toast('번역 완료. 고칠 부분을 확인하고 저장하세요.');
+    } catch (err) { toast(err.message); }
   });
   $('neSave').onclick = async () => {
     const title = $('neTitle').value.trim(), body = $('neBody').value.trim();

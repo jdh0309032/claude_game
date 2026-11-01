@@ -37,7 +37,11 @@
         <button data-tab="econ">⚙️ 가격·보상</button>
       </nav>
       <div class="side-foot">
-        <div id="mtStatus" class="mt-status">번역 엔진: 대기 (처음 쓸 때 받음)</div>
+        <label class="mt-engine">번역 엔진<select id="mtEngine">
+          <option value="online">온라인 번역 (빠름, 기본)</option>
+          <option value="m2m">M2M100 오픈소스 (PC 전용, 630MB)</option>
+        </select></label>
+        <div id="mtStatus" class="mt-status">번역: 온라인 번역 사용</div>
         <div id="who" class="muted small"></div>
         <button id="logout" class="btn ghost small">로그아웃</button>
       </div>
