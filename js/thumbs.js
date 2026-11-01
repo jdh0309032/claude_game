@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { createItemModel } from './models.js';
 
-const SIZE = 160;
+const SIZE = 200; // 고해상도 폰(70px × 약 2.8배)에서도 선명하게
 const cache = new Map();   // key → dataURL
 const queue = [];          // { key, kind, id, color }
 let renderer = null, scene = null, cam = null, busy = false;

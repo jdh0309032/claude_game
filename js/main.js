@@ -2703,7 +2703,7 @@ const THUMB_KINDS = new Set(['box', 'helmet', 'outfit', 'bike']);
 function tileVisual(kind, it) {
   // 상자·헤드기어·의상·바이크: 3D 모델 썸네일 (배경 없음, 그려지기 전엔 색 점)
   if (THUMB_KINDS.has(kind) && it.special !== 'national') {
-    return `<span class="tv thumb" style="--sw:${it.swatch || '#ccc'}"><img data-thumb="${thumbKey(kind, it.id)}" alt="">${it.tag ? flagBadge(it.tag, 'flag') : ''}</span>`;
+    return `<span class="tv item-thumb" style="--sw:${it.swatch || '#ccc'}"><img data-thumb="${thumbKey(kind, it.id)}" alt="">${it.tag ? flagBadge(it.tag, 'flag') : ''}</span>`;
   }
   if (kind === 'bike') {
     if (it.special === 'national') {
