@@ -1336,3 +1336,50 @@ body.touch #menu .help { display: none; }
 @media (max-width: 420px) { .mhead-top .brand { font-size: 22px; } .mhead-top .account-chip { max-width: 34vw; } }
 /* 스로틀 그립 라벨이 좁은 그립 밖으로 잘리지 않게 */
 .throttle-grip b, .brake-lever b { font-size: 10px; letter-spacing: 0.3px; padding: 0 2px; white-space: nowrap; }
+
+
+/* ======================================================================
+   결과 화면 v3: 한 화면에, 깔끔하게 (강조색 하나, 큰 점수, 기록 카드 하나, 주 버튼 하나)
+   ====================================================================== */
+#gameover .result-panel { gap: 12px; padding: 22px 18px 16px; }
+#gameover .res-top { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+#gameover .result-title { font-family: var(--hud) !important; font-weight: 800 !important; font-size: 14px !important; letter-spacing: 3px; text-shadow: none !important; margin: 0; }
+#gameover .result-title.delivered { color: var(--green-dark); }
+#gameover .result-title.crash { color: var(--red); }
+#gameover .final-score { font-size: clamp(44px, 14vw, 58px); line-height: 1.05; color: var(--text); letter-spacing: -1px; }
+#gameover .new-record { font-family: var(--hud); font-weight: 800; font-size: 12px; letter-spacing: 1.5px; color: #7a5600; background: #fff1c2; padding: 3px 10px; border-radius: 999px; animation: none; }
+#gameover .go-stats { gap: 1px; background: #e9edeb; border-radius: 16px; overflow: hidden; }
+#gameover .go-stats div { background: #f7f9f8; border-radius: 0; padding: 9px 4px 8px; display: flex; flex-direction: column-reverse; gap: 1px; }
+#gameover .go-stats b { font-family: var(--display); font-weight: 400; font-size: 17px; line-height: 1.15; color: var(--text); }
+#gameover .go-stats small { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#gameover #goMissions { gap: 2px; }
+#gameover #goMissions div { font-size: 12px; }
+#gameover #goGlobal { background: none; padding: 0; border-radius: 0; font-size: 13px; color: var(--muted); display: block; }
+#gameover #goGlobal b { color: var(--text); }
+#gameover #goGlobal .ge-line { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: center; }
+#gameover #goGlobal.ge-signin { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 10px; text-align: left; }
+#gameover #goGlobal.ge-signin .ge-msg { margin: 0; font-size: 12px; line-height: 1.3; flex: 0 1 auto; min-width: 0; }
+#gameover #goGlobal.ge-signin .ge-btn { flex-shrink: 0; padding: 6px 14px; font-size: 12px; background: var(--green-soft); color: var(--green-dark); box-shadow: none; }
+/* 이어 달리기 제안: 조용한 칩 */
+#gameover .res-offers { display: flex; gap: 8px; width: 100%; justify-content: center; }
+#gameover .res-offers:not(:has(.chip-btn:not(.hidden))) { display: none; }
+.chip-btn { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 38px; padding: 0 10px;
+  border: 1.5px solid var(--line); border-radius: 12px; background: #fff; color: var(--text); font: inherit; font-weight: 800; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.chip-btn .ic { width: 15px; height: 15px; color: var(--green-dark); flex-shrink: 0; }
+.chip-btn.gold { border-color: #ffd36a; background: #fff8e1; color: #7a5600; }
+.chip-btn.gold .ic { color: #d99a00; }
+.chip-btn:disabled { opacity: 0.45; }
+.chip-btn:active { transform: scale(0.97); }
+.chip-btn.hidden { display: none; }
+#gameover .res-main { width: 100%; padding: 14px; font-size: 17px; border-radius: 16px; }
+#gameover .res-sub { gap: 8px; }
+#gameover .res-sub .btn { padding: 10px 6px; font-size: 13px; background: #f3f5f4; border: none; color: var(--text); border-radius: 14px; box-shadow: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+#gameover .res-sub .btn .ic { width: 17px; height: 17px; }
+#gameover .res-sub .share .ic { color: #d62976; }
+#gameover .res-sub .wa .ic { color: #25d366; }
+#gameover .res-sub .btn:disabled { opacity: 0.6; }
+@media (max-height: 680px) {
+  #gameover .result-panel { gap: 9px; padding: 16px 14px 12px; }
+  #gameover .final-score { font-size: 42px; }
+  #gameover .res-main { padding: 12px; }
+}

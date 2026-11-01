@@ -148,3 +148,36 @@ export function renderRiderSnapshot(renderer, target, opts, color) {
   renderer.setRenderTarget(prevTarget);
   renderer.setClearColor(prevClear, prevAlpha);
 }
+
+// 자랑 카드용 히어로 렌더: 바닥 없이 투명 배경, 낮은 3/4 앞 각도 + 기울인 자세 → 캔버스 반환
+// (WebGL 컨텍스트를 아끼려고 렌더러 하나를 만들어 재사용)
+let heroR = null, heroScene = null, heroBike = null;
+export function renderRiderHero(w, h, opts, color, { crashed = false } = {}) {
+  if (!heroR) {
+    heroR = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    heroR.setPixelRatio(1);
+    heroScene = new THREE.Scene();
+    heroScene.add(new THREE.HemisphereLight(0xffffff, 0x2a3a30, 2.1));
+    const key = new THREE.DirectionalLight(0xffffff, 2.6);
+    key.position.set(3, 6, -4);
+    const rim = new THREE.DirectionalLight(0x7dffb0, 2.2);
+    rim.position.set(-4, 2.5, 3);
+    const fill = new THREE.DirectionalLight(0xffe2b0, 0.9);
+    fill.position.set(4, 1, 2);
+    heroScene.add(key, rim, fill);
+  }
+  if (heroBike) heroScene.remove(heroBike.root);
+  heroBike = createBike(color, opts);
+  heroScene.add(heroBike.root);
+  // 달리는 자세: 몸을 기울이고 앞바퀴를 살짝 들어 올림 (크래시면 더 크게 기울임)
+  heroBike.lean.rotation.z = crashed ? 0.55 : -0.22;
+  heroBike.root.rotation.x = crashed ? 0 : -0.08;
+  heroBike.root.rotation.y = -0.35;
+  heroR.setSize(w, h, false);
+  heroR.setClearColor(0x000000, 0);
+  const cam = new THREE.PerspectiveCamera(30, w / h, 0.3, 40);
+  cam.position.set(3.4, 1.15, -4.6);
+  cam.lookAt(0, 1.0, 0.1);
+  heroR.render(heroScene, cam);
+  return heroR.domElement;
+}

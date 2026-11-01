@@ -353,5 +353,15 @@
  "ACCEL",
  "HANDLING",
  "Smash a car in Giant Mode",
- "Get airborne off a ramp"
+ "Get airborne off a ramp",
+ "SHARE MY RESULT",
+ "Can you beat my score?",
+ "I scored {score} on Grub Rider! Ride the same road and beat me: {url}",
+ "IMAGE SAVED  ·  POST IT TO YOUR STORY",
+ "Could not share",
+ "REVIVE",
+ "COINS x2",
+ "Watch ad to revive",
+ "Watch ad to double coins",
+ "SHARE"
 ]
