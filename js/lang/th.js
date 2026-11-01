@@ -363,6 +363,7 @@ export default {
 "COINS x2": "เหรียญ x2",
 "Watch ad to revive": "ดูโฆษณาเพื่อฟื้นคืนชีพ",
 "Watch ad to double coins": "ดูโฆษณาเพื่อรับเหรียญ x2",
+"SHARE": "แชร์",
 "Starter delivery scooter": "สกูตเตอร์ส่งของสำหรับมือใหม่",
 "Nimble in tight traffic": "คล่องตัวในรถติด",
 "Chrome and leather charm": "เสน่ห์โครเมียมและหนัง",

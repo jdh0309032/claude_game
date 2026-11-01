@@ -363,6 +363,7 @@ export default {
 "COINS x2": "កាក់ x2",
 "Watch ad to revive": "មើលពាណិជ្ជកម្មដើម្បីរស់ឡើងវិញ",
 "Watch ad to double coins": "មើលពាណិជ្ជកម្មដើម្បីបានកាក់ទ្វេដង",
+"SHARE": "ចែករំលែក",
 "Starter delivery scooter": "ស្កូតទ័រដឹកជញ្ជូនសម្រាប់អ្នកចាប់ផ្ដើម",
 "Nimble in tight traffic": "រហ័សរហួនក្នុងចរាចរណ៍ចង្អៀត",
 "Chrome and leather charm": "ភាពទាក់ទាញនៃក្រូម និងស្បែក",

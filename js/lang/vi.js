@@ -363,6 +363,7 @@ export default {
 "COINS x2": "XU x2",
 "Watch ad to revive": "Xem quảng cáo để hồi sinh",
 "Watch ad to double coins": "Xem quảng cáo để nhân đôi xu",
+"SHARE": "CHIA SẺ",
 "Starter delivery scooter": "Xe tay ga giao hàng cho người mới",
 "Nimble in tight traffic": "Linh hoạt giữa dòng xe đông",
 "Chrome and leather charm": "Nét cổ điển của crôm và da",

@@ -363,6 +363,7 @@ export default {
 "COINS x2": "အကြွေစေ့ x2",
 "Watch ad to revive": "ကြော်ငြာကြည့်ပြီး ပြန်ရှင်",
 "Watch ad to double coins": "ကြော်ငြာကြည့်ပြီး အကြွေစေ့ နှစ်ဆ",
+"SHARE": "မျှဝေ",
 "Starter delivery scooter": "စတင်သူအတွက် ပို့ဆောင်ရေးစကူတာ",
 "Nimble in tight traffic": "ကားကြပ်ထဲတွင် လျင်မြန်သွက်လက်",
 "Chrome and leather charm": "ခရုမ်းနှင့် သားရေ၏ ဆွဲဆောင်မှု",

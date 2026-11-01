@@ -6,7 +6,7 @@ import { ScreenRain } from './rainfx.js';
 import {
   THEMES, ZONE_LENGTH, themeAt, themeIndexAt, driveSign, pickWeighted, COUNTRY_CODES, countryName, isCountryCode, flagBadge, nationalLivery, preloadFlags, setThemeOrder,
 } from './themes.js';
-import { PreviewStage, renderRiderSnapshot } from './preview.js';
+import { PreviewStage, renderRiderSnapshot, renderRiderHero } from './preview.js';
 import { fillThumbs, thumbKey } from './thumbs.js';
 import { showRewarded, adsEnabled } from './ads.js';
 import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, ECON, GACHA_ODDS, TIERS, DEFAULT_NOTICES, STREAK_REWARDS, STREAK_SPECIAL_HELMET, FLAG_CHECK_INTERVAL_SEC,
@@ -2518,7 +2518,7 @@ function scheduleFit() {
   fitQueued = true;
   requestAnimationFrame(() => {
     fitQueued = false;
-    for (const el of document.querySelectorAll('.screen:not(.hidden) .btn, .modal:not(.hidden) .btn')) if (el.offsetParent) fitButton(el);
+    for (const el of document.querySelectorAll('.screen:not(.hidden) .btn, .screen:not(.hidden) .chip-btn')) if (el.offsetParent) fitButton(el);
   });
 }
 window.addEventListener('resize', scheduleFit);
@@ -2526,7 +2526,7 @@ window.addEventListener('resize', scheduleFit);
 new MutationObserver((list) => {
   for (const m of list) {
     const n = m.target.nodeType === 3 ? m.target.parentElement : m.target;
-    const hit = m.type === 'attributes' ? n.classList.contains('screen') : n?.closest?.('.btn');
+    const hit = m.type === 'attributes' ? n.classList.contains('screen') : n?.closest?.('.btn, .chip-btn');
     if (hit) { scheduleFit(); return; }
   }
 }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class'] });
@@ -4154,6 +4154,16 @@ function challengeUrl() {
   const base = SHARE_BASE_URL || `${location.origin}${location.pathname}`;
   return `${base}${base.includes('?') ? '&' : '?'}seed=${G.seed}`;
 }
+// 자랑 카드 재료: 지금 주행 장면(배경용) 복사본
+function sceneShot() {
+  renderer.render(scene, camera); // 그리기 버퍼가 비기 전에 바로 복사
+  const out = document.createElement('canvas');
+  out.width = renderer.domElement.width;
+  out.height = renderer.domElement.height;
+  out.getContext('2d').drawImage(renderer.domElement, 0, 0);
+  return out;
+}
+
 let sharing = false;
 $('btnShareCard').addEventListener('click', async (e) => {
   if (sharing) return;
@@ -4161,11 +4171,9 @@ $('btnShareCard').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   btn.disabled = true;
   try {
-    renderer.render(scene, camera); // 지금 장면을 바로 그려서 스냅샷 (그리기 버퍼가 비기 전에 복사)
-    const snap = document.createElement('canvas');
-    snap.width = renderer.domElement.width;
-    snap.height = renderer.domElement.height;
-    snap.getContext('2d').drawImage(renderer.domElement, 0, 0);
+    const look = myLook();
+    const rider = renderRiderHero(1000, 1000, look.opts, look.color);
+    const bg = sceneShot();
     const url = challengeUrl();
     const blob = await makeResultCard({
       title: $('goTitle').textContent,
@@ -4173,13 +4181,16 @@ $('btnShareCard').addEventListener('click', async (e) => {
       score: fmt(Math.floor(G.score)),
       record: G.resultRecord,
       recordLabel: t('NEW RECORD'),
+      scoreLabel: t('SCORE'),
       stats: G.resultStats || [],
       country: save.country,
       countryName: countryName(save.country),
       rankLine: G.rankLine || countryName(save.country),
       tagline: t('Can you beat my score?'),
       url: url.replace(/^https?:\/\//, ''),
-      scene: snap,
+      scene: bg,
+      rider,
+      flagCode: look.opts.flag,
       scriptFont: SCRIPT_FONTS[getLang()],
     });
     const text = t('I scored {score} on Grub Rider! Ride the same road and beat me: {url}', { score: fmt(Math.floor(G.score)), url });

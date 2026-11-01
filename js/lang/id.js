@@ -363,6 +363,7 @@ export default {
 "COINS x2": "KOIN x2",
 "Watch ad to revive": "Tonton iklan untuk hidup lagi",
 "Watch ad to double coins": "Tonton iklan untuk koin ganda",
+"SHARE": "BAGIKAN",
 "Starter delivery scooter": "Skuter antar untuk pemula",
 "Nimble in tight traffic": "Lincah di jalanan padat",
 "Chrome and leather charm": "Pesona krom dan kulit",

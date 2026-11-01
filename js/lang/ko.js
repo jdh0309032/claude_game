@@ -363,6 +363,7 @@ export default {
 "COINS x2": "코인 2배",
 "Watch ad to revive": "광고 보고 부활",
 "Watch ad to double coins": "광고 보고 코인 2배",
+"SHARE": "자랑하기",
 "Starter delivery scooter": "입문용 배달 스쿠터",
 "Nimble in tight traffic": "꽉 막힌 도로에서도 날렵하게",
 "Chrome and leather charm": "크롬과 가죽의 클래식한 멋",

@@ -363,6 +363,7 @@ export default {
 "COINS x2": "SYILING x2",
 "Watch ad to revive": "Tonton iklan untuk hidup semula",
 "Watch ad to double coins": "Tonton iklan untuk syiling berganda",
+"SHARE": "KONGSI",
 "Starter delivery scooter": "Skuter penghantaran permulaan",
 "Nimble in tight traffic": "Lincah dalam trafik sesak",
 "Chrome and leather charm": "Pesona krom dan kulit",

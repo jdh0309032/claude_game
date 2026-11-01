@@ -363,6 +363,7 @@ export default {
 "COINS x2": "BARYA x2",
 "Watch ad to revive": "Manood ng ad para mabuhay muli",
 "Watch ad to double coins": "Manood ng ad para dumoble ang barya",
+"SHARE": "I-SHARE",
 "Starter delivery scooter": "Panimulang delivery scooter",
 "Nimble in tight traffic": "Maliksi sa masikip na trapiko",
 "Chrome and leather charm": "Ganda ng chrome at katad",
