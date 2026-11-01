@@ -38,7 +38,16 @@ async function http(path, { method = 'GET', body, auth = true } = {}) {
   const res = await fetch(SUPABASE_URL + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined });
   const text = await res.text();
   const json = text ? JSON.parse(text) : null;
-  if (!res.ok) throw Object.assign(new Error(json?.message || json?.msg || json?.error_description || `HTTP ${res.status}`), { status: res.status });
+  if (!res.ok) {
+    let msg = json?.message || json?.msg || json?.error_description || `HTTP ${res.status}`;
+    // 테이블·함수가 아직 없을 때 (SQL 미실행) → 무엇을 실행해야 하는지 안내
+    const miss = /Could not find the (table|function) '?public\.(\w+)/.exec(msg);
+    if (miss) {
+      const file = { app_config: '008_app_config.sql', admin_set_config: '008_app_config.sql' }[miss[2]] || '009_ops.sql';
+      msg = `서버에 '${miss[2]}' ${miss[1] === 'table' ? '테이블' : '함수'}이 없어요. Supabase SQL Editor에서 supabase/migrations/${file} (또는 setup_all.sql) 를 실행한 뒤 새로고침하세요.`;
+    }
+    throw Object.assign(new Error(msg), { status: res.status });
+  }
   return json;
 }
 async function refresh() {

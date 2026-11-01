@@ -529,3 +529,6 @@ end;
 $$;
 revoke all on function public.admin_grant_coins(uuid, int, text) from public, anon;
 grant execute on function public.admin_grant_coins(uuid, int, text) to authenticated;
+
+-- API(PostgREST)가 새 테이블·함수를 바로 알아보도록 스키마 캐시 새로고침
+notify pgrst, 'reload schema';
