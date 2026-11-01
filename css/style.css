@@ -1294,3 +1294,45 @@ body.touch #menu .help { display: none; }
 .country-label { min-width: 0; flex: 0 1 auto; }
 .country-label .cl-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .country-label small, .country-label img, .country-label .flag { flex-shrink: 0; }
+
+/* 아날로그 스로틀·브레이크: 당긴 양(--amt 0~1)을 게이지와 빛으로 표시 */
+.throttle-grip::after, .brake-lever::after {
+  content: ''; position: absolute; left: 4px; bottom: 6px; width: 5px; border-radius: 3px;
+  height: calc((100% - 12px) * var(--amt, 0)); transition: height 0.06s; pointer-events: none;
+}
+.throttle-grip::after { background: linear-gradient(0deg, #39ff88, #d6ff3d 70%, #ff4040); box-shadow: 0 0 8px rgba(57, 255, 136, 0.8); }
+.brake-lever::after { background: linear-gradient(0deg, #ffb3b3, #ff2a2a); box-shadow: 0 0 8px rgba(255, 42, 42, 0.8); }
+.throttle-grip.active { transform: perspective(300px) rotateX(calc(6deg + 14deg * var(--amt, 1))) scale(0.98); }
+#steerDot.gas { box-shadow: 0 0 calc(6px + 26px * var(--amt, 1)) rgba(57, 255, 136, calc(0.25 + 0.55 * var(--amt, 1))); }
+#steerDot.brk { box-shadow: 0 0 calc(6px + 26px * var(--amt, 1)) rgba(255, 64, 64, calc(0.25 + 0.55 * var(--amt, 1))); }
+
+/* 아이템 설명은 자르지 않고 전부 보여 줌 + 바이크 스펙 막대 */
+.garage-action { align-items: flex-start; }
+.garage-action > .btn { align-self: center; }
+.ga-info b { white-space: normal; overflow: visible; line-height: 1.2; overflow-wrap: anywhere; }
+.ga-info span { white-space: normal; overflow: visible; line-height: 1.35; margin-top: 2px; }
+.ga-spec { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
+.ga-spec-row { display: grid; grid-template-columns: minmax(64px, auto) 1fr 52px; align-items: center; gap: 6px; font-size: 10px; font-weight: 800; color: var(--muted); }
+.ga-spec-row span { white-space: nowrap; }
+.ga-spec-row i { display: block; height: 6px; border-radius: 3px; background: #e3e8e5; overflow: hidden; }
+.ga-spec-row i b { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--green), #7be495); }
+.ga-spec-row em { font-style: normal; text-align: right; color: var(--text); font-family: var(--hud); font-size: 11px; white-space: nowrap; }
+/* 부스트·묶음 이름은 두 줄까지, 누르면 설명이 위에 나옴 */
+.boost .nm, .bundle .nm { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; min-height: 2.2em; display: flex; align-items: center; justify-content: center; }
+.boost-desc { margin: 0; font-size: 12px; line-height: 1.35; color: var(--muted); background: var(--green-soft); border-radius: 10px; padding: 6px 10px; }
+.boost-desc b { color: var(--green-dark); }
+.tile .tn { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.15; text-align: center; min-height: 2.3em; overflow-wrap: anywhere; }
+
+/* 주행 HUD: 밝은 하늘 위에서도 숫자가 잘 보이도록 위쪽에 옅은 그림자 띠 */
+#hud::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 150px; pointer-events: none;
+  background: linear-gradient(180deg, rgba(8, 20, 14, 0.42), rgba(8, 20, 14, 0.18) 55%, transparent); z-index: -1; }
+:root { --hud-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 12px rgba(0, 0, 0, 0.45); }
+#hud .combo { color: #ff9a9a; }
+/* 결과 화면: 로그인 안내는 문장 아래에 버튼 */
+#goGlobal { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+#goGlobal .ge-msg { margin: 0; font-size: 14px; line-height: 1.4; }
+#goGlobal .ge-btn { padding: 8px 22px; }
+/* 메뉴 상단: 코인이 많아도 로그인 칩이 잘리지 않게 좁은 화면에서 로고를 조금 줄임 */
+@media (max-width: 420px) { .mhead-top .brand { font-size: 22px; } .mhead-top .account-chip { max-width: 34vw; } }
+/* 스로틀 그립 라벨이 좁은 그립 밖으로 잘리지 않게 */
+.throttle-grip b, .brake-lever b { font-size: 10px; letter-spacing: 0.3px; padding: 0 2px; white-space: nowrap; }

@@ -348,5 +348,10 @@
  "FRONT FLIP",
  "DIAGONAL FRONT FLIP",
  "{n}-WAY COMBO",
- "{n}x {trick}"
+ "{n}x {trick}",
+ "TOP SPEED",
+ "ACCEL",
+ "HANDLING",
+ "Smash a car in Giant Mode",
+ "Get airborne off a ramp"
 ]

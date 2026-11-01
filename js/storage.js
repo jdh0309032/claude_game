@@ -25,8 +25,8 @@ export const MISSION_DEFS = {
   oncoming: { label: (n) => t('Ride {n} m in the wrong way lane', { n: n.toLocaleString() }), targets: [200, 500, 1000, 2000, 3500, 5000] },
   combo:    { label: (n) => t('Reach a x{n} near-miss combo', { n }),          targets: [3, 5, 8, 12, 16, 20] },
   speed:    { label: (n) => t('Hit {n} KM/H', { n }),            targets: [120, 150, 180, 210, 240, 280] },
-  smash:    { label: (n) => t('Smash {n} cars in Giant Mode', { n }),     targets: [1, 3, 5, 10, 15, 25] },
-  jump:     { label: (n) => t('Get airborne {n} times off ramps', { n }),      targets: [1, 2, 3, 5, 8, 12] },
+  smash:    { label: (n) => (n === 1 ? t('Smash a car in Giant Mode') : t('Smash {n} cars in Giant Mode', { n })),     targets: [1, 3, 5, 10, 15, 25] },
+  jump:     { label: (n) => (n === 1 ? t('Get airborne off a ramp') : t('Get airborne {n} times off ramps', { n })),      targets: [1, 2, 3, 5, 8, 12] },
 };
 
 // 서버(player_data.data)에 저장하는 키
