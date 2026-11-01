@@ -52,7 +52,7 @@
 51	<b>KOMBO</b> — sambung nyaris nabrak dalam 3 detik untuk menaikkan pengali.
 52	<b>LAJUR KIRI / LAJUR KANAN</b> — Singapura, Malaysia, Indonesia, dan Thailand lajur kiri; Vietnam, Filipina, Kamboja, dan Myanmar lajur kanan. Perhatikan rambu di setiap gerbang perbatasan.
 53	<b>LAWAN ARAH</b> — berkendara di lajur berlawanan skornya x2. Awas kendaraan dari depan.
-54	<b>LOMPAT</b> — naiki truk ramp atau ramp lompat bergaris emas. Di udara, geser untuk berputar. Poin per putaran: atas (gas) = <b>SALTO BELAKANG</b> 1.0, diagonal atas 1.3, kiri / kanan = <b>SALTO SAMPING</b> 1.6, bawah (rem) = <b>SALTO DEPAN</b> 1.8, diagonal bawah 2.2 (1.0 = 300 poin). 2 putaran x2.5, 3+ putaran x5; campur 2 gerakan = <b>KOMBO</b> x1.5, 3+ gerakan x2.2. Mendarat rata dan kamu kebal sesaat; mendarat miring dan kamu jatuh.
+54	<b>LOMPAT</b> — naiki truk ramp atau ramp lompat bergaris emas. Di udara, geser untuk berputar. Poin per putaran: atas (gas) = <b>SALTO BELAKANG</b> 1.0, diagonal atas 1.3, kiri / kanan = <b>BARREL ROLL</b> 1.6, bawah (rem) = <b>SALTO DEPAN</b> 1.8, diagonal bawah 2.2 (1.0 = 300 poin). 2 putaran x2.5, 3+ putaran x5; ganti arah di udara = <b>KOMBO</b> x3 (sekali) atau x5 (2 kali atau lebih). Mendarat rata dan kamu kebal sesaat; mendarat miring dan kamu jatuh.
 55	<b>BADAI</b> — 30 detik hujan deras (skor x1,3). Genangan air membuat motor tergelincir.
 56	Hindari lapak pinggir jalan, kerucut dan rambu di garis tengah, serta mobil yang melewati garis tengah.
 57	<b>POWER-UP</b> (setiap 100-150 m) — Perisai, Magnet, <b>Mode Raksasa</b> (besar dan tak terhentikan), Skor x2, Lambat.
@@ -374,3 +374,4 @@
 373	MAIN GRATIS SEKARANG
 374	DAPATKAN DI GOOGLE PLAY
 375	MEMPERBARUI KE VERSI BARU...
+376	BARREL ROLL

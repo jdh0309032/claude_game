@@ -52,7 +52,7 @@
 51	<b>KOMBO</b> — sambung nyaris langgar dalam 3 saat untuk naikkan pendarab.
 52	<b>JALAN KIRI / JALAN KANAN</b> — Singapura, Malaysia, Indonesia dan Thailand memandu di sebelah kiri; Vietnam, Filipina, Kemboja dan Myanmar di sebelah kanan. Lihat papan tanda di setiap pintu sempadan.
 53	<b>LAWAN ARUS</b> — menunggang di lorong bertentangan memberi skor x2. Awas kenderaan dari depan.
-54	<b>LOMPAT</b> — naik trak tanjakan atau tanjakan lompat berjalur emas. Di udara, leret untuk berpusing. Mata setiap pusingan: atas (minyak) = <b>BALIK KUANG BELAKANG</b> 1.0, pepenjuru atas 1.3, kiri / kanan = <b>BALIK KUANG SISI</b> 1.6, bawah (brek) = <b>BALIK KUANG DEPAN</b> 1.8, pepenjuru bawah 2.2 (1.0 = 300 mata). 2 pusingan x2.5, 3+ pusingan x5; campur 2 gerakan = <b>KOMBO</b> x1.5, 3+ gerakan x2.2. Mendarat rata dan anda kebal seketika; mendarat senget dan anda jatuh.
+54	<b>LOMPAT</b> — naik trak tanjakan atau tanjakan lompat berjalur emas. Di udara, leret untuk berpusing. Mata setiap pusingan: atas (minyak) = <b>BALIK KUANG BELAKANG</b> 1.0, pepenjuru atas 1.3, kiri / kanan = <b>GULING TONG</b> 1.6, bawah (brek) = <b>BALIK KUANG DEPAN</b> 1.8, pepenjuru bawah 2.2 (1.0 = 300 mata). 2 pusingan x2.5, 3+ pusingan x5; tukar arah di udara = <b>KOMBO</b> x3 (sekali) atau x5 (2 kali atau lebih). Mendarat rata dan anda kebal seketika; mendarat senget dan anda jatuh.
 55	<b>RIBUT</b> — 30 saat hujan lebat (skor x1.3). Lopak air membuat anda tergelincir.
 56	Elakkan gerai tepi jalan, kon dan papan tanda di garisan tengah, serta kereta yang melintasi garisan tengah.
 57	<b>KUASA TAMBAHAN</b> (setiap 100-150 m) — Perisai, Magnet, <b>Mod Gergasi</b> (besar dan tidak dapat dihalang), Skor x2, Perlahan.
@@ -374,3 +374,4 @@
 373	MAIN PERCUMA SEKARANG
 374	DAPATKANNYA DI GOOGLE PLAY
 375	MENGEMAS KINI KE VERSI BAHARU...
+376	GULING TONG

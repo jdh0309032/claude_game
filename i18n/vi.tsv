@@ -52,7 +52,7 @@
 51	<b>COMBO</b> — nối các lần suýt va trong vòng 3 giây để tăng hệ số nhân.
 52	<b>ĐI BÊN TRÁI / BÊN PHẢI</b> — Singapore, Malaysia, Indonesia và Thái Lan đi bên trái; Việt Nam, Philippines, Campuchia và Myanmar đi bên phải. Hãy xem biển báo ở mỗi cổng biên giới.
 53	<b>ĐI NGƯỢC CHIỀU</b> — chạy ở làn ngược chiều được điểm x2. Coi chừng xe lao thẳng tới.
-54	<b>NHẢY</b> — chạy lên xe tải có dốc hoặc dốc nhảy sọc vàng. Trên không, vuốt để xoay. Điểm mỗi vòng: lên (ga) = <b>LỘN NGƯỢC</b> 1.0, chéo lên 1.3, trái / phải = <b>LỘN NGANG</b> 1.6, xuống (phanh) = <b>LỘN XUÔI</b> 1.8, chéo xuống 2.2 (1.0 = 300 điểm). 2 vòng x2.5, từ 3 vòng x5; kết hợp 2 động tác = <b>COMBO</b> x1.5, từ 3 động tác x2.2. Tiếp đất thăng bằng thì được bất tử trong giây lát; tiếp đất nghiêng là ngã.
+54	<b>NHẢY</b> — chạy lên xe tải có dốc hoặc dốc nhảy sọc vàng. Trên không, vuốt để xoay. Điểm mỗi vòng: lên (ga) = <b>LỘN NGƯỢC</b> 1.0, chéo lên 1.3, trái / phải = <b>XOAY THÙNG</b> 1.6, xuống (phanh) = <b>LỘN XUÔI</b> 1.8, chéo xuống 2.2 (1.0 = 300 điểm). 2 vòng x2.5, từ 3 vòng x5; đổi hướng giữa không trung = <b>COMBO</b> x3 (1 lần) hoặc x5 (từ 2 lần). Tiếp đất thăng bằng thì được bất tử trong giây lát; tiếp đất nghiêng là ngã.
 55	<b>MƯA GIÔNG</b> — 30 giây mưa lớn (điểm x1,3). Vũng nước làm xe trượt.
 56	Tránh các sạp hàng ven đường, cọc và biển báo giữa đường, và xe lấn qua vạch giữa.
 57	<b>VẬT PHẨM TĂNG SỨC</b> (mỗi 100-150 m) — Khiên, Nam châm, <b>Chế độ khổng lồ</b> (to lớn và không thể cản), Điểm x2, Chậm lại.
@@ -374,3 +374,4 @@
 373	CHƠI MIỄN PHÍ NGAY
 374	TẢI TRÊN GOOGLE PLAY
 375	ĐANG CẬP NHẬT PHIÊN BẢN MỚI...
+376	XOAY THÙNG
