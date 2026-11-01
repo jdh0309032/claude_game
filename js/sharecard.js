@@ -32,7 +32,7 @@ function loadImage(src) {
 }
 
 /**
- * @param {object} d { title, delivered, score, record, recordLabel, scoreLabel, stats: [[label, value]...], country, rankLine,
+ * @param {object} d { title, tone: 'gold'|'green', score, record, recordLabel, scoreLabel, stats: [[label, value]...], country, rankLine,
  *                    tagline, url, scene: 배경용 주행 장면 canvas, rider: 투명 배경 라이더 canvas, scriptFont }
  * @returns {Promise<Blob>}
  */
@@ -48,7 +48,8 @@ export async function makeResultCard(d) {
   c.height = H;
   const ctx = c.getContext('2d');
   ctx.textAlign = 'center';
-  const accent = d.delivered ? '#39ff88' : '#ff6b6b';
+  const gold = d.tone === 'gold';
+  const accent = gold ? '#ffd34d' : '#39ff88';
 
   // 1) 배경: 주행 장면을 크게 흐리게 + 짙은 초록 그라데이션
   ctx.fillStyle = '#04170d';
@@ -84,7 +85,7 @@ export async function makeResultCard(d) {
   }
   ctx.restore();
   const glow = ctx.createRadialGradient(ox, oy + 40, 30, ox, oy + 40, 520);
-  glow.addColorStop(0, d.delivered ? 'rgba(57,255,136,0.55)' : 'rgba(255,107,107,0.45)');
+  glow.addColorStop(0, gold ? 'rgba(255,211,77,0.5)' : 'rgba(57,255,136,0.55)');
   glow.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 200, W, 1100);
@@ -222,9 +223,12 @@ const blobToBase64 = (blob) => new Promise((resolve, reject) => {
 });
 
 /**
- * 이미지 + 문구 공유. 결과: 'shared' | 'cancelled' | 'saved'
+ * 이미지 + 문구 공유 (shareFile 참고). 결과: 'shared' | 'cancelled' | 'saved'
  */
-export async function shareImage(blob, text, filename = 'grub-rider.png') {
+export async function shareImage(blob, text, filename = 'grub-rider.png') { return shareFile(blob, text, filename); }
+
+// 이미지·영상 공통 공유
+export async function shareFile(blob, text, filename) {
   const cap = window.Capacitor;
   const Share = cap?.Plugins?.Share, Fs = cap?.Plugins?.Filesystem;
   // 앱: 캐시에 저장 → 안드로이드 공유 시트 (왓츠앱, 인스타 스토리 등)
@@ -238,7 +242,7 @@ export async function shareImage(blob, text, filename = 'grub-rider.png') {
     }
   }
   // 브라우저: 파일 공유 시트
-  const file = new File([blob], filename, { type: 'image/png' });
+  const file = new File([blob], filename, { type: blob.type || 'image/png' });
   if (navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], text });

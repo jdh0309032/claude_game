@@ -218,6 +218,7 @@
         <div class="setting"><span><i data-icon="vibrate"></i><em class="st-label" data-i18n>VIBRATION</em></span><button class="btn toggle" data-setting="vibrate"></button></div>
         <div class="setting"><span><i data-icon="eye"></i><em class="st-label" data-i18n>GRAPHICS</em></span><button class="btn toggle" data-setting="quality"></button></div>
         <div class="setting"><span><i data-icon="drop"></i><em class="st-label" data-i18n>SCREEN WET EFFECT</em></span><button class="btn toggle" data-setting="wetFx"></button></div>
+        <div id="clipsRow" class="setting"><span><i data-icon="play"></i><em class="st-label" data-i18n>HIGHLIGHT CLIPS</em></span><button class="btn toggle" data-setting="clips"></button></div>
         <div class="setting"><span><i data-icon="hand"></i><em class="st-label" data-i18n>CONTROLS</em></span><button class="btn toggle" data-setting="controls"></button></div>
         <p id="controlsHint" class="muted setting-hint"></p>
         <div id="flipRow" class="setting"><span><i data-icon="retry"></i><em class="st-label" data-i18n>FLIP CONTROL LAYOUT</em></span><button class="btn toggle" data-setting="flipControls"></button></div>
@@ -294,6 +295,17 @@
         </div>
       </div>
     </section>
+
+    <!-- 자랑하기: 하이라이트 영상 / 이미지 카드 선택 -->
+    <div id="shareSheet" class="share-sheet hidden" role="dialog" aria-modal="true">
+      <div class="ss-card">
+        <div class="ss-head"><b data-i18n>SHARE</b><button id="ssClose" class="ss-x" aria-label="Close" data-i18n-aria>&times;</button></div>
+        <video id="ssVideo" muted loop playsinline autoplay></video>
+        <p class="ss-hint" data-i18n>Your best move from this run</p>
+        <button id="ssVideoBtn" class="btn primary" data-icon="play"><span data-i18n>SHARE VIDEO</span></button>
+        <button id="ssImageBtn" class="btn res-soft" data-icon="share"><span data-i18n>SHARE IMAGE</span></button>
+      </div>
+    </div>
 
     <!-- 7-day login streak -->
     <section id="daily" class="screen hidden">

@@ -68,7 +68,7 @@ function defaults() {
     missionLevels: {},
     // controls: 'onehand'(기본, 좌우 슬라이드만 · 자동 가속) | 'slide'(슬라이드 + 스로틀/브레이크) | 'arrows'(방향 버튼 + 스로틀/브레이크)
     // flipControls: 조향·페달 좌우 반전 / ctrlVer: 조작 기본값 이전용 버전
-    settings: { sound: true, music: true, vibrate: true, quality: 'high', controls: 'onehand', flipControls: false, wetFx: true, ctrlVer: 3, lang: '' }, // lang '' = 영어(기본)
+    settings: { sound: true, music: true, vibrate: true, quality: 'high', controls: 'onehand', flipControls: false, wetFx: true, clips: true, ctrlVer: 3, lang: '' }, // lang '' = 영어(기본)
     stats: { runs: 0, totalDist: 0, totalNear: 0 },
     // ---- 아래는 서버 data 에 저장하지 않는 런타임 상태
     country: guessRegion(), // 랭킹 국가 (IP 판별 → 로그인 시 서버에 고정된 값)

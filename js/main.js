@@ -15,7 +15,8 @@ import { BILLBOARD_POSTERS, SHARE_BASE_URL, ADS, ECON, GACHA_ODDS, TIERS, DEFAUL
 import { paymentsMode, initPayments, getPacks, buyPack } from './payments.js';
 import { initLiveUpdate, webBuild } from './updater.js';
 import { machineTranslate } from './mt.js';
-import { makeResultCard, shareImage } from './sharecard.js';
+import { makeResultCard, shareImage, shareFile } from './sharecard.js';
+import { ClipRecorder } from './clips.js';
 import { t, setLang, getLang, LANGS, applyI18n, onLangChange } from './i18n.js';
 import {
   save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, PAINTS, getBike,
@@ -105,6 +106,14 @@ THREE.ShaderChunk.fog_fragment = THREE.ShaderChunk.fog_fragment.replace(
   'if ( fogFactor > 0.965 ) discard;\n\tgl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );',
 );
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+// 하이라이트 클립 녹화기 (점프~착지 순간만 녹화)
+const clips = new ClipRecorder(canvas);
+// 클립이 바이크를 따라 잘리도록 화면 속 바이크 위치(0~1)를 알려 줌
+const clipFocusV = new THREE.Vector3();
+clips.focus = () => {
+  clipFocusV.set(bike.root.position.x, bike.root.position.y + 1.1, bike.root.position.z).project(camera);
+  return { x: (clipFocusV.x + 1) / 2, y: (1 - clipFocusV.y) / 2 };
+};
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87c6ff);
 scene.fog = new THREE.Fog(0x87c6ff, 60, 240);
@@ -1864,6 +1873,7 @@ function resetBikePose() {
 }
 
 function startRun(opts = {}) {
+  clips.reset();
   sfx.init();
   sfx.click();
   if (bikeKey !== currentBikeKey()) buildBike();
@@ -2145,6 +2155,8 @@ function startJump(c) {
   G.rotShown = 0;
   G.jumps++;
   c.passed = true;
+  clips.enabled = save.settings.clips !== false;
+  clips.start({ url: challengeUrl().replace(/^https?:\/\//, '').replace(/\?.*$/, ''), scriptFont: SCRIPT_FONTS[getLang()] });
   sfx.jump();
   vibrate(30);
   popup(t('AIRBORNE'), 'big');
@@ -2243,6 +2255,7 @@ function land() {
   const clean = offLevelAngle() < LAND_TOL;
   const types = G.rotTypes.slice(0, G.rotationCount);
   if (!clean) {
+    clips.finish(-1);
     popup(t('CRASH LANDING!'), 'big');
     crash({ x: G.x - 0.5 });
     return;
@@ -2257,6 +2270,7 @@ function land() {
   if (types.length > 0) G.tricks += types.length;
   const mult = types.length ? ` · x${sc.rot}${sc.combo > 1 ? ` · ${t('COMBO x{n}', { n: sc.combo })}` : ''}` : '';
   popup(trickTitle(types), 'perfect', t('CLEAN LANDING · +{n}', { n: fmt(pts) }) + mult);
+  clips.finish(pts, trickTitle(types), `+${fmt(pts)}`);
   G.shake = 0.5;
   sfx.land();
   vibrate(40);
@@ -2389,6 +2403,7 @@ function knockAway(o, kind) {
 }
 
 function crash(o) {
+  clips.crashed();
   G.state = 'crashing';
   G.crashT = 0;
   G.shake = 1.3;
@@ -3788,6 +3803,7 @@ const SETTING_LABELS = {
   quality: (v) => (v === 'high' ? t('HIGH') : t('LOW (FAST)')),
   controls: (v) => t({ onehand: 'ONE-HAND', slide: 'SLIDE + PEDALS', arrows: 'ARROWS + PEDALS' }[v] || 'ONE-HAND'),
   flipControls: onOff,
+  clips: (v) => onOff(v !== false),
 };
 function renderSettings() {
   $('langSelect').innerHTML = LANGS.map((l) => `<option value="${l.code}">${escapeHtml(l.name)}</option>`).join('');
@@ -3797,6 +3813,7 @@ function renderSettings() {
   }
   $('controlsHint').textContent = t(CONTROL_HINTS[save.settings.controls] || CONTROL_HINTS.onehand);
   $('flipRow').classList.toggle('hidden', save.settings.controls === 'onehand');
+  $('clipsRow').classList.toggle('hidden', !clips.supported); // 녹화를 지원하지 않는 기기에선 숨김
   const src = t({ server: 'LOCKED', ip: 'IP', tz: 'ESTIMATED' }[save.countrySource] || '');
   $('countryLabel').innerHTML = `${flagBadge(save.country)}<span class="cl-name">${escapeHtml(countryName(save.country))}</span> <small class="muted">${isAdminMode() ? 'ADMIN' : src}</small>`;
   // 관리자만 국가를 바꿀 수 있음
@@ -3887,6 +3904,7 @@ for (const b of document.querySelectorAll('[data-setting]')) {
       s.controls = order[(order.indexOf(s.controls) + 1) % order.length];
     }
     if (k === 'flipControls') s.flipControls = !s.flipControls;
+    if (k === 'clips') { s.clips = s.clips === false; clips.enabled = s.clips; }
     applyControlSettings();
     sfx.click();
     persist();
@@ -3956,6 +3974,7 @@ $('btnResume').addEventListener('click', resumeGame);
   let exitArmed = 0;
   App?.addListener?.('backButton', () => {
     if (!$('tutorial').classList.contains('hidden')) { hideTutorial(); return; }
+    if (!$('shareSheet').classList.contains('hidden')) { closeShareSheet(); return; }
     if (G.state === 'playing') { togglePause(); return; }
     if (G.state === 'paused') { resumeGame(); return; }
     if (G.state === 'countdown') return;
@@ -4046,6 +4065,7 @@ async function submitGlobal() {
   const box = $('goGlobal');
   box.classList.remove('hidden', 'ge-signin');
   G.rankLine = '';
+  G.rankNum = 0;
   const s = getSession();
   const score = Math.floor(G.score);
   const cname = escapeHtml(countryName(save.country));
@@ -4077,6 +4097,7 @@ async function submitGlobal() {
   try {
     const r = await leaderboard.myRank();
     if (r) rank = `#${r.rank}`;
+    G.rankNum = r?.rank || 0;
     applyNationalStatus(Boolean(r && r.rank === 1), r?.country || save.country);
   } catch (e) { /* 순위 조회 실패 시 표시만 생략 */ }
   regionTopsDirty(save.country);
@@ -4165,10 +4186,47 @@ function sceneShot() {
 }
 
 let sharing = false;
-$('btnShareCard').addEventListener('click', async (e) => {
-  if (sharing) return;
+// 자랑하기: 이번 판 하이라이트 영상이 있으면 미리보기 창(영상 / 이미지 선택), 없으면 바로 이미지 카드
+$('btnShareCard').addEventListener('click', (e) => {
+  if (clips.best) openShareSheet();
+  else shareCard(e.currentTarget);
+});
+function openShareSheet() {
+  const v = $('ssVideo');
+  v.src = clips.best.url;
+  v.play?.().catch(() => {});
+  $('shareSheet').classList.remove('hidden');
+}
+function closeShareSheet() {
+  const v = $('ssVideo');
+  v.pause?.();
+  v.removeAttribute('src');
+  v.load?.();
+  $('shareSheet').classList.add('hidden');
+}
+$('ssClose').addEventListener('click', closeShareSheet);
+$('shareSheet').addEventListener('click', (e) => { if (e.target.id === 'shareSheet') closeShareSheet(); });
+$('ssImageBtn').addEventListener('click', (e) => shareCard(e.currentTarget));
+$('ssVideoBtn').addEventListener('click', async (e) => {
+  const best = clips.best;
+  if (!best || sharing) return;
   sharing = true;
   const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    const text = t('I scored {score} on Grub Rider! Ride the same road and beat me: {url}', { score: fmt(Math.floor(G.score)), url: challengeUrl() });
+    const r = await shareFile(best.blob, text, `grub-rider-${Math.floor(G.score)}.${best.ext}`);
+    if (r === 'saved') toast(t('VIDEO SAVED  ·  POST IT TO YOUR STORY'));
+  } catch (err) {
+    toast(t('Could not share'));
+  } finally {
+    sharing = false;
+    btn.disabled = false;
+  }
+});
+async function shareCard(btn) {
+  if (sharing) return;
+  sharing = true;
   btn.disabled = true;
   try {
     const look = myLook();
@@ -4176,8 +4234,10 @@ $('btnShareCard').addEventListener('click', async (e) => {
     const bg = sceneShot();
     const url = challengeUrl();
     const blob = await makeResultCard({
-      title: $('goTitle').textContent,
-      delivered: $('goTitle').classList.contains('delivered'),
+      // 자랑 카드는 항상 축하 문구: 국가 1위 > 개인 신기록 > 그 밖 (넘어진 판이어도 '크래시'는 안 씀)
+      title: G.rankNum === 1 ? t('#1 IN {country}!', { country: countryName(save.country).toUpperCase() })
+        : G.resultRecord ? t('NEW PERSONAL BEST!') : t('WHAT A RIDE!'),
+      tone: G.rankNum === 1 || G.resultRecord ? 'gold' : 'green',
       score: fmt(Math.floor(G.score)),
       record: G.resultRecord,
       recordLabel: t('NEW RECORD'),
@@ -4202,7 +4262,7 @@ $('btnShareCard').addEventListener('click', async (e) => {
     sharing = false;
     btn.disabled = false;
   }
-});
+}
 
 function reviveRun() {
   G.continued = true;
@@ -4276,6 +4336,7 @@ function frame(now) {
   updateCamera(rdt);
   updateFx(rdt);
   renderer.render(scene, camera);
+  if (clips.recording) clips.frame(G.score); // 렌더 직후 같은 프레임에서 복사
   // 화면 빗물은 렌더 직후 같은 프레임에서 그려야 굴절 스냅샷이 유효
   if (G.state !== 'paused') {
     const wet = G.state === 'playing' || G.state === 'crashing' ? G.rainAmt : 0;
