@@ -13,7 +13,7 @@ import { BILLBOARD_POSTERS, SHARE_BASE_URL, STORE_URL, ADS, ECON, GACHA_ODDS, TI
   FLAG_SHOP_CODES, FLAG_PRICE_THEME, FLAG_PRICE_OTHER, ADMIN_DEBUG_TOGGLE, APP_INFO, BOOSTS, BOOST_BUNDLE, BOOST_START_TIME, HEAD_START_TIME,
 } from './config.js';
 import { paymentsMode, initPayments, getPacks, buyPack } from './payments.js';
-import { initLiveUpdate, webBuild } from './updater.js';
+import { initLiveUpdate, webBuild, hasPendingUpdate, applyPendingUpdate } from './updater.js';
 import { machineTranslate } from './mt.js';
 import { makeResultCard, shareImage, shareFile } from './sharecard.js';
 import { ClipRecorder } from './clips.js';
@@ -1895,6 +1895,18 @@ function resetBikePose() {
   bike.lean.rotation.set(0, 0, 0);
   bike.root.visible = true;
 }
+
+// 앱 라이브 업데이트: 받아 두었으면 메뉴 화면에 있을 때 바로 적용 (주행 중이면 끝나고 메뉴로 돌아왔을 때)
+let applyingUpdate = false;
+function tryApplyUpdate() {
+  if (applyingUpdate || !hasPendingUpdate() || G.state !== 'menu' || (currentScreen && currentScreen !== 'menu')) return;
+  applyingUpdate = true;
+  toast(t('UPDATING TO THE NEW VERSION...'));
+  persist();
+  setTimeout(() => { applyPendingUpdate().then((ok) => { if (!ok) applyingUpdate = false; }); }, 1200);
+}
+window.addEventListener('grub-update-ready', tryApplyUpdate);
+setInterval(tryApplyUpdate, 3000);
 
 function startRun(opts = {}) {
   clips.reset();

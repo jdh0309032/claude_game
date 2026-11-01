@@ -374,6 +374,7 @@ export default {
 "HIGHLIGHT CLIPS": "HIGHLIGHT CLIPS",
 "PLAY FREE NOW": "LARUIN NANG LIBRE",
 "GET IT ON GOOGLE PLAY": "I-DOWNLOAD SA GOOGLE PLAY",
+"UPDATING TO THE NEW VERSION...": "NAG-A-UPDATE SA BAGONG BERSYON...",
 "Starter delivery scooter": "Panimulang delivery scooter",
 "Nimble in tight traffic": "Maliksi sa masikip na trapiko",
 "Chrome and leather charm": "Ganda ng chrome at katad",
