@@ -372,6 +372,8 @@ export default {
 "SHARE IMAGE": "แชร์รูปภาพ",
 "VIDEO SAVED  ·  POST IT TO YOUR STORY": "บันทึกวิดีโอแล้ว  ·  โพสต์ลงสตอรี่ได้เลย",
 "HIGHLIGHT CLIPS": "คลิปไฮไลต์",
+"PLAY FREE NOW": "เล่นฟรีเลย",
+"GET IT ON GOOGLE PLAY": "ดาวน์โหลดบน Google Play",
 "Starter delivery scooter": "สกูตเตอร์ส่งของสำหรับมือใหม่",
 "Nimble in tight traffic": "คล่องตัวในรถติด",
 "Chrome and leather charm": "เสน่ห์โครเมียมและหนัง",

@@ -372,6 +372,8 @@ export default {
 "SHARE IMAGE": "BAGIKAN GAMBAR",
 "VIDEO SAVED  ·  POST IT TO YOUR STORY": "VIDEO DISIMPAN  ·  POSTING KE STORY",
 "HIGHLIGHT CLIPS": "KLIP SOROTAN",
+"PLAY FREE NOW": "MAIN GRATIS SEKARANG",
+"GET IT ON GOOGLE PLAY": "DAPATKAN DI GOOGLE PLAY",
 "Starter delivery scooter": "Skuter antar untuk pemula",
 "Nimble in tight traffic": "Lincah di jalanan padat",
 "Chrome and leather charm": "Pesona krom dan kulit",

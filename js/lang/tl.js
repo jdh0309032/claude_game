@@ -372,6 +372,8 @@ export default {
 "SHARE IMAGE": "I-SHARE ANG LARAWAN",
 "VIDEO SAVED  ·  POST IT TO YOUR STORY": "NA-SAVE ANG VIDEO  ·  I-POST SA STORY",
 "HIGHLIGHT CLIPS": "HIGHLIGHT CLIPS",
+"PLAY FREE NOW": "LARUIN NANG LIBRE",
+"GET IT ON GOOGLE PLAY": "I-DOWNLOAD SA GOOGLE PLAY",
 "Starter delivery scooter": "Panimulang delivery scooter",
 "Nimble in tight traffic": "Maliksi sa masikip na trapiko",
 "Chrome and leather charm": "Ganda ng chrome at katad",

@@ -23,6 +23,17 @@ export class Sound {
     this.intensity = 0;
   }
 
+  // 하이라이트 영상 녹화용: 게임 소리 전체(마스터)를 MediaStream 으로도 내보냄
+  recordStream() {
+    this.init();
+    if (!this.ctx?.createMediaStreamDestination) return null;
+    if (!this.recDest) {
+      this.recDest = this.ctx.createMediaStreamDestination();
+      this.master.connect(this.recDest);
+    }
+    return this.recDest.stream;
+  }
+
   init() {
     if (!this.ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
