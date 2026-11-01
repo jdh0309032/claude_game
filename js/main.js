@@ -4046,6 +4046,7 @@ async function submitGlobal() {
   const box = $('goGlobal');
   box.classList.remove('hidden', 'ge-signin');
   G.rankLine = '';
+  G.rankNum = 0;
   const s = getSession();
   const score = Math.floor(G.score);
   const cname = escapeHtml(countryName(save.country));
@@ -4077,6 +4078,7 @@ async function submitGlobal() {
   try {
     const r = await leaderboard.myRank();
     if (r) rank = `#${r.rank}`;
+    G.rankNum = r?.rank || 0;
     applyNationalStatus(Boolean(r && r.rank === 1), r?.country || save.country);
   } catch (e) { /* 순위 조회 실패 시 표시만 생략 */ }
   regionTopsDirty(save.country);
@@ -4176,8 +4178,10 @@ $('btnShareCard').addEventListener('click', async (e) => {
     const bg = sceneShot();
     const url = challengeUrl();
     const blob = await makeResultCard({
-      title: $('goTitle').textContent,
-      delivered: $('goTitle').classList.contains('delivered'),
+      // 자랑 카드는 항상 축하 문구: 국가 1위 > 개인 신기록 > 그 밖 (넘어진 판이어도 '크래시'는 안 씀)
+      title: G.rankNum === 1 ? t('#1 IN {country}!', { country: countryName(save.country).toUpperCase() })
+        : G.resultRecord ? t('NEW PERSONAL BEST!') : t('WHAT A RIDE!'),
+      tone: G.rankNum === 1 || G.resultRecord ? 'gold' : 'green',
       score: fmt(Math.floor(G.score)),
       record: G.resultRecord,
       recordLabel: t('NEW RECORD'),
