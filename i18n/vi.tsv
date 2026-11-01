@@ -1,0 +1,343 @@
+0	CHẾ ĐỘ QUẢN TRỊ · KHÔNG GHI ĐIỂM
+1	GA
+2	PHANH
+3	TĂNG GA
+4	GIAO HỎA TỐC!
+5	KM/H
+6	TẠM DỪNG
+7	ĐƯỜNG THỬ THÁCH
+8	TIN TỨC
+9	GARA
+10	XẾP HẠNG
+11	NHIỆM VỤ
+12	CÀI ĐẶT
+13	BẮT ĐẦU CHẠY
+14	CAO NHẤT
+15	GẦN ĐÂY
+16	CHẾ ĐỘ QUẢN TRỊ
+17	PHÍM MŨI TÊN / A D lái · LÊN tăng ga · XUỐNG phanh · P tạm dừng
+18	TÀI KHOẢN TÀI XẾ
+19	ĐĂNG NHẬP
+20	ĐĂNG KÝ
+21	ID
+22	MẬT KHẨU
+23	XÁC NHẬN MẬT KHẨU
+24	Đã đăng nhập với
+25	Điểm cao nhất của bạn được đưa lên bảng xếp hạng sau mỗi lượt chạy.
+26	ĐĂNG XUẤT
+27	QUAY LẠI
+28	KÉO ĐỂ XOAY
+29	XE
+30	TÀI XẾ
+31	THÙNG
+32	CỜ
+33	BẢNG XẾP HẠNG
+34	CHẠM VÀO TÀI XẾ ĐỂ XEM
+35	QUỐC GIA
+36	GIẢI THẾ GIỚI
+37	THÔNG BÁO
+38	HỖ TRỢ
+39	Hoàn thành trong một lượt chạy để nhận xu ngay. Nhiệm vụ đã xong sẽ được thay bằng nhiệm vụ khó hơn ở lượt sau.
+40	NGÔN NGỮ
+41	HIỆU ỨNG ÂM THANH
+42	NHẠC
+43	RUNG
+44	ĐỒ HỌA
+45	HIỆU ỨNG MÀN HÌNH ƯỚT
+46	ĐIỀU KHIỂN
+47	ĐẢO VỊ TRÍ ĐIỀU KHIỂN
+48	QUỐC GIA CỦA TÔI
+49	CÁCH CHƠI
+50	<b>SUÝT VA</b> — lướt sát qua xe để được điểm thưởng. Trong vòng 0,35 m là <b class="gold">HOÀN HẢO</b> (x2).
+51	<b>COMBO</b> — nối các lần suýt va trong vòng 3 giây để tăng hệ số nhân.
+52	<b>ĐI BÊN TRÁI / BÊN PHẢI</b> — Singapore, Malaysia, Indonesia và Thái Lan đi bên trái; Việt Nam, Philippines, Campuchia và Myanmar đi bên phải. Hãy xem biển báo ở mỗi cổng biên giới.
+53	<b>ĐI NGƯỢC CHIỀU</b> — chạy ở làn ngược chiều được điểm x2. Coi chừng xe lao thẳng tới.
+54	<b>NHẢY</b> — chạy lên xe tải có dốc hoặc dốc nhảy sọc vàng. Trên không, ga / phanh = <b>LỘN NHÀO</b> (+500), lái = <b>XOAY 360</b> (+1.200), cả hai cùng lúc = <b>SIÊU LỘN CHÉO</b> (+3.000) mỗi vòng. Tiếp đất thăng bằng thì được bất tử trong giây lát; tiếp đất nghiêng là ngã.
+55	<b>MƯA GIÔNG</b> — 30 giây mưa lớn (điểm x1,3). Vũng nước làm xe trượt.
+56	Tránh các sạp hàng ven đường, cọc và biển báo giữa đường, và xe lấn qua vạch giữa.
+57	<b>VẬT PHẨM TĂNG SỨC</b> (mỗi 100-150 m) — Khiên, Nam châm, <b>Chế độ khổng lồ</b> (to lớn và không thể cản), Điểm x2, Chậm lại.
+58	<b>NGUY HIỂM TRÊN ĐƯỜNG</b> — ổ gà làm bạn chậm lại; nắp cống mở và thùng hàng rơi sẽ kết thúc lượt chạy.
+59	<b>ĐIỂM GIAO HÀNG</b> — chạy thẳng qua vùng xanh phát sáng ở mép đường để nhận +50 xu.
+60	<b>XE ĐỘI TUYỂN QUỐC GIA</b> — đứng #1 ở quốc gia của bạn để được lái. Mất #1 là bị thu lại.
+61	GIỚI THIỆU
+62	CHÍNH SÁCH QUYỀN RIÊNG TƯ
+63	ĐIỀU KHOẢN DỊCH VỤ
+64	ĐẶT LẠI TIẾN TRÌNH
+65	XÓA TÀI KHOẢN
+66	BIÊN NHẬN GIAO HÀNG · TẠM DỪNG
+67	MÃ ĐƠN
+68	PHƯƠNG TIỆN
+69	TIẾN ĐỘ NHIỆM VỤ
+70	ĐIỂM
+71	TIẾP TỤC
+72	VỀ MENU
+73	KỶ LỤC MỚI
+74	XEM QUẢNG CÁO ĐỂ HỒI SINH
+75	HỒI SINH (QUẢN TRỊ)
+76	XEM QUẢNG CÁO ĐỂ NHÂN ĐÔI XU
+77	CHẠY TIẾP
+78	THÁCH ĐẤU QUA WHATSAPP
+79	TIẾP
+80	PHẦN THƯỞNG HẰNG NGÀY
+81	Đăng nhập 7 ngày liên tiếp để nhận mũ Vương miện chuỗi ngày.
+82	NHẬN
+83	CỬA HÀNG XU
+84	mua 4 tặng 1
+85	Xu là tiền ảo trong trò chơi, không có giá trị quy đổi thành tiền mặt và không thể hoàn lại hay chuyển nhượng, trừ khi luật pháp hoặc chính sách cửa hàng yêu cầu. Xem <a href="terms.html" target="_blank" rel="noopener">Điều khoản</a> và <a href="privacy.html" target="_blank" rel="noopener">Chính sách quyền riêng tư</a>.
+86	HỘP BÍ ẨN
+87	TRANG BỊ
+88	ĐÓNG
+89	3-12 chữ thường / số
+90	Ít nhất 6 ký tự
+91	Rẽ trái
+92	Rẽ phải
+93	Phanh
+94	Tăng ga
+95	Tạm dừng
+96	Cửa hàng xu
+97	Bỏ thử thách
+98	Menu
+99	Ngôn ngữ
+100	Quốc gia (quản trị)
+101	Ổ GÀ!
+102	ĐIỂM GIAO HÀNG!
+103	+{n} XU
+104	VƯỢT TÀI XẾ NÀY ĐỂ CHIẾM BẢNG
+105	HÃY LÀ NGƯỜI ĐẦU TIÊN Ở {country}
+106	KỶ LỤC CÁ NHÂN
+107	KỶ LỤC MỚI!
+108	QUÃNG ĐƯỜNG XA NHẤT CỦA BẠN
+109	ĐÃ VƯỢT {name}!
+110	#1 TẠI {country}
+111	CÒN {n} m
+112	ĐÃ GIAO!
+113	GIAO TRỄ
+114	ĐI SAU BỌC GIÓ
+115	CHẾ ĐỘ BÙNG NỔ!
+116	ĐIỂM x3 · TỰ HÚT XU
+117	CÁCH LÁI
+118	Lướt sát qua xe để nhận thưởng SUÝT VA
+119	ĐI!
+120	CẢNH BÁO MƯA GIÔNG  ·  30 GIÂY MƯA LỚN  ·  ĐIỂM x1,3
+121	MƯA GIÔNG ĐÃ QUA
+122	ĐANG BAY
+123	NHẢY
+124	{n}x SIÊU LỘN CHÉO
+125	SIÊU LỘN CHÉO
+126	XOAY {n}
+127	{n}x LỘN NHÀO
+128	LỘN NHÀO
+129	TIẾP ĐẤT HỎNG!
+130	NHẢY!
+131	TIẾP ĐẤT ĐẸP · +{n}
+132	TRƯỢT BÁNH!
+133	HOÀN HẢO!
+134	SUÝT VA!
+135	COMBO x{n}
+136	KHIÊN ĐÃ VỠ
+137	NẮP CỐNG MỞ!
+138	ĐẬP NÁT!
+139	CƠ HỘI THỨ HAI!
+140	HOÀN THÀNH NHIỆM VỤ
+141	XE CỦA TÔI
+142	KHỔNG LỒ
+143	XUẤT PHÁT NHANH
+144	NAM CHÂM
+145	CHẬM LẠI
+146	KHIÊN
+147	COMBO {n}
+148	KỸ THUẬT x{n}
+149	MƯA GIÔNG
+150	TRƯỢT BÁNH
+151	NGOẠI TUYẾN · tiến trình không được lưu
+152	KHÁCH · đăng nhập để lưu xu và vật phẩm
+153	Chưa có thông báo.
+154	7 NGÀY
+155	Chạm vào vật phẩm để xem trước
+156	Xe hiện tại của bạn ở phía trên
+157	TỐI ĐA {n} KM/H
+158	Sơn màu {country}
+159	Đứng #1 tại {country} để mở khóa
+160	Lớp hoàn thiện {finish} · xe và mũ
+161	ĐANG DÙNG
+162	CHỈ #1
+163	CHUỖI 7 NGÀY
+164	TỈ LỆ HỘP BÍ ẨN
+165	một thùng, trang phục hoặc mũ ngẫu nhiên bạn chưa có thuộc cấp đó (nếu bạn đã có hết một cấp, tỉ lệ của cấp đó chia cho các cấp còn lại)
+166	ĐÃ MỞ KHÓA
+167	ĐÃ SƯU TẬP ĐỦ!
+168	Hoàn lại {n} xu
+169	TĂNG LỰC
+170	{n} món sẵn sàng cho lượt sau
+171	Chạm để trang bị cho lượt sau
+172	MUA {n}?
+173	KHÔNG ĐỦ XU  ·  CẦN {n}
+174	SẴN SÀNG CHO LƯỢT SAU
+175	MUA THÀNH CÔNG
+176	ĐANG TẢI…
+177	Không có trên bản web.
+178	Cửa hàng hiện không khả dụng. Vui lòng thử lại sau.
+179	THƯỞNG
+180	có {n}
+181	Mua {name} x{n} với giá {price} xu?
+182	ĐÃ THÊM
+183	HÃY ĐĂNG NHẬP TRƯỚC  ·  XU ĐƯỢC LƯU VÀO TÀI KHOẢN
+184	MUA THẤT BẠI
+185	MUA THỬ
+186	ĐÃ NHẬN THANH TOÁN  ·  ĐANG CHUYỂN XU…
+187	XU SẼ ĐẾN NGAY  ·  NẾU KHÔNG HÃY MỞ LẠI ỨNG DỤNG
+188	XU MIỄN PHÍ TIẾP THEO SAU {time}
+189	XEM QUẢNG CÁO NHẬN {n} XU
+190	THẾ GIỚI
+191	Đang tải...
+192	Không tải được bảng xếp hạng
+193	Chưa có kỷ lục nào.
+194	Chưa có kỷ lục nào ở {country}.
+195	Hãy là tài xế đầu tiên trên bảng!
+196	THẾ GIỚI
+197	Đăng nhập để xem thứ hạng của bạn
+198	THỨ HẠNG CỦA BẠN TẠI {where}
+199	{name} chưa có kỷ lục
+200	TẠO TÀI KHOẢN
+201	Tài khoản được lưu trên máy chủ. Thiết bị này chỉ giữ mã đăng nhập tự động.
+202	Chưa cấu hình máy chủ: tài khoản và bảng xếp hạng chỉ lưu trong trình duyệt này.
+203	Mật khẩu không khớp
+204	Vui lòng đợi...
+205	CHÀO MỪNG, {name}
+206	ĐÃ ĐĂNG XUẤT
+207	MÁY CHỦ
+208	HỖ TRỢ ĐÃ TRẢ LỜI  ·  XEM TẠI CÀI ĐẶT → HỖ TRỢ
+209	CHẾ ĐỘ QUẢN TRỊ  ·  MỞ KHÓA MỌI VẬT PHẨM  ·  KHÔNG GHI ĐIỂM
+210	ĐÃ MỞ KHÓA GÓI ĐỘI TUYỂN QUỐC GIA
+211	BẠN ĐÃ MẤT #1  ·  GÓI ĐỘI TUYỂN QUỐC GIA BỊ THU LẠI
+212	Đăng nhập để liên hệ hỗ trợ. Chúng tôi trả lời bằng ngôn ngữ của bạn.
+213	DANH MỤC
+214	TIÊU ĐỀ
+215	Tóm tắt ngắn
+216	NỘI DUNG
+217	Hãy cho chúng tôi biết chuyện gì đã xảy ra. Với vấn đề thanh toán, vui lòng ghi ngày và số tiền.
+218	GỬI
+219	HỦY
+220	Vui lòng nhập nội dung.
+221	ĐÃ GỬI  ·  CHÚNG TÔI SẼ SỚM TRẢ LỜI
+222	Bạn
+223	Hỗ trợ Grub Rider
+224	Bản gốc
+225	TẤT CẢ YÊU CẦU
+226	Yêu cầu này đã đóng. Hãy tạo yêu cầu mới nếu bạn cần thêm trợ giúp.
+227	Viết trả lời…
+228	YÊU CẦU MỚI
+229	Chưa có yêu cầu nào. Có câu hỏi về thanh toán, lỗi hay tài khoản? Hãy nhắn cho chúng tôi.
+230	BẬT
+231	TẮT
+232	CAO
+233	THẤP (NHANH)
+234	Xóa vĩnh viễn tài khoản? Xu, vật phẩm, kỷ lục xếp hạng và lịch sử mua sẽ không thể khôi phục.
+235	Nhập DELETE để xác nhận.
+236	XÓA THẤT BẠI
+237	ĐÃ XÓA TÀI KHOẢN
+238	BẬT CHẾ ĐỘ QUẢN TRỊ  ·  KHÔNG GHI ĐIỂM
+239	TẮT CHẾ ĐỘ QUẢN TRỊ
+240	Đặt lại xu, xe, trang phục, xếp hạng và nhiệm vụ? (Tài khoản vẫn được giữ)
+241	ĐÃ ĐẶT LẠI TIẾN TRÌNH
+242	QUÃNG ĐƯỜNG
+243	SỐ LẦN SUÝT VA
+244	COMBO CAO NHẤT
+245	ĐI NGƯỢC CHIỀU
+246	SỐ LẦN NHẢY
+247	XU
+248	Nhấn quay lại lần nữa để thoát
+249	NGÃ XE!
+250	SUÝT VA
+251	TỐC ĐỘ TỐI ĐA
+252	CHƠI LẠI
+253	CHẾ ĐỘ QUẢN TRỊ · lượt này không được ghi lên bảng xếp hạng
+254	Đăng nhập để đưa điểm lên bảng xếp hạng {country}
+255	Đang gửi lên bảng xếp hạng {country}...
+256	Không gửi được điểm
+257	HẠNG TẠI {country}
+258	ĐÃ NHÂN ĐÔI XU
+259	TRỞ LẠI ĐƯỜNG ĐUA
+260	NGÀY {n}
+261	+ VƯƠNG MIỆN
+262	PHẦN THƯỞNG NGÀY {n}
+263	ĐÃ MỞ KHÓA VƯƠNG MIỆN CHUỖI NGÀY
+264	Suýt va {n} lần trong một lượt
+265	Chạy {n} m trong một lượt
+266	Đạt {n} điểm trong một lượt
+267	Nhặt {n} xu trong một lượt
+268	Chạy {n} m ở làn ngược chiều
+269	Đạt combo suýt va x{n}
+270	Đạt {n} KM/H
+271	Đâm nát {n} xe ở chế độ khổng lồ
+272	Bay lên từ dốc nhảy {n} lần
+273	CHẾ ĐỘ KHỔNG LỒ
+274	ĐIỂM x2
+275	THÙNG GIAO HÀNG
+276	TRANG PHỤC
+277	MŨ
+278	SƠN XE
+279	MÀU MŨ
+280	MŨ BẢO HIỂM
+281	THƯỜNG
+282	HIẾM
+283	SỬ THI
+284	HUYỀN THOẠI
+285	TRƠN
+286	ÁNH KIM
+287	NEON
+288	MỘT TAY
+289	VUỐT + BÀN ĐẠP
+290	MŨI TÊN + BÀN ĐẠP
+291	ĐÃ KHÓA
+292	IP
+293	ƯỚC TÍNH
+294	QUẢN TRỊ
+295	Thanh toán / xu
+296	Lỗi / treo
+297	Tài khoản / đăng nhập
+298	Góp ý
+299	Khác
+300	ĐANG CHỜ
+301	ĐÃ TRẢ LỜI
+302	ĐÃ ĐÓNG
+303	CẬP NHẬT
+304	SỰ KIỆN
+305	THÔNG BÁO
+306	BẢO TRÌ
+307	Không cờ
+308	Chạy không gắn cờ
+309	Màu gốc
+310	Màu ban đầu
+311	Một ngón tay ở bất kỳ đâu: vuốt trái / phải để lái, lên để tăng ga, xuống để phanh. Không có nút. Trên không, cùng thao tác đó để làm kỹ thuật.
+312	Vuốt ở bên lái, nút TĂNG GA và PHANH ở bên kia.
+313	Nút TRÁI / PHẢI một bên, TĂNG GA và PHANH ở bên kia.
+314	Tiếp đất thăng bằng sau khi lộn nhào để tiếp tục chạy
+315	Mỗi km được +50 xu
+316	Chạy ngược chiều để được điểm x2 - cẩn thận!
+317	Đứng #1 ở quốc gia của bạn để mở khóa xe Đội tuyển quốc gia
+318	Cần đăng nhập
+319	ID này đã có người dùng
+320	Sai ID hoặc mật khẩu
+321	Không kết nối được máy chủ
+322	Thử quá nhiều lần, vui lòng thử lại sau
+323	Chưa xác định được quốc gia
+324	ID phải gồm 3-12 chữ thường, số hoặc _
+325	Mật khẩu phải có ít nhất 6 ký tự
+326	Nhập ID và mật khẩu của bạn
+327	Quốc gia không hợp lệ
+328	Chế độ quản trị: điểm không được ghi
+329	Tài khoản quản trị: điểm không được ghi
+330	Hôm nay bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại vào ngày mai.
+331	Quá nhiều tin nhắn. Vui lòng đợi một lát.
+332	Thử lại
+333	Vật phẩm mới, phân cấp và phần thưởng hậu hĩnh hơn
+334	Mọi vật phẩm giờ đều có cấp: Thường, Hiếm, Sử thi và Huyền thoại.\n26 thùng và mũ mới từ khắp Đông Nam Á - Merlion, Tháp đôi Petronas, Chùa Vàng, hộp mèo, bể cá và nhiều hơn nữa.\nMỗi lượt được nhiều hơn: mỗi xu giá trị 2, điểm giao hàng +50, mỗi km +50.\nTăng lực mới XUẤT PHÁT NHANH: lao đi với tốc độ x1,5.
+335	Xuất phát với khiên chặn được một lần va chạm
+336	Lao đi với tốc độ tối đa x1,5 trong 5 giây, bất tử, hút hết mọi đồng xu
+337	ĐIỂM x2 30 GIÂY
+338	Nhân đôi điểm trong 30 giây đầu
+339	XUẤT PHÁT KHỔNG LỒ
+340	Xuất phát với thân hình khổng lồ, không thể cản
+341	CƠ HỘI THỨ HAI
+342	Quay lại đường đua một lần miễn phí sau khi ngã

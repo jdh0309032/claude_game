@@ -174,6 +174,12 @@ export const CAR_DEFS = {
   tuktuk: { len: 2.9, w: 1.45, speed: [7, 11] }, // 태국 툭툭
   scooter:{ len: 1.9, w: 0.75, speed: [9, 14] }, // 베트남 오토바이 물결
   jeepney:{ len: 5.6, w: 2.0, speed: [8, 12] },  // 필리핀 지프니
+  doubledecker: { len: 11.5, w: 2.5, speed: [8, 11] }, // 싱가포르 2층 버스
+  angkot: { len: 4.0, w: 1.7, speed: [9, 13] },   // 인도네시아 앙콧(합승 미니밴)
+  songthaew: { len: 4.8, w: 1.9, speed: [9, 13] }, // 태국 송태우(픽업 합승)
+  tricycle: { len: 2.2, w: 1.6, speed: [7, 10] },  // 필리핀 트라이시클
+  remork: { len: 3.4, w: 1.6, speed: [7, 10] },    // 캄보디아 레모크(툭툭)
+  trishaw: { len: 2.0, w: 1.4, speed: [4.5, 6.5] }, // 미얀마 트라이쇼(자전거 인력거)
 };
 
 const GLASS = 0x1b2735;
@@ -194,11 +200,12 @@ function buildCar(type) {
   const d = CAR_DEFS[type];
   const L = d.len, W = d.w, hl = L / 2, hw = W / 2;
   const body = [], det = [], tail = [], head = [], bl = [], br = [];
-  const big = type === 'truck' || type === 'bus';
+  const big = type === 'truck' || type === 'bus' || type === 'doubledecker';
   const small = type === 'tuktuk' || type === 'scooter';
   const wr = big ? 0.5 : small ? 0.28 : 0.36;
-  const wheelZ = type === 'bus' ? [-hl + 2, hl - 2.2] : type === 'truck' ? [-hl + 1.2, hl - 1.4, hl - 2.6] : small ? [-hl + 0.4, hl - 0.45] : [-hl + 0.85, hl - 0.85];
-  if (type !== 'scooter') {
+  const wheelZ = type === 'bus' || type === 'doubledecker' ? [-hl + 2, hl - 2.2] : type === 'truck' ? [-hl + 1.2, hl - 1.4, hl - 2.6] : small ? [-hl + 0.4, hl - 0.45] : [-hl + 0.85, hl - 0.85];
+  const ownWheels = type === 'scooter' || type === 'tricycle' || type === 'remork' || type === 'trishaw';
+  if (!ownWheels) {
     for (const z of wheelZ) {
       for (const s of [-1, 1]) {
         if (type === 'tuktuk' && z < 0 && s > 0) continue; // 앞바퀴 1개
@@ -255,6 +262,168 @@ function buildCar(type) {
     det.push(box(0.6, 0.2, 0.04, 0, 1.9, -hl + 1.6, 0xffd60a));
     det.push(box(W * 0.8, 0.12, 0.05, 0, 2.05, hl + 0.01, 0xe63946));
     lightY = 0.8;
+  } else if (type === 'doubledecker') {
+    // 싱가포르 2층 버스: 높은 차체 + 위·아래 창 띠 + 앞 2층 창 + 행선지 LED
+    body.push(box(W, 3.9, L, 0, 2.3, 0));
+    det.push(box(W + 0.03, 0.8, L * 0.9, 0, 1.95, 0.3, GLASS));
+    det.push(box(W + 0.03, 0.85, L * 0.95, 0, 3.45, 0, GLASS));
+    det.push(box(W * 0.9, 1.0, 0.05, 0, 1.9, -hl - 0.02, GLASS));
+    det.push(box(W * 0.92, 0.85, 0.05, 0, 3.45, -hl - 0.02, GLASS));
+    det.push(box(W + 0.03, 0.22, L + 0.03, 0, 0.55, 0, TRIM));
+    for (let k = 0; k < 7; k++) for (const sx of [-1, 1]) for (const y of [1.95, 3.45]) det.push(box(0.05, 0.82, 0.1, sx * (hw + 0.03), y, -hl + 1.6 + k * 1.35, 0x2b2b2b));
+    det.push(box(0.05, 1.6, 1.0, hw + 0.03, 1.25, -hl + 0.9, 0x1f2b38));
+    det.push(box(W * 0.7, 0.22, 0.05, 0, 2.75, -hl - 0.03, 0x101010));
+    head.push(box(W * 0.5, 0.1, 0.03, 0, 2.75, -hl - 0.06));
+    for (const sx of [-1, 1]) det.push(box(0.04, 0.12, L * 0.86, sx * (hw + 0.02), 2.7, 0, 0xffffff));
+    det.push(box(W, 0.06, L, 0, 4.27, 0, 0xd9dde1));
+    lightY = 0.85;
+  } else if (type === 'angkot') {
+    // 인도네시아 앙콧(미니밴 합승): 짧은 보닛 + 박스형 차체 + 옆 창 + 미닫이문 + 색 띠
+    body.push(box(W, 1.25, L * 0.78, 0, 1.05, hl - L * 0.39));
+    body.push(box(W, 0.65, L * 0.24, 0, 0.75, -hl + L * 0.12));
+    det.push(paint(taperTop(new THREE.BoxGeometry(W * 0.94, 0.5, 0.5), 0.95, 0.4).translate(0, 1.32, -hl + L * 0.25), GLASS));
+    for (const sx of [-1, 1]) {
+      det.push(box(0.03, 0.45, L * 0.6, sx * (hw + 0.012), 1.35, 0.25, GLASS));
+      det.push(box(0.03, 0.12, L * 0.78, sx * (hw + 0.015), 0.85, hl - L * 0.39, 0xffffff));
+      det.push(box(0.02, 0.85, 0.03, sx * (hw + 0.012), 1.0, -0.15, 0x1b1d22));
+    }
+    det.push(box(W + 0.04, 0.18, 0.2, 0, 0.42, -hl, TRIM));
+    det.push(box(W * 0.95, 0.06, L * 0.7, 0, 1.71, 0.3, 0x555b62));
+    lightY = 0.7;
+  } else if (type === 'songthaew') {
+    // 태국 송태우: 픽업 캡 + 지붕 덮인 짐칸(양옆 벤치) + 뒤 손잡이
+    body.push(box(W, 1.0, 1.5, 0, 0.95, -hl + 0.75));
+    body.push(box(W * 0.94, 0.55, 1.1, 0, 1.72, -hl + 0.85));
+    det.push(box(W * 0.85, 0.45, 0.05, 0, 1.7, -hl + 0.28, GLASS));
+    det.push(box(W, 0.4, L - 1.5, 0, 0.65, hl - (L - 1.5) / 2, 0x3a3d42));
+    for (const sx of [-1, 1]) {
+      body.push(box(0.06, 0.45, L - 1.6, sx * (hw - 0.03), 1.07, hl - (L - 1.6) / 2));
+      for (let k = 0; k < 3; k++) det.push(box(0.05, 0.85, 0.05, sx * (hw - 0.03), 1.72, -hl + 1.6 + k * ((L - 1.7) / 2), 0xc9ced3));
+      det.push(box(0.35, 0.08, L - 1.8, sx * (hw - 0.3), 1.0, hl - (L - 1.8) / 2 - 0.05, 0x7a4a22));
+    }
+    body.push(box(W + 0.1, 0.08, L - 1.4, 0, 2.17, hl - (L - 1.4) / 2));
+    det.push(box(0.05, 0.6, 0.05, 0, 1.5, hl - 0.02, 0xc9ced3));
+    lightY = 0.75;
+  } else if (type === 'tricycle' || type === 'remork' || type === 'trishaw') {
+    // 필리핀 트라이시클 / 캄보디아 레모크 / 미얀마 트라이쇼 — 실제 오토바이·자전거 구조 + 사이드카·객차 디테일
+    const CHROME = 0xc9ced3, DARK = 0x1d1f22, SKIN = 0xd9a77a;
+    const tube = (a, b, r, c, seg = 6) => {
+      const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b);
+      const g = new THREE.CylinderGeometry(r, r, A.distanceTo(B), seg);
+      g.translate(0, A.distanceTo(B) / 2, 0);
+      g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), B.clone().sub(A).normalize()));
+      g.translate(A.x, A.y, A.z);
+      det.push(paint(g, c));
+    };
+    const ball = (r, p, c, s = [1, 1, 1], list = det) => list.push(paint(new THREE.SphereGeometry(r, 10, 8).scale(s[0], s[1], s[2]).translate(p[0], p[1], p[2]), c));
+    // 바퀴: 타이어 + 림 + 스포크 (thin = 자전거)
+    const wheel = (x, z, r, thin = false) => {
+      const t = new THREE.TorusGeometry(r - (thin ? 0.025 : 0.05), thin ? 0.025 : 0.055, 6, 18);
+      t.rotateY(Math.PI / 2);
+      t.translate(x, r, z);
+      det.push(paint(t, RUBBER));
+      det.push(cylX(thin ? 0.03 : r * 0.42, thin ? 0.05 : 0.12, x, r, z, CHROME, 10));
+      for (let i = 0; i < (thin ? 12 : 6); i++) {
+        const a = (i / (thin ? 12 : 6)) * Math.PI;
+        const sp = new THREE.BoxGeometry(0.012, (r - 0.05) * 2, thin ? 0.006 : 0.02);
+        sp.rotateX(a);
+        sp.translate(x + (i % 2 ? 0.006 : -0.006), r, z);
+        det.push(paint(sp, thin ? 0xb0b6bc : 0x8a9096));
+      }
+    };
+    // 오토바이: 바퀴 2 + 앞 포크 + 연료탱크 + 안장 + 엔진 + 머플러 + 핸들 + 미러 + 흙받이
+    const moto = (x, zf, zr, tankC) => {
+      wheel(x, zf, 0.3); wheel(x, zr, 0.3);
+      for (const s of [-1, 1]) tube([x + s * 0.06, 0.3, zf], [x + s * 0.06, 1.0, zf + 0.22], 0.025, CHROME);
+      tube([x - 0.32, 1.06, zf + 0.26], [x + 0.32, 1.06, zf + 0.26], 0.018, DARK);
+      for (const s of [-1, 1]) { tube([x + s * 0.26, 1.06, zf + 0.26], [x + s * 0.3, 1.24, zf + 0.22], 0.008, DARK); ball(0.035, [x + s * 0.3, 1.25, zf + 0.21], CHROME, [1, 0.7, 0.4]); }
+      const fender = (z) => { const f = new THREE.TorusGeometry(0.34, 0.03, 4, 10, Math.PI * 0.8); f.rotateY(Math.PI / 2); f.rotateX(-Math.PI * 0.1); f.scale(0.45, 1, 1); f.translate(x, 0.3, z); det.push(paint(f, tankC)); };
+      fender(zf); fender(zr);
+      det.push(paint(taperTop(new THREE.BoxGeometry(0.26, 0.2, 0.45), 0.8, 0.75).translate(x, 0.92, (zf + zr) / 2 - 0.08), tankC));
+      det.push(box(0.24, 0.07, 0.42, x, 0.93, (zf + zr) / 2 + 0.3, DARK));
+      det.push(box(0.22, 0.24, 0.32, x, 0.55, (zf + zr) / 2, 0x3a3d42));
+      for (let k = 0; k < 3; k++) det.push(box(0.26, 0.012, 0.22, x, 0.48 + k * 0.06, (zf + zr) / 2 - 0.02, 0x5a5f66));
+      tube([x + 0.1, 0.48, (zf + zr) / 2 + 0.1], [x + 0.16, 0.42, zr + 0.25], 0.03, CHROME, 8);
+      det.push(box(0.05, 0.05, 0.12, x + 0.06, 0.56, (zf + zr) / 2 + 0.05, DARK)); // 발판
+      det.push(box(0.05, 0.05, 0.12, x - 0.06 - 0.12, 0.56, (zf + zr) / 2 + 0.05, DARK));
+    };
+    // 운전자: 몸통 + 팔(핸들까지) + 다리 + 머리 + 헬멧/모자. skirt = 롱지(미얀마 치마)
+    const rider = (x, z, shirt, hx, hz, head = 'helmet', skirt = null) => {
+      det.push(box(0.32, 0.42, 0.22, x, 1.26, z, shirt, -0.25));
+      for (const s of [-1, 1]) {
+        tube([x + s * 0.16, 1.4, z - 0.05], [hx + s * 0.26, 1.08, hz], 0.04, shirt);
+        ball(0.04, [hx + s * 0.26, 1.07, hz], SKIN);
+        if (!skirt) { tube([x + s * 0.1, 1.04, z], [x + s * 0.13, 0.82, z - 0.3], 0.055, 0x2b2b2b); tube([x + s * 0.13, 0.82, z - 0.3], [x + s * 0.13, 0.6, z - 0.18], 0.045, 0x2b2b2b); det.push(box(0.09, 0.07, 0.17, x + s * 0.13, 0.58, z - 0.2, DARK)); }
+      }
+      if (skirt) {
+        const lg = new THREE.CylinderGeometry(0.16, 0.2, 0.42, 10); lg.translate(x, 0.86, z - 0.08); det.push(paint(lg, skirt));
+        for (const s of [-1, 1]) det.push(box(0.08, 0.06, 0.14, x + s * 0.08, 0.62, z - 0.18, 0x5a3e2b));
+      }
+      ball(0.13, [x, 1.6, z - 0.06], SKIN);
+      if (head === 'helmet') { ball(0.15, [x, 1.65, z - 0.04], 0xe63946, [1, 0.8, 1.05]); det.push(box(0.16, 0.05, 0.04, x, 1.6, z - 0.19, 0x1b2735)); }
+      else { const h = new THREE.ConeGeometry(0.3, 0.16, 12); h.translate(x, 1.76, z - 0.05); det.push(paint(h, 0xd9b77a)); }
+    };
+    if (type === 'tricycle') {
+      // 필리핀: 오토바이(오른쪽) + 지붕 달린 사이드카(왼쪽), 지붕 앞 TODA 번호판, 측면 줄무늬·크롬 트림
+      const mx = hw - 0.3;
+      moto(mx, -0.72, 0.5, 0x1d3557);
+      rider(mx, 0.18, 0xffd60a, mx, -0.46);
+      wheel(-hw + 0.18, 0.2, 0.25);
+      body.push(box(0.85, 0.55, 1.35, -0.28, 0.72, 0.12));
+      body.push(taperTop(new THREE.BoxGeometry(0.85, 0.3, 0.35), 1, 0.4).translate(-0.28, 0.59, -0.69)); // 사이드카 앞코
+      det.push(box(0.87, 0.04, 1.37, -0.28, 1.01, 0.12, CHROME));
+      for (const [y, c] of [[0.82, 0xce1126], [0.75, 0x0038a8], [0.68, 0xffd60a]]) det.push(box(0.87, 0.035, 1.37, -0.28, y, 0.12, c));
+      det.push(box(0.72, 0.16, 0.5, -0.28, 0.98, 0.45, 0xb71c1c));
+      det.push(box(0.72, 0.45, 0.1, -0.28, 1.25, 0.72, 0xb71c1c));
+      for (const [px, pz] of [[-0.7, -0.5], [0.14, -0.5], [-0.7, 0.78], [0.14, 0.78]]) tube([px, 1.0, pz], [px, 1.88, pz], 0.022, CHROME);
+      body.push(box(1.05, 0.07, 1.55, -0.28, 1.92, 0.12));
+      det.push(box(1.07, 0.05, 1.57, -0.28, 1.97, 0.12, CHROME));
+      det.push(box(0.75, 0.42, 0.03, -0.28, 1.55, -0.5, GLASS));
+      det.push(box(0.6, 0.18, 0.04, -0.28, 2.1, -0.45, 0xffffff));
+      for (let k = 0; k < 4; k++) det.push(box(0.08, 0.1, 0.045, -0.48 + k * 0.13, 2.1, -0.47, 0x0038a8));
+      det.push(box(0.04, 0.3, 0.2, -0.72, 0.42, 0.35, DARK));
+    } else if (type === 'remork') {
+      // 캄보디아: 오토바이가 끄는 객차 — 마주 보는 벤치 2개, 술 장식 차양, 크롬 기둥, 객차 바퀴 흙받이
+      moto(0, -hl + 0.32, -hl + 1.22, 0x7a1f2b);
+      rider(0, -hl + 1.05, 0x2a9d8f, 0, -hl + 0.58);
+      tube([0, 0.62, -hl + 1.4], [0, 0.62, -hl + 1.75], 0.035, DARK);
+      for (const sx of [-1, 1]) wheel(sx * (hw - 0.12), hl - 0.62, 0.3);
+      det.push(box(W - 0.1, 0.07, 1.65, 0, 0.66, hl - 0.86, 0x5a3e2b));
+      for (const sx of [-1, 1]) { const f = new THREE.BoxGeometry(0.16, 0.04, 0.7); f.translate(sx * (hw - 0.12), 0.68, hl - 0.62); det.push(paint(f, DARK)); }
+      for (const [zc, back] of [[hl - 1.5, -1], [hl - 0.2, 1]]) {
+        det.push(box(W - 0.25, 0.14, 0.42, 0, 0.82, zc - back * 0.12, 0xc1121f));
+        det.push(box(W - 0.25, 0.45, 0.1, 0, 1.08, zc + back * 0.08, 0xc1121f));
+        det.push(box(W - 0.2, 0.06, 0.48, 0, 0.73, zc - back * 0.12, 0x3a2a1a));
+      }
+      for (const [px, pz] of [[-1, -1.66], [1, -1.66], [-1, -0.06], [1, -0.06]]) tube([px * (hw - 0.08), 0.7, hl + pz], [px * (hw - 0.08), 1.86, hl + pz], 0.025, CHROME);
+      body.push(box(W, 0.07, 1.85, 0, 1.9, hl - 0.86));
+      for (let k = 0; k < 12; k++) for (const sx of [-1, 1]) det.push(paint(new THREE.ConeGeometry(0.05, 0.1, 3).rotateX(Math.PI).translate(sx * (hw + 0.01), 1.83, hl - 1.72 + k * 0.155), k % 2 ? 0xe8b923 : 0xffffff));
+      for (let k = 0; k < 9; k++) det.push(paint(new THREE.ConeGeometry(0.05, 0.1, 3).rotateX(Math.PI).translate(-hw + 0.1 + k * 0.175, 1.83, hl - 1.78), k % 2 ? 0xe8b923 : 0xffffff));
+      for (const sx of [-1, 1]) det.push(box(0.05, 0.12, 1.6, sx * (hw - 0.05), 0.92, hl - 0.86, CHROME));
+      det.push(box(W - 0.3, 0.05, 0.25, 0, 0.45, hl + 0.08, DARK));
+    } else {
+      // 미얀마 트라이쇼(사이카): 자전거(오른쪽) + 등을 맞댄 2인 좌석 사이드카(왼쪽), 롱지 입은 운전자 + 밀짚모자
+      const bx = hw - 0.22, zf = -hl + 0.34, zr = hl - 0.33;
+      wheel(bx, zf, 0.33, true); wheel(bx, zr, 0.33, true);
+      const seatP = [bx, 0.98, zr - 0.25], crank = [bx, 0.38, (zf + zr) / 2 + 0.05], head = [bx, 0.98, zf + 0.12];
+      tube(seatP, crank, 0.022, 0x1b6b5c); tube(crank, [bx, 0.33, zr], 0.018, 0x1b6b5c); tube(seatP, [bx, 0.33, zr], 0.016, 0x1b6b5c);
+      tube(head, crank, 0.024, 0x1b6b5c); tube(head, seatP, 0.022, 0x1b6b5c); tube(head, [bx, 0.33, zf], 0.02, CHROME);
+      tube([bx - 0.25, 1.1, zf + 0.15], [bx + 0.25, 1.1, zf + 0.15], 0.015, DARK);
+      det.push(box(0.12, 0.05, 0.22, bx, 1.01, zr - 0.25, DARK));
+      det.push(cylX(0.08, 0.03, bx + 0.04, crank[1], crank[2], 0x777d84, 10));
+      for (const s of [-1, 1]) det.push(box(0.08, 0.02, 0.1, bx + s * 0.1, crank[1] + s * 0.07, crank[2], DARK));
+      rider(bx, zr - 0.2, 0xffffff, bx, zf + 0.15, 'hat', 0x5b3f8c);
+      wheel(-hw + 0.12, 0.05, 0.24, true);
+      for (const zz of [-0.35, 0.45]) tube([bx, 0.4, zz], [-hw + 0.12, 0.42, zz], 0.022, 0x555b62);
+      body.push(box(0.7, 0.32, 1.0, -0.22, 0.6, 0.05));
+      det.push(box(0.72, 0.06, 1.02, -0.22, 0.79, 0.05, 0xe8b923));
+      for (const [zc, s] of [[-0.18, -1], [0.28, 1]]) {
+        det.push(box(0.62, 0.08, 0.38, -0.22, 0.86, zc, 0x1d3557));
+        det.push(box(0.62, 0.32, 0.06, -0.22, 1.06, 0.05 + s * 0.02, 0x7a1f2b));
+      }
+      det.push(box(0.72, 0.04, 0.04, -0.22, 0.5, -0.46, CHROME));
+    }
+    lightY = 0.75;
   } else if (type === 'ramp') {
     // 앞 캡 + 평판 적재함 + 후면 경사판 (뒤쪽 +Z 가 땅에 닿음)
     body.push(box(W, 1.3, 2.3, 0, 1.25, -hl + 1.15));
@@ -340,13 +509,24 @@ function buildCar(type) {
     }
   }
 
-  for (const s of [-1, 1]) {
-    tail.push(box(0.36, 0.18, 0.05, s * (hw - 0.3), lightY, hl + 0.02));
-    head.push(box(0.36, 0.16, 0.05, s * (hw - 0.3), lightY, -hl - 0.02));
-  }
-  for (const z of [hl + 0.03, -hl - 0.03]) {
-    bl.push(box(0.12, 0.12, 0.05, -hw + 0.06, lightY, z));
-    br.push(box(0.12, 0.12, 0.05, hw - 0.06, lightY, z));
+  if (type === 'tricycle' || type === 'remork' || type === 'trishaw') {
+    // 삼륜·인력거: 오토바이(자전거) 앞에 헤드램프 1개, 차체 뒤에 후미등 1개, 깜빡이는 차체 모서리에 붙임
+    // [앞등 x, z, y], [뒷등 x, z, y]: 각각 오토바이 앞끝 / 사이드카·객차 뒤끝에 붙임
+    const [hx, hz, hy] = type === 'tricycle' ? [hw - 0.3, -0.56, 0.95] : type === 'remork' ? [0, -hl + 0.6, 0.95] : [hw - 0.22, -hl + 0.42, 0.92];
+    const [tx, tz, ty] = type === 'tricycle' ? [-0.28, 0.81, 0.62] : type === 'remork' ? [0, hl + 0.01, 0.72] : [-0.22, 0.57, 0.55];
+    head.push(box(0.12, 0.1, 0.04, hx, hy, hz));
+    tail.push(box(0.22, 0.07, 0.03, tx, ty, tz));
+    bl.push(box(0.05, 0.05, 0.04, hx - 0.1, hy, hz), box(0.05, 0.05, 0.03, tx - 0.15, ty, tz));
+    br.push(box(0.05, 0.05, 0.04, hx + 0.1, hy, hz), box(0.05, 0.05, 0.03, tx + 0.15, ty, tz));
+  } else {
+    for (const s of [-1, 1]) {
+      tail.push(box(0.36, 0.18, 0.05, s * (hw - 0.3), lightY, hl + 0.02));
+      head.push(box(0.36, 0.16, 0.05, s * (hw - 0.3), lightY, -hl - 0.02));
+    }
+    for (const z of [hl + 0.03, -hl - 0.03]) {
+      bl.push(box(0.12, 0.12, 0.05, -hw + 0.06, lightY, z));
+      br.push(box(0.12, 0.12, 0.05, hw - 0.06, lightY, z));
+    }
   }
 
   return {
@@ -402,6 +582,26 @@ export const BOX_STYLES = {
   vintage:   { base: 0x9c6b3c, band: 0x5a3e2b, lid: 0x7a5230, planks: true },
   anime:     { base: 0xffc2e2, band: 0x8e7cff, lid: 0xff6fae, anime: true },
   cyber:     { base: 0x0b0f1e, band: 0x39ff88, lid: 0x00e5ff, glow: true, grid: true },
+  // 나라 특색 배달통
+  bajaj:      { base: 0x2a6fd4 },
+  tuktukbox:  { base: 0x1d3557 },
+  jeepneybox: { base: 0xd9dde1 },
+  petronas:   { base: 0xd9dde1 },
+  angkorbox:  { base: 0xbfae8c },
+  shwedagon:  { base: 0xe6b422 },
+  // 공용 배달통
+  pizzatower: { base: 0xd9b483 },
+  minifridge: { base: 0xa8e6cf },
+  fishbox:    { base: 0xf4f4ee },
+  boombox:    { base: 0x1d1f22 },
+  giftbox:    { base: 0xd62828 },
+  gascapsule: { base: 0xb8c0c8 },
+  steamer:    { base: 0xd4b06a },
+  parcel:     { base: 0xc89b64 },
+  catbox:     { base: 0xc89b64 },
+  goldbar:    { base: 0xe6b422 },
+  aquarium:   { base: 0x9fd8ff },
+  icecream:   { base: 0xf4f4ee },
   national:  { base: 0x24262d, band: 0x101114, lid: 0x24262d, national: true }, // 면은 createBike 에서 국기 텍스처로 감쌈
 };
 export const OUTFIT_STYLES = {
@@ -428,6 +628,15 @@ export const HELMET_STYLES = {
   dino:      { kind: 'dino', shell: 0x52b788 },
   chibi:     { kind: 'chibi', shell: 0xffe0bd },
   cyberneon: { kind: 'cyber', shell: 0x14141c, visor: 0x00e5ff, neon: 0xff2fd6 },
+  // 나라 특색 · 공용 헤드기어
+  nonla:     { kind: 'nonla', shell: 0xe8cf8a },
+  batik:     { kind: 'batik', shell: 0x7a4a22 },
+  mongkol:   { kind: 'mongkol', shell: 0xd62828 },
+  merlion:   { kind: 'merlion', shell: 0xf4f4f0 },
+  angkorhat: { kind: 'angkorhat', shell: 0xbfae8c },
+  durian:    { kind: 'durian', shell: 0xb5c94a },
+  duckprop:  { kind: 'duckprop', shell: 0xffd60a },
+  crttv:     { kind: 'crttv', shell: 0xd9cfb4 },
 };
 
 // 메탈릭 반사용 환경맵: 하늘 → 밝은 수평선 → 어두운 지면 + 소프트박스 하이라이트 (등장방형)
@@ -466,6 +675,43 @@ function facetMat() {
   return _facetMat;
 }
 let _facetMat = null;
+// 투명 유리 (어항 배달통): 깊이 기록 없이 뒤의 물고기·수초가 비쳐 보이게
+let _glassMat = null, _batikMat = null;
+function glassMat() {
+  if (!_glassMat) _glassMat = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: 0.32, roughness: 0.05, metalness: 0.1, envMap: envTexture(), envMapIntensity: 1.4, depthWrite: false });
+  return _glassMat;
+}
+// 바틱 헬멧: 갈색 바탕 + 금빛 카웅 원 무늬 + 파랑 꽃잎 + 점선 (캔버스로 그린 손그림 바틱)
+function batikMat() {
+  if (_batikMat) return _batikMat;
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const x = c.getContext('2d');
+  x.fillStyle = '#5a3417';
+  x.fillRect(0, 0, 256, 256);
+  const cell = 64;
+  for (let gy = 0; gy < 4; gy++) for (let gx = 0; gx < 4; gx++) {
+    const cx = gx * cell + cell / 2, cy = gy * cell + cell / 2;
+    x.fillStyle = '#e8c27a';
+    for (let k = 0; k < 4; k++) { // 카웅: 네 장의 타원 꽃잎
+      x.beginPath();
+      x.ellipse(cx + Math.cos(k * Math.PI / 2) * 14, cy + Math.sin(k * Math.PI / 2) * 14, 13, 7, k * Math.PI / 2, 0, Math.PI * 2);
+      x.fill();
+    }
+    x.fillStyle = '#1f3b63';
+    for (let k = 0; k < 4; k++) { x.beginPath(); x.ellipse(cx + Math.cos(k * Math.PI / 2) * 14, cy + Math.sin(k * Math.PI / 2) * 14, 7, 3, k * Math.PI / 2, 0, Math.PI * 2); x.fill(); }
+    x.fillStyle = '#c1121f';
+    x.beginPath(); x.arc(cx, cy, 5, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#e8c27a';
+    for (let k = 0; k < 8; k++) { x.beginPath(); x.arc(gx * cell + k * 8, gy * cell, 1.6, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(gx * cell, gy * cell + k * 8, 1.6, 0, Math.PI * 2); x.fill(); }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(3, 1.5);
+  _batikMat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.4, metalness: 0.05, envMap: envTexture(), envMapIntensity: 0.6 });
+  return _batikMat;
+}
 function metalMat() {
   if (!_metalMat) _metalMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.22, metalness: 0.85, envMap: envTexture(), envMapIntensity: 1.8 });
   return _metalMat;
@@ -704,6 +950,177 @@ function headgear(det, glow, hel, paintOpt, shellOut = det, mats = {}) {
       { const tuft = new THREE.ConeGeometry(0.035, 0.14, 5); tuft.rotateZ(-0.5); tuft.translate(0.04, 2.04, -0.17); det.push(paint(tuft, 0x3d2b1f)); }
       det.push(box(0.08, 0.02, 0.02, 0, 1.58, -0.47, 0xd62828));
       return;
+    case 'nonla': { // 베트남 농라: 얼굴 + 넓은 원뿔 삿갓(동심원 결 + 테두리) + 턱끈 리본
+      faceBall();
+      sph(0.15, 0, 1.6, -0.19, 0x2b1d14, det, 0.98, 0.75, 1.02, 14); // 머리카락 (모자 안쪽)
+      const hat = new THREE.ConeGeometry(0.38, 0.27, 28, 1, true);
+      hat.translate(0, 1.82, -0.19);
+      shellList.push(paint(hat, shell));
+      const inner = new THREE.ConeGeometry(0.375, 0.265, 28, 1, true);
+      inner.scale(-1, 1, 1);
+      inner.translate(0, 1.815, -0.19);
+      det.push(paint(inner, 0xc9a961));
+      for (let k = 1; k <= 4; k++) { const t = new THREE.TorusGeometry(0.38 * (1 - k * 0.2), 0.004, 4, 28); t.rotateX(Math.PI / 2); t.translate(0, 1.69 + k * 0.27 * 0.2 + 0.002, -0.19); det.push(paint(t, 0xb08d48)); }
+      { const t = new THREE.TorusGeometry(0.38, 0.012, 5, 32); t.rotateX(Math.PI / 2); t.translate(0, 1.685, -0.19); det.push(paint(t, 0xb08d48)); }
+      for (const s of [-1, 1]) { const st = new THREE.CylinderGeometry(0.007, 0.007, 0.2, 4); st.rotateZ(s * 0.25); st.translate(s * 0.115, 1.52, -0.21); det.push(paint(st, 0xd62828)); }
+      det.push(box(0.1, 0.012, 0.012, 0, 1.43, -0.27, 0xd62828));
+      return;
+    }
+    case 'batik': { // 인도네시아 바틱 헬멧: 바틱 무늬 텍스처 쉘 + 금빛 테두리 + 브라운 바이저 챙
+      faceBall();
+      const g = new THREE.SphereGeometry(R, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.52);
+      g.scale(SC[0], SC[1], SC[2]);
+      g.translate(HC.x, HC.y, HC.z);
+      (mats.batik || shellList).push(mats.batik ? g : paint(g, shell));
+      const t = new THREE.TorusGeometry(R * Math.sin(Math.PI * 0.52), 0.012, 6, 32);
+      t.rotateX(Math.PI / 2);
+      t.scale(SC[0], 1, SC[2]);
+      t.translate(HC.x, HC.y + R * Math.cos(Math.PI * 0.52), HC.z);
+      metal.push(paint(t, 0xd4a017));
+      for (const sx of [-1, 1]) sph(0.065, sx * 0.165, 1.55, -0.17, 0x5a3417, det, 0.45, 1.1, 1, 14);
+      { // 짧은 챙: 이마 앞으로 살짝 나온 넓은 구면 띠 (쉘 테두리 아래)
+        const g = new THREE.SphereGeometry(R * 1.3, 20, 4, FRONT - 0.75, 1.5, Math.PI * 0.5, Math.PI * 0.07);
+        g.scale(SC[0], 0.5, SC[2]);
+        g.translate(HC.x, HC.y + 0.035, HC.z);
+        det.push(paint(g, 0x5a3417));
+      }
+      return;
+    }
+    case 'mongkol': { // 태국 무에타이 몽콘: 얼굴 + 머리띠 고리(흰·빨강 꼰 줄) + 뒤로 뻗은 꼬리 + 머리카락
+      faceBall();
+      sph(0.15, 0, 1.6, -0.19, 0x1b1410, det, 0.98, 0.85, 1.04, 14);
+      for (let i = 0; i < 24; i++) {
+        const a = (i / 24) * Math.PI * 2;
+        const seg = new THREE.TorusGeometry(0.162, 0.024, 6, 6, (Math.PI * 2) / 24); // 조각끼리 딱 맞닿게 (겹침 없음)
+        seg.rotateZ(a);
+        seg.rotateX(Math.PI / 2 - 0.12);
+        seg.scale(1, 1, 1.12);
+        seg.translate(0, 1.66, -0.19);
+        det.push(paint(seg, i % 2 ? 0xffffff : 0xd62828));
+      }
+      const tail = [];
+      for (let i = 0; i <= 5; i++) { const t = i / 5; tail.push(V(0, 1.66 + t * 0.12 - t * t * 0.08, -0.02 + t * 0.26)); }
+      for (let i = 0; i < tail.length - 1; i++) {
+        const a = tail[i], b = tail[i + 1], len = a.distanceTo(b);
+        const c = new THREE.CylinderGeometry(0.02 - i * 0.003, 0.022 - i * 0.003, len, 6);
+        c.translate(0, len / 2, 0);
+        c.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), b.clone().sub(a).normalize()));
+        c.translate(a.x, a.y, a.z);
+        det.push(paint(c, i % 2 ? 0xffffff : 0xd62828));
+      }
+      sph(0.03, 0, tail[5].y, tail[5].z + 0.02, 0xd4a017, metal);
+      return;
+    }
+    case 'merlion': { // 싱가포르 머라이언 사자탈: 흰 사자 머리 + 두 겹 금빛 갈기 + 주둥이·코·입 + 정수리 뒤 물고기 꼬리지느러미 + 비늘
+      part(R * 1.05, 0, Math.PI * 2, 0, Math.PI * 0.8, shell, shellList);
+      for (const [n, rr, len, tilt, off, zz] of [[22, 0.19, 0.17, 0.35, 0, -0.17], [18, 0.18, 0.14, 0.8, 0.5, -0.09]]) { // 얼굴 둘레로 퍼지는 앞 갈기 + 뒤로 눕는 뒷 갈기
+        for (let i = 0; i < n; i++) {
+          const a = ((i + off) / n) * Math.PI * 2;
+          if (Math.cos(a) < -0.5) continue; // 아래쪽(어깨·목)으로는 갈기를 내리지 않음
+          const m = new THREE.ConeGeometry(0.055, len, 5);
+          m.translate(0, len / 2, 0);
+          m.rotateX(tilt); // 바깥으로 뻗되 tilt 만큼 뒤로 눕는 갈기 털
+          m.rotateZ(-a);
+          m.translate(Math.sin(a) * rr, 1.6 + Math.cos(a) * rr, zz);
+          metal.push(paint(m, (i + (off ? 1 : 0)) % 2 ? 0xe6b422 : 0xffd34d));
+        }
+      }
+      part(R * 1.08, FRONT - 0.85, 1.7, Math.PI * 0.38, Math.PI * 0.12, 0x101418, gloss);
+      sph(0.08, 0, 1.49, -0.36, shell, shellList, 1.3, 0.75, 0.9, 14);
+      sph(0.025, 0, 1.52, -0.44, 0x2b2d31, det, 1.4, 0.8, 0.8);
+      det.push(box(0.07, 0.012, 0.012, 0, 1.45, -0.43, 0xc1121f));
+      for (const sx of [-1, 1]) sph(0.02, sx * 0.03, 1.465, -0.425, 0xffffff, det, 0.6, 1.2, 0.6); // 송곳니
+      { // 정수리 뒤 물고기 꼬리지느러미 (V자, 은청색)
+        for (const sx of [-1, 1]) {
+          const f = new THREE.ConeGeometry(0.06, 0.2, 4);
+          f.scale(1, 1, 0.2);
+          f.translate(0, 0.1, 0);
+          f.rotateY(Math.PI / 2);
+          f.rotateZ(sx * 0.5);
+          f.rotateX(0.5);
+          f.translate(0, 1.76, -0.02);
+          metal.push(paint(f, 0x9fb8d0));
+        }
+        sph(0.035, 0, 1.76, -0.03, 0x9fb8d0, metal, 1, 1, 1.3);
+      }
+      return;
+    }
+    case 'angkorhat': { // 캄보디아 앙코르 석조 탑 헬멧: 머리 덮는 돌 테 + 3단 연꽃봉오리 탑 + 새긴 홈 + 끝 금장
+      faceBall();
+      part(R, 0, Math.PI * 2, 0, Math.PI * 0.5, shell, shellList);
+      const stone = [0xbfae8c, 0xa8987a, 0xc9b896];
+      for (let i = 0; i < 4; i++) {
+        const r0 = 0.15 - i * 0.03;
+        const c = new THREE.CylinderGeometry(r0 * 0.88, r0, 0.07, 8);
+        c.translate(0, 1.78 + i * 0.07, -0.19);
+        shellList.push(paint(c, stone[i % 3]));
+        const band = new THREE.CylinderGeometry(r0 * 0.9 + 0.006, r0 * 0.9 + 0.006, 0.012, 8);
+        band.translate(0, 1.775 + i * 0.07, -0.19);
+        det.push(paint(band, 0x7d6f58));
+      }
+      { const tip = new THREE.ConeGeometry(0.045, 0.12, 8); tip.translate(0, 2.1, -0.19); shellList.push(paint(tip, stone[0])); }
+      sph(0.022, 0, 2.17, -0.19, 0xd4a017, metal);
+      for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; sph(0.02, Math.cos(a) * 0.13, 1.76, -0.19 + Math.sin(a) * 0.13, 0x9d8d70, det, 1, 1.4, 1); }
+      return;
+    }
+    case 'durian': { // 두리안 가시 헬멧: 연두·노랑 반구 쉘 + 촘촘한 가시 + 꼭지
+      faceBall();
+      part(R * 1.02, 0, Math.PI * 2, 0, Math.PI * 0.55, shell, shellList);
+      for (let row = 0; row < 5; row++) {
+        const th = 0.12 + row * 0.33, n = row === 0 ? 5 : 8 + row * 3;
+        for (let k = 0; k < n; k++) {
+          const phi = (k / n) * Math.PI * 2 + row * 0.3;
+          const p = onShell(R * 1.02, phi, th);
+          const nrm = p.clone().sub(HC).normalize();
+          const c = new THREE.ConeGeometry(0.022, 0.06, 4);
+          c.translate(0, 0.03, 0);
+          c.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), nrm));
+          c.translate(p.x - nrm.x * 0.008, p.y - nrm.y * 0.008, p.z - nrm.z * 0.008);
+          det.push(paint(c, (k + row) % 3 ? 0x9bbf4a : 0x6f8f2e));
+        }
+      }
+      { const st = new THREE.CylinderGeometry(0.015, 0.025, 0.08, 6); st.translate(0, 1.83, -0.19); det.push(paint(st, 0x5a3e2b)); }
+      return;
+    }
+    case 'duckprop': { // 오리 프로펠러 모자: 노란 오리 머리 캡 + 앞으로 뻗은 주황 부리 챙 + 눈 + 정수리 깃털 + 프로펠러
+      faceBall();
+      part(R * 1.02, 0, Math.PI * 2, 0, Math.PI * 0.5, shell, shellList);
+      for (const sx of [-1, 1]) { // 눈: 흰자 + 검은 눈동자 (쉘에 반쯤 묻음)
+        const p = onShell(R * 1.02, FRONT + sx * 0.42, Math.PI * 0.3);
+        sph(0.032, p.x, p.y, p.z, 0xffffff, det, 1, 1.15, 0.6);
+        const q = onShell(R * 1.02 + 0.016, FRONT + sx * 0.42, Math.PI * 0.31);
+        sph(0.016, q.x, q.y, q.z, 0x111111, det, 1, 1.2, 0.6);
+      }
+      { const b = new THREE.SphereGeometry(0.1, 14, 8); b.scale(1.15, 0.28, 1.5); b.translate(0, 1.66, -0.35); det.push(paint(b, 0xff8c1a)); } // 윗부리
+      { const b = new THREE.SphereGeometry(0.08, 12, 6); b.scale(1.05, 0.22, 1.3); b.translate(0, 1.635, -0.33); det.push(paint(b, 0xe86f00)); } // 아랫부리
+      for (const sx of [-1, 1]) sph(0.008, sx * 0.03, 1.69, -0.43, 0x7a3a00, det, 1, 0.6, 1); // 콧구멍
+      for (const a of [-0.35, 0, 0.35]) { const f = new THREE.ConeGeometry(0.02, 0.08, 5); f.translate(0, 0.04, 0); f.rotateX(-0.5); f.rotateZ(a); f.translate(0, 1.78, -0.09); det.push(paint(f, shell)); } // 깃털
+      { const st = new THREE.CylinderGeometry(0.008, 0.008, 0.1, 6); st.translate(0, 1.83, -0.19); det.push(paint(st, 0xc9ced3)); }
+      sph(0.016, 0, 1.88, -0.19, 0xd62828);
+      for (const [a, c] of [[0, 0xd62828], [Math.PI / 2, 0x2a9df4], [Math.PI, 0x2ec27e], [Math.PI * 1.5, 0xffd60a]]) {
+        const bl = new THREE.BoxGeometry(0.12, 0.006, 0.04);
+        bl.rotateX(0.25);
+        bl.translate(0.07, 0, 0);
+        bl.rotateY(a);
+        bl.translate(0, 1.88, -0.19);
+        det.push(paint(bl, c));
+      }
+      return;
+    }
+    case 'crttv': { // 뚱뚱이 CRT TV 헬멧: 베이지 브라운관 상자 + 볼록 화면(발광) + 웃는 얼굴 + 다이얼·스피커 + 토끼귀 안테나
+      const T = V(0, 1.6, -0.2);
+      shellList.push(roundBox(0.42, 0.36, 0.38, 0.04, T.x, T.y, T.z, shell, 0.01));
+      det.push(box(0.3, 0.26, 0.14, T.x, T.y, T.z + 0.24, 0xbfb59a));
+      det.push(box(0.32, 0.26, 0.02, -0.03, T.y, T.z - 0.196, 0x2b2d31));
+      glow.push(box(0.26, 0.2, 0.006, -0.03, T.y, T.z - 0.209, 0x7fd0ff)); // 화면 (베젤 앞)
+      for (let k = 0; k < 5; k++) glow.push(box(0.24, 0.004, 0.004, -0.03, T.y - 0.08 + k * 0.04, T.z - 0.2135, 0x9fe0ff)); // 주사선
+      for (const sx of [-1, 1]) det.push(box(0.035, 0.035, 0.006, -0.03 + sx * 0.06, T.y + 0.04, T.z - 0.2175, 0x14324a)); // 웃는 눈
+      { const m = new THREE.TorusGeometry(0.06, 0.009, 4, 12, Math.PI); m.rotateZ(Math.PI); m.scale(1, 1, 0.4); m.translate(-0.03, T.y - 0.01, T.z - 0.2175); det.push(paint(m, 0x14324a)); }
+      for (let k = 0; k < 2; k++) { const d = new THREE.CylinderGeometry(0.022, 0.022, 0.02, 10); d.rotateX(Math.PI / 2); d.translate(0.165, T.y + 0.07 - k * 0.07, T.z - 0.2); det.push(paint(d, 0x3a3d42)); }
+      for (let k = 0; k < 4; k++) det.push(box(0.04, 0.006, 0.006, 0.165, T.y - 0.07 - k * 0.014, T.z - 0.193, 0x3a3d42)); // 스피커 그릴 (쉘 면에 붙음)
+      for (const s of [-1, 1]) { const a = new THREE.CylinderGeometry(0.005, 0.005, 0.26, 4); a.translate(0, 0.13, 0); a.rotateZ(s * 0.5); a.translate(0, T.y + 0.18, T.z); det.push(paint(a, 0xc9ced3)); sph(0.012, s * 0.125, T.y + 0.405, T.z, 0xc9ced3); }
+      return;
+    }
     case 'cyber': { // 사이버 네온: 매끈한 검은 쉘 + 발광 바이저 + 플러시 네온 라인 + 측면 핀
       part(R, 0, Math.PI * 2, 0, Math.PI * 0.8, shell, shellList);
       sph(0.1, 0, 1.47, -0.31, shell, shellList, 1.3, 0.75, 0.9, 16);
@@ -928,14 +1345,29 @@ function deliveryBox(det, glow, style, mats = {}, code = null) {
       lid(0xb71c1c, 0.1, det, 0.06);
       wrap(0.02, 1.535, 0x222222, 0.1, 0.014);
       for (const sx of [-1, 1]) det.push(box(0.03, 0.03, 0.05, sx * 0.2, 1.535, BACKZ + 0.01, 0xc0c4c8));
-      { // 피자 조각: 노란 삼각형 + 크러스트 + 페퍼로니
-        const g = new THREE.CylinderGeometry(0.15, 0.15, 0.008, 3);
-        g.rotateX(Math.PI / 2);
-        g.rotateZ(Math.PI);
-        g.translate(0, 1.29, BACKZ + L(1));
-        det.push(paint(g, 0xffd166));
-        backB(0.24, 0.035, 0, 1.36, 0xc77d3a, 2);
-        for (const [x, y] of [[-0.04, 1.31], [0.045, 1.3], [0, 1.24]]) backDisc(0.022, x, y, 0xb71c1c, 2);
+      { // 피자 조각 엠블럼: 꼭짓점이 아래 · 위쪽이 둥근 크러스트 · 치즈 흘러내림 · 페퍼로니 · 바질
+        const AX = 0, AY = 1.17, A0 = Math.PI / 2 - 0.42, A1 = Math.PI / 2 + 0.42;
+        const sector = (r0, r1, n) => {
+          const sh = new THREE.Shape();
+          if (r0 <= 0) sh.moveTo(AX, AY); else sh.moveTo(AX + Math.cos(A0) * r0, AY + Math.sin(A0) * r0);
+          sh.lineTo(AX + Math.cos(A0) * r1, AY + Math.sin(A0) * r1); // 첫 호 앞에는 자동 직선이 없어 직접 이음
+          sh.absarc(AX, AY, r1, A0, A1, false);
+          if (r0 > 0) sh.absarc(AX, AY, r0, A1, A0, true);
+          sh.closePath();
+          const g = new THREE.ExtrudeGeometry(sh, { depth: 0.008, bevelEnabled: false, curveSegments: 16 });
+          g.translate(0, 0, BACKZ + L(n) - 0.004);
+          return g;
+        };
+        det.push(paint(sector(0, 0.215, 1), 0xffc94a)); // 치즈
+        det.push(paint(sector(0.215, 0.25, 1), 0xc77d3a)); // 크러스트 (치즈와 맞닿게, 겹치지 않음)
+        det.push(paint(sector(0.222, 0.242, 2), 0xe0a060)); // 크러스트 하이라이트
+        for (const [x, y, r] of [[-0.035, 1.31, 0.026], [0.04, 1.33, 0.024], [0.0, 1.25, 0.02], [-0.05, 1.355, 0.02], [0.06, 1.365, 0.015]]) {
+          backDisc(r, x, y, 0xb71c1c, 2, det, 1, 1, 16);
+          backDisc(r * 0.35, x + r * 0.3, y + r * 0.3, 0xd84545, 3, det, 1, 1, 8); // 기름 반짝임
+        }
+        for (const [x, y, rz] of [[0.02, 1.29, 0.6], [-0.03, 1.355, -0.5]]) backB(0.024, 0.012, x, y, 0x2d6a4f, 4, det, rz);
+        backB(0.38, 0.03, 0, 1.475, 0xffffff, 1); // HOT 띠
+        for (let k = 0; k < 3; k++) backB(0.05, 0.012, -0.08 + k * 0.08, 1.475, 0xd62828, 2);
       }
       for (const sx of [-1, 1]) det.push(box(0.04, 0.012, 0.42, sx * 0.12, TOP + 0.07, CZ, 0x1d1f22));
       reflector();
@@ -971,28 +1403,49 @@ function deliveryBox(det, glow, style, mats = {}, code = null) {
       reflector();
       return;
     }
-    case 'treasure': { // 보물상자: 나무 + 둥근 뚜껑 + 금띠 + 자물쇠
+    case 'treasure': { // 보물상자: 나무 판자 몸통 + 위로 볼록한 반원통 뚜껑 + 금띠 + 모서리 쇠 장식 + 리벳 + 맹꽁이 자물쇠
+      const LH = 0.15; // 몸통 높이 중 뚜껑 아래 상자 부분은 그대로, 뚜껑은 위로 솟음
       body(0x7a4a22, 0.02);
-      { // 반원통 뚜껑
-        const g = new THREE.CylinderGeometry(D / 2 + 0.015, D / 2 + 0.015, W + 0.02, 20, 1, false, -Math.PI / 2, Math.PI);
+      for (const y of [1.18, 1.31]) backB(W - 0.03, 0.006, 0, y, 0x4e2e14, 1); // 판자 이음새
+      for (const y of [1.18, 1.31]) sideB(0.006, D - 0.03, y, 0, 0x4e2e14, 1);
+      { // 반원통 뚜껑 (축은 x, 위로 볼록)
+        const g = new THREE.CylinderGeometry(D / 2 + 0.012, D / 2 + 0.012, W + 0.02, 22, 1, false, 0, Math.PI);
         g.rotateZ(Math.PI / 2);
-        g.scale(1, 0.55, 1);
-        g.translate(CX, TOP - 0.005, CZ);
+        g.scale(1, LH / (D / 2 + 0.012), 1);
+        g.translate(CX, TOP + 0.005, CZ);
         det.push(paint(g, 0x5c3517));
+        // 뚜껑 판자 이음새 (뚜껑 곡면을 따라 띄운 얇은 띠)
+        for (const th of [Math.PI * 0.33, Math.PI * 0.67]) {
+          const r = D / 2 + 0.016;
+          const y = TOP + 0.005 + Math.sin(th) * LH * (r / (D / 2 + 0.012)), z = CZ + Math.cos(th) * r;
+          const st = new THREE.BoxGeometry(W - 0.03, 0.006, 0.02);
+          st.rotateX(-(Math.PI / 2 - th) * 0.6);
+          st.translate(0, y, z);
+          det.push(paint(st, 0x3e2410));
+        }
       }
-      for (const x of [-0.19, 0.19]) {
-        const g = new THREE.TorusGeometry(D / 2 + 0.025, 0.014, 6, 20, Math.PI);
+      det.push(box(W + 0.03, 0.022, D + 0.03, 0, TOP + 0.006, CZ, 0xc99a10)); // 뚜껑 테두리(금속 립)
+      for (const x of [-0.19, 0.19]) { // 뚜껑을 감싸는 금띠 + 몸통 세로 금띠
+        const g = new THREE.TorusGeometry(D / 2 + 0.024, 0.013, 6, 22, Math.PI);
         g.rotateY(Math.PI / 2);
-        g.scale(1, 0.55, 1);
-        g.translate(x, TOP - 0.005, CZ);
+        g.scale(1, LH / (D / 2 + 0.012), 1);
+        g.translate(x, TOP + 0.005, CZ);
         metal.push(paint(g, 0xf5c518));
-        backB(0.04, H - 0.04, x, CY, 0xf5c518, 1, metal);
+        backB(0.045, H - 0.03, x, CY - 0.005, 0xf5c518, 2, metal);
+        for (const y of [1.12, 1.24, 1.36, 1.48]) backDisc(0.009, x, y, 0xfff3b0, 3, metal, 1, 1, 8); // 리벳
       }
-      sideB(H - 0.04, 0.04, CY, 0, 0xf5c518, 1, metal); // 양옆 한 번만 (예전엔 두 번 그려 겹침)
-      wrap(0.035, 1.12, 0xf5c518, 0.02, 0.018, metal);
-      backB(0.1, 0.12, 0, TOP - 0.05, 0xf5c518, 2, metal);
-      backDisc(0.016, 0, TOP - 0.04, 0x1b1b1b, 3);
-      backB(0.012, 0.035, 0, TOP - 0.07, 0x1b1b1b, 3);
+      sideB(H - 0.03, 0.045, CY - 0.005, 0, 0xf5c518, 2, metal);
+      wrap(0.03, 1.1, 0xf5c518, 0.02, 0.018, metal);
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) { // 모서리 쇠 장식 (뒷면 L자)
+        backB(0.07, 0.022, sx * (W / 2 - 0.045), CY + sy * 0.15, 0x3a2a1a, 1);
+        backB(0.022, 0.07, sx * (W / 2 - 0.021), CY + sy * 0.15 - sy * 0.024, 0x3a2a1a, 2);
+      }
+      // 자물쇠: 금빛 걸쇠판 + 걸린 맹꽁이 자물쇠(고리 + 몸통 + 열쇠 구멍)
+      backB(0.1, 0.07, 0, TOP - 0.01, 0xf5c518, 2, metal);
+      { const sh = new THREE.TorusGeometry(0.028, 0.008, 6, 12, Math.PI); sh.translate(0, TOP - 0.05, BACKZ + 0.04); metal.push(paint(sh, 0xc9ced3)); }
+      metal.push(roundBox(0.08, 0.07, 0.03, 0.012, 0, TOP - 0.085, BACKZ + 0.04, 0xe6b422, 0.006));
+      { const k = new THREE.CylinderGeometry(0.01, 0.01, 0.006, 10); k.rotateX(Math.PI / 2); k.translate(0, TOP - 0.078, BACKZ + 0.058); det.push(paint(k, 0x1b1b1b)); }
+      det.push(box(0.007, 0.02, 0.006, 0, TOP - 0.093, BACKZ + 0.058, 0x1b1b1b));
       return;
     }
     case 'goldbox': { // 골드 VIP 금고: 금속 광택 몸통 + 다이얼 + 경첩 + 리벳
@@ -1068,6 +1521,286 @@ function deliveryBox(det, glow, style, mats = {}, code = null) {
           }
         });
       }
+      return;
+    }
+    // ======================= 나라 특색 배달통 (뒤쪽 +z 가 카메라 쪽) =======================
+    case 'bajaj': case 'tuktukbox': case 'jeepneybox': { // 미니 바자이 / 툭툭 / 지프니: 앞모습이 뒤(카메라)를 보게 실은 장난감 차
+      const jeep = style === 'jeepneybox', baj = style === 'bajaj';
+      const c1 = baj ? 0x2a6fd4 : jeep ? 0xd9dde1 : 0x1d3557, c2 = baj ? 0xff8c1a : jeep ? 0xe63946 : 0xffd60a;
+      det.push(box(0.46, 0.05, 0.5, 0, 1.08, CZ, 0x2b2d31)); // 받침 (익스프레스 사이드 가방과 면이 겹치지 않게 폭 0.46)
+      // 바퀴 (앞 1 + 뒤 2, 지프니는 4)
+      const wh = (x, z) => { det.push(cylX(0.075, 0.05, x, 1.16, z, 0x141414, 12)); det.push(cylX(0.035, 0.055, x, 1.16, z, 0xc9ced3, 8)); };
+      if (jeep) { for (const sx of [-1, 1]) for (const z of [CZ - 0.16, CZ + 0.16]) wh(sx * 0.2, z); } else { wh(0, CZ + 0.2); for (const sx of [-1, 1]) wh(sx * 0.19, CZ - 0.14); }
+      if (jeep) {
+        det.push(roundBox(0.36, 0.18, 0.48, 0.03, 0, 1.3, CZ, c1, 0.01));
+        det.push(box(0.37, 0.14, 0.34, 0, 1.46, CZ - 0.06, 0x1b1d22));
+        for (let k = 0; k < 4; k++) for (const sx of [-1, 1]) det.push(box(0.012, 0.15, 0.025, sx * 0.188, 1.46, CZ - 0.2 + k * 0.09, 0xd9dde1));
+        det.push(box(0.4, 0.03, 0.5, 0, 1.545, CZ, 0xd9dde1));
+        for (const [y, c] of [[1.25, 0xffd60a], [1.29, 0xe63946], [1.33, 0x2a9df4]]) for (const sx of [-1, 1]) det.push(box(0.008, 0.025, 0.46, sx * 0.186, y, CZ, c));
+        metal.push(box(0.3, 0.12, 0.02, 0, 1.3, CZ + 0.25, 0xd9dde1));
+        for (let k = 0; k < 6; k++) det.push(box(0.012, 0.1, 0.012, -0.11 + k * 0.044, 1.3, CZ + 0.262, 0x555b62));
+        for (const sx of [-1, 1]) { glow.push(paint(new THREE.CylinderGeometry(0.025, 0.025, 0.01, 10).rotateX(Math.PI / 2).translate(sx * 0.125, 1.36, CZ + 0.272), 0xfff3b0)); metal.push(paint(new THREE.ConeGeometry(0.02, 0.09, 4).scale(0.4, 1, 1).rotateX(0.6).translate(sx * 0.08, 1.42, CZ + 0.22), 0xe9ecef)); }
+        det.push(box(0.2, 0.04, 0.012, 0, 1.51, CZ + 0.18, 0xffd60a));
+      } else {
+        det.push(roundBox(0.38, 0.17, 0.44, 0.06, 0, 1.28, CZ, c1, 0.01));
+        det.push(box(0.36, 0.05, 0.02, 0, 1.33, CZ + 0.23, c2));
+        for (const [px, pz] of [[-0.17, -0.18], [0.17, -0.18], [-0.17, 0.12], [0.17, 0.12]]) det.push(box(0.018, 0.22, 0.018, px, 1.46, CZ + pz, 0xc9ced3));
+        det.push(roundBox(0.42, 0.04, 0.46, 0.05, 0, 1.585, CZ - 0.02, baj ? c1 : 0x1d3557, 0.008));
+        if (!baj) for (let k = 0; k < 8; k++) det.push(paint(new THREE.ConeGeometry(0.018, 0.035, 3).rotateX(Math.PI).translate(-0.18 + k * 0.052, 1.55, CZ + 0.21), k % 2 ? 0xffd60a : 0xffffff));
+        if (baj) { det.push(box(0.316, 0.2, 0.02, 0, 1.47, CZ + 0.12, GLASS)); det.push(box(0.39, 0.04, 0.012, 0, 1.385, CZ + 0.13, 0xc9ced3)); }
+        else det.push(box(0.3, 0.06, 0.2, 0, 1.4, CZ - 0.08, 0x7a1f2b));
+        glow.push(paint(new THREE.CylinderGeometry(0.03, 0.03, 0.01, 10).rotateX(Math.PI / 2).translate(0, 1.29, CZ + 0.227), 0xfff3b0));
+      }
+      return;
+    }
+    case 'petronas': { // 말레이시아 페트로나스 트윈타워: 은빛 수납 받침 + 계단식 8각 타워 2개 + 스카이브리지 + 첨탑
+      det.push(roundBox(0.56, 0.2, 0.5, 0.04, 0, 1.16, CZ, 0x2b2f36, 0.01));
+      for (const sx of [-1, 1]) backB(0.015, 0.12, sx * 0.2, 1.16, 0x9bf6ff, 1, glow);
+      for (const sx of [-1, 1]) {
+        for (let i = 0; i < 6; i++) {
+          const r = 0.09 - i * 0.01;
+          const c = new THREE.CylinderGeometry(r * 0.96, r, 0.07, 8);
+          c.translate(sx * 0.13, 1.295 + i * 0.07, CZ);
+          metal.push(paint(c, 0xd9dde1));
+          const g = new THREE.CylinderGeometry(r * 0.97 + 0.004, r * 0.97 + 0.004, 0.01, 8);
+          g.translate(sx * 0.13, 1.33 + i * 0.07, CZ);
+          glow.push(paint(g, 0x9bf6ff));
+        }
+        metal.push(paint(new THREE.ConeGeometry(0.018, 0.14, 8).translate(sx * 0.13, 1.76, CZ), 0xffffff));
+      }
+      metal.push(box(0.12, 0.025, 0.04, 0, 1.5, CZ, 0x8d99ae));
+      for (const s of [-1, 1]) det.push(paint(new THREE.CylinderGeometry(0.007, 0.007, 0.12, 4).rotateZ(s * 0.6).translate(s * 0.035, 1.45, CZ), 0x8d99ae));
+      return;
+    }
+    case 'angkorbox': { // 캄보디아 앙코르 석조 탑: 3단 사암 기단(새긴 띠) + 연꽃봉오리 탑 5개 + 금장 첨두
+      const stone = [0xbfae8c, 0xa8987a, 0x9d8d70];
+      for (let i = 0; i < 3; i++) {
+        det.push(box(0.56 - i * 0.1, 0.1, 0.5 - i * 0.1, 0, 1.11 + i * 0.1, CZ, stone[i]));
+        for (const sz of [-1, 1]) det.push(box(0.56 - i * 0.1 + 0.012, 0.015, 0.012, 0, 1.11 + i * 0.1, CZ + sz * (0.25 - i * 0.05), 0x7d6f58));
+      }
+      const tower = (x, z, s) => {
+        for (let i = 0; i < 4; i++) det.push(paint(new THREE.CylinderGeometry((0.055 - i * 0.01) * s, (0.06 - i * 0.01) * s, 0.06 * s, 8).translate(x, 1.39 + (0.03 + i * 0.06) * s, CZ + z), i % 2 ? stone[1] : stone[0]));
+        det.push(paint(new THREE.ConeGeometry(0.022 * s, 0.09 * s, 8).translate(x, 1.39 + 0.3 * s, CZ + z), stone[0]));
+        metal.push(paint(new THREE.SphereGeometry(0.012 * s, 6, 4).translate(x, 1.39 + 0.36 * s, CZ + z), 0xd4a017));
+      };
+      tower(0, 0, 1.5);
+      for (const [x, z] of [[-0.12, -0.1], [0.12, -0.1], [-0.12, 0.1], [0.12, 0.1]]) tower(x, z, 0.9);
+      return;
+    }
+    case 'shwedagon': { // 미얀마 쉐다곤 황금 탑: 흰 기단 + 금 테라스 + 종 모양 탑 + 링 + 첨탑 + 보석
+      det.push(box(0.56, 0.1, 0.5, 0, 1.11, CZ, 0xf0e8d6));
+      for (let i = 0; i < 3; i++) metal.push(box(0.46 - i * 0.1, 0.05, 0.42 - i * 0.1, 0, 1.185 + i * 0.05, CZ, 0xe6b422));
+      metal.push(paint(new THREE.SphereGeometry(0.15, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.6).scale(1, 1.2, 1).translate(0, 1.29, CZ), 0xf2c230));
+      for (let i = 0; i < 5; i++) metal.push(paint(new THREE.CylinderGeometry(0.06 - i * 0.008, 0.065 - i * 0.008, 0.03, 14).translate(0, 1.47 + i * 0.03, CZ), i % 2 ? 0xffd34d : 0xe6b422));
+      metal.push(paint(new THREE.ConeGeometry(0.03, 0.2, 14).translate(0, 1.72, CZ), 0xffd34d));
+      glow.push(paint(new THREE.OctahedronGeometry(0.014).translate(0, 1.83, CZ), 0xffffff));
+      for (const [x, z] of [[-0.25, -0.225], [0.25, -0.225], [-0.25, 0.225], [0.25, 0.225]]) metal.push(paint(new THREE.ConeGeometry(0.02, 0.1, 8).translate(x, 1.21, CZ + z), 0xe6b422)); // 기단 모서리 작은 탑 (테라스 밖)
+      return;
+    }
+    // ======================= 공용 배달통 =======================
+    case 'pizzatower': { // 피자 상자 타워: 엇갈려 쌓은 상자 4개(상자마다 로고) + 맨 위 열린 상자 속 페퍼로니 피자 + 젖혀진 뚜껑
+      for (let i = 0; i < 4; i++) {
+        const ry = (i % 2 ? 1 : -1) * 0.04 * (i + 1), y = 1.1 + i * 0.09;
+        const part = (g, c) => { g.rotateY(ry); g.translate(0, y, CZ); det.push(paint(g, c)); };
+        part(new THREE.BoxGeometry(0.5, 0.085, 0.5), 0xd9b483);
+        part(new THREE.BoxGeometry(0.512, 0.012, 0.512), 0xb88f5e); // 뚜껑 접힘 선
+        // 상자 뒷면 로고: 빨간 원 + 흰 조각 + 글자 줄 (상자를 따라 회전)
+        part(new THREE.CylinderGeometry(0.026, 0.026, 0.006, 16).rotateX(Math.PI / 2).translate(-0.12, 0.012, 0.259), 0xd62828);
+        part(new THREE.BoxGeometry(0.12, 0.012, 0.006).translate(0.02, 0.022, 0.259), 0xd62828);
+        part(new THREE.BoxGeometry(0.09, 0.008, 0.006).translate(0.005, -0.004, 0.259), 0x8a5a2b);
+      }
+      const B = 1.1 + 3 * 0.09 + 0.0425; // 맨 위 열린 상자 바닥
+      det.push(box(0.5, 0.012, 0.5, 0, B + 0.008, CZ, 0xd9b483));
+      for (const sz of [-1, 1]) det.push(box(0.5, 0.05, 0.012, 0, B + 0.039, CZ + sz * 0.244, 0xd9b483));
+      for (const sx of [-1, 1]) det.push(box(0.012, 0.05, 0.476, sx * 0.244, B + 0.039, CZ, 0xd9b483));
+      const PY = B + 0.014;
+      det.push(paint(new THREE.CylinderGeometry(0.21, 0.21, 0.016, 28).translate(0, PY + 0.008, CZ), 0xc77d3a)); // 크러스트
+      det.push(paint(new THREE.CylinderGeometry(0.188, 0.188, 0.006, 28).translate(0, PY + 0.019, CZ), 0xffc94a)); // 치즈
+      for (const [x, z] of [[-0.08, -0.06], [0.07, -0.09], [0.0, 0.05], [-0.1, 0.1], [0.11, 0.07], [0.04, -0.15], [-0.03, -0.12], [0.12, -0.02]]) det.push(paint(new THREE.CylinderGeometry(0.026, 0.026, 0.006, 14).translate(x, PY + 0.024, CZ + z), 0xb71c1c));
+      for (let k = 0; k < 4; k++) det.push(paint(new THREE.BoxGeometry(0.4, 0.003, 0.006).rotateY((k * Math.PI) / 4).translate(0, PY + 0.0235, CZ), 0xe0a54a)); // 8조각 칼집
+      for (const [x, z, r] of [[0.05, 0.12, 0.5], [-0.12, -0.02, -0.4], [0.08, -0.04, 1.2]]) det.push(paint(new THREE.BoxGeometry(0.03, 0.004, 0.016).rotateY(r).translate(x, PY + 0.028, CZ + z), 0x2d6a4f));
+      { // 젖혀진 뚜껑 (앞쪽 경첩, 라이더 쪽으로 기울어짐) + 안쪽 기름 자국
+        const lg = new THREE.BoxGeometry(0.5, 0.012, 0.5);
+        lg.translate(0, 0, 0.25);
+        lg.rotateX(-1.9);
+        lg.translate(0, B + 0.064, CZ - 0.25);
+        det.push(paint(lg, 0xd9b483));
+      }
+      return;
+    }
+    case 'minifridge': { // 미니 냉장고: 민트 레트로 몸체 + 냉동실·냉장실 문 틈 + 크롬 손잡이 + 로고 + 다리
+      body(0xa8e6cf, 0.05, gloss);
+      backB(W - 0.08, 0.008, 0, 1.44, 0x5a7d70, 1);
+      metal.push(box(0.03, 0.08, 0.03, 0.2, 1.5, BACKZ + 0.02, 0xd9dde1));
+      metal.push(box(0.03, 0.18, 0.03, 0.2, 1.3, BACKZ + 0.02, 0xd9dde1));
+      backDisc(0.04, -0.15, 1.5, 0xffffff, 1);
+      backB(0.1, 0.02, -0.12, 1.2, 0xd62828, 1);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) det.push(paint(new THREE.CylinderGeometry(0.018, 0.024, 0.04, 8).translate(sx * 0.22, 1.05, CZ + sz * 0.2), 0xd9dde1));
+      for (let k = 0; k < 4; k++) sideB(0.008, 0.25, 1.2 + k * 0.03, -0.05, 0x5a7d70, 1);
+      return;
+    }
+    case 'fishbox': { // 스티로폼 생선 박스: 흰 상자 + 파란 생선 그림 + 살짝 들린 뚜껑 사이로 얼음과 생선 꼬리
+      body(0xf4f4ee, 0.03);
+      backDisc(0.075, -0.02, 1.32, 0x2f7fe0, 1, det, 1.7, 0.75, 24); // 생선 몸통 (타원)
+      { const t = new THREE.CylinderGeometry(0.06, 0.06, 0.008, 3); t.rotateX(Math.PI / 2); t.rotateZ(Math.PI / 2); t.scale(-0.8, 1, 1); t.translate(0.165, 1.32, BACKZ + L(1)); det.push(paint(t, 0x2f7fe0)); } // 꼬리 (몸통과 겹치지 않게 뒤로)
+      backDisc(0.012, -0.1, 1.335, 0xffffff, 2, det, 1, 1, 10); // 눈
+      backDisc(0.005, -0.1, 1.335, 0x1b1b1b, 3, det, 1, 1, 8);
+      backB(0.006, 0.07, -0.06, 1.32, 0xf4f4ee, 2, det, 0.15); // 아가미
+      backB(0.4, 0.02, 0, 1.17, 0x2f7fe0, 1);
+      backB(0.4, 0.008, 0, 1.14, 0x2f7fe0, 1);
+      { const lidg = roundBox(W + 0.02, 0.05, D + 0.02, 0.04, 0, 0, 0, 0xe2e2da, 0.008); lidg.translate(0, 0, -(D + 0.02) / 2); lidg.rotateX(-0.14); lidg.translate(0, TOP + 0.025, CZ + (D + 0.02) / 2 - 0.02); det.push(lidg); } // 앞쪽이 들린 뚜껑 (뒤쪽 경첩)
+      for (const [x, z] of [[-0.17, -0.2], [0.0, -0.21], [0.16, -0.19]]) glow.push(paint(new THREE.OctahedronGeometry(0.035).translate(x, TOP + 0.02, CZ + z), 0xd6f3ff)); // 틈새로 보이는 얼음
+      for (const sx of [-1, 1]) { // 앞쪽 틈으로 삐져나온 꼬리지느러미 (V자)
+        const f = new THREE.ConeGeometry(0.04, 0.1, 3); f.scale(1, 1, 0.25); f.translate(0, 0.05, 0); f.rotateZ(sx * 0.45); f.translate(0.12, TOP + 0.03, CZ - 0.2); det.push(paint(f, 0x7f8c9a));
+      }
+      return;
+    }
+    case 'boombox': { // 붐박스 스피커: 검은 몸체 + 큰 우퍼 2개(뒷면) + 카세트 데크 + 발광 이퀄라이저 + 손잡이
+      body(0x1d1f22, 0.04, gloss);
+      lid(0x2b2d31, 0.04);
+      for (const sx of [-1, 1]) {
+        backDisc(0.115, sx * 0.14, 1.27, 0x9aa0a6, 1);
+        backDisc(0.09, sx * 0.14, 1.27, 0x2b2d31, 2);
+        backDisc(0.035, sx * 0.14, 1.27, 0x9aa0a6, 3);
+      }
+      backB(0.14, 0.08, 0, 1.45, 0x3a3d42, 1);
+      backB(0.1, 0.05, 0, 1.45, 0x0e3a4a, 2);
+      for (let k = 0; k < 7; k++) backB(0.012, 0.02 + (k % 3) * 0.015, -0.21 + k * 0.012, 1.48, [0x39ff88, 0xffd60a, 0xff3b30][k % 3], 1, glow);
+      for (let k = 0; k < 4; k++) backB(0.025, 0.015, 0.14 + k * 0.03, 1.48, 0xc9ced3, 1);
+      handle(0xc9ced3, TOP + 0.06);
+      return;
+    }
+    case 'giftbox': { // 리본 선물 상자: 빨간 상자 + 금 리본 십자 + 큰 나비 리본 + 꼬리
+      body(0xd62828, 0.02);
+      lid(0xb71c1c, 0.02);
+      backB(0.06, H - 0.04, 0, CY, 0xffd34d, 1, metal);
+      sideB(H - 0.04, 0.06, CY, 0, 0xffd34d, 1, metal);
+      metal.push(box(0.06, 0.015, D + 0.04, 0, TOP + 0.04, CZ, 0xffd34d));
+      metal.push(box(W + 0.04, 0.015, 0.06, 0, TOP + 0.042, CZ, 0xffd34d));
+      for (const sx of [-1, 1]) { const loop = new THREE.TorusGeometry(0.07, sx > 0 ? 0.022 : 0.02, 6, 14); loop.scale(1, 0.75, 0.6); loop.rotateZ(sx * (0.4 + (sx > 0 ? 0.06 : 0))); loop.translate(sx * 0.072, TOP + 0.1, CZ + sx * 0.006); metal.push(paint(loop, 0xffd34d)); } // 좌우 고리를 살짝 비대칭으로 (가운데 면 겹침 방지)
+      metal.push(paint(new THREE.SphereGeometry(0.03, 8, 6).translate(0, TOP + 0.08, CZ), 0xffd34d));
+      for (const sx of [-1, 1]) metal.push(paint(new THREE.BoxGeometry(0.03, 0.012, 0.16).rotateY(sx * 0.4).translate(sx * 0.04, TOP + 0.055 + (sx > 0 ? 0.004 : 0), CZ + 0.1), 0xffd34d));
+      return;
+    }
+    case 'gascapsule': { // 부스터 가스 캡슐: 가로 금속 캡슐 + 파란 띠 + 압력계 + 밸브 + 경고 줄무늬 + 발광 링
+      for (const sx of [-1, 1]) det.push(box(0.04, 0.08, 0.42, sx * 0.18, 1.1, CZ, 0x2b2d31));
+      const cap = new THREE.CylinderGeometry(0.2, 0.2, 0.36, 20); cap.rotateX(Math.PI / 2); cap.translate(0, 1.32, CZ); metal.push(paint(cap, 0xb8c0c8));
+      for (const s of [-1, 1]) metal.push(paint(new THREE.SphereGeometry(0.2, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(s * Math.PI / 2).translate(0, 1.32, CZ + s * 0.18), 0xb8c0c8));
+      for (const z of [-0.1, 0.1]) { const b = new THREE.TorusGeometry(0.203, 0.012, 6, 28); b.translate(0, 1.32, CZ + z); det.push(paint(b, 0x1e6fd9)); }
+      { const r = new THREE.TorusGeometry(0.205, 0.008, 6, 28); r.translate(0, 1.32, CZ); glow.push(paint(r, 0x00e5ff)); }
+      det.push(paint(new THREE.CylinderGeometry(0.05, 0.05, 0.02, 18).rotateX(Math.PI / 2).translate(0, 1.32, CZ + 0.385), 0x3a3d42)); // 압력계 (캡 정중앙에 박힘)
+      det.push(paint(new THREE.CylinderGeometry(0.042, 0.042, 0.004, 18).rotateX(Math.PI / 2).translate(0, 1.32, CZ + 0.396), 0xf4f4f4));
+      det.push(paint(new THREE.CylinderGeometry(0.042, 0.042, 0.004, 18, 1, false, Math.PI * 0.75, Math.PI * 0.5).rotateX(Math.PI / 2).translate(0, 1.32, CZ + 0.399), 0xd62828)); // 위험 구간
+      det.push(paint(new THREE.BoxGeometry(0.005, 0.036, 0.004).translate(0, 0.016, 0).rotateZ(-0.9).translate(0, 1.32, CZ + 0.403), 0x1b1b1b)); // 바늘
+      det.push(paint(new THREE.CylinderGeometry(0.03, 0.03, 0.06, 8).translate(0, 1.55, CZ - 0.05), 0x3a3d42));
+      det.push(paint(new THREE.TorusGeometry(0.04, 0.01, 4, 10).rotateX(Math.PI / 2).translate(0, 1.59, CZ - 0.05), 0xd62828));
+      det.push(box(0.38, 0.05, 0.03, 0, 1.1, CZ + 0.235, 0x2b2d31)); // 받침 뒤 가로대 + 경고 줄무늬
+      backB(0.36, 0.034, 0, 1.1, 0xffd60a, 0, det);
+      for (let k = 0; k < 7; k++) backB(0.022, 0.044, -0.15 + k * 0.05, 1.1, 0x1b1b1b, 1, det, 0.6);
+      return;
+    }
+    case 'steamer': { // 대나무 찜통: 대나무색 원통 3단(대 묶음 띠) + 엮은 뚜껑 + 빨간 받침 + 반투명 김
+      det.push(paint(new THREE.CylinderGeometry(0.26, 0.26, 0.04, 24).translate(0, 1.08, CZ), 0xb71c1c));
+      for (let i = 0; i < 3; i++) {
+        det.push(paint(new THREE.CylinderGeometry(0.25, 0.25, 0.12, 24).translate(0, 1.165 + i * 0.13, CZ), 0xd4b06a));
+        for (const dy of [-0.045, 0.045]) det.push(paint(new THREE.CylinderGeometry(0.256, 0.256, 0.02, 24, 1, true).translate(0, 1.165 + i * 0.13 + dy, CZ), 0xa8823e)); // 묶음 띠 (뚜껑 면 없이)
+        for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2 + i; det.push(paint(new THREE.BoxGeometry(0.008, 0.06, 0.008).translate(Math.cos(a) * 0.252, 1.165 + i * 0.13, CZ + Math.sin(a) * 0.252), 0xb8944e)); } // 대나무 마디
+      }
+      det.push(paint(new THREE.SphereGeometry(0.26, 24, 8, 0, Math.PI * 2, 0, Math.PI * 0.35).scale(1, 0.45, 1).translate(0, 1.47, CZ), 0xc9a45a));
+      for (let k = 0; k < 6; k++) { const r = 0.06 + k * 0.035, t = new THREE.TorusGeometry(r, 0.004, 3, 24); t.rotateX(Math.PI / 2); t.translate(0, 1.47 + Math.sqrt(Math.max(0, 0.0676 - r * r)) * 0.45 + 0.002, CZ); det.push(paint(t, 0xa8823e)); }
+      det.push(paint(new THREE.TorusGeometry(0.04, 0.01, 4, 10).rotateX(Math.PI / 2).translate(0, 1.585, CZ), 0xa8823e));
+      const steam = mats.glass || glow; // 김: 투명 재질로 피어오르는 덩어리
+      for (const [x, y, z, r] of [[-0.05, 1.63, 0, 0.05], [0.03, 1.69, -0.02, 0.045], [-0.02, 1.75, 0.01, 0.038], [0.04, 1.8, 0.02, 0.03]]) steam.push(paint(new THREE.IcosahedronGeometry(r, 1).translate(x, y, CZ + z), 0xffffff));
+      return;
+    }
+    case 'parcel': { // 테이프 덕지덕지 택배 박스: 골판지 + 여기저기 붙인 테이프(층 다르게, 얇게) + 송장 + 취급주의 스티커
+      body(0xc89b64, 0.01);
+      const tape = (w, h, x, y, rz, n, c = 0xd9c08a) => { const g = new THREE.BoxGeometry(w, h, 0.003); g.rotateZ(rz); g.translate(x, y, BACKZ + 0.003 + n * 0.0035); det.push(paint(g, c)); };
+      [[0.06, H, 0, CY, 0], [W - 0.02, 0.06, 0, 1.45, 0], [0.3, 0.05, -0.08, 1.2, 0.5], [0.26, 0.05, 0.1, 1.33, -0.7], [0.18, 0.04, 0.15, 1.17, 0.25]].forEach(([w, h, x, y, rz], i) => tape(w, h, x, y, rz, i));
+      sideB(H, 0.06, CY, 0, 0xd9c08a, 1);
+      det.push(box(0.06, 0.008, D + 0.008, 0, TOP + 0.004, CZ, 0xd9c08a));
+      det.push(box(W + 0.008, 0.008, 0.06, 0, TOP + 0.0065, CZ - 0.12, 0xcbb07a)); // 위로 한 번 더 감은 테이프
+      tape(0.16, 0.11, 0.16, 1.4, 0, 5, 0xffffff); // 송장
+      for (let k = 0; k < 4; k++) tape(k ? 0.11 : 0.06, 0.006, k ? 0.16 : 0.13, 1.43 - k * 0.018, 0, 6, 0x333333);
+      for (let k = 0; k < 8; k++) tape(0.004, 0.022, 0.1 + k * 0.012 + (k % 3) * 0.002, 1.365, 0, 6, 0x333333); // 바코드
+      tape(0.1, 0.06, -0.18, 1.12, 0, 5, 0xd62828); // 취급주의
+      tape(0.06, 0.012, -0.18, 1.12, 0, 6, 0xffffff);
+      { const g = new THREE.CylinderGeometry(0.012, 0.012, 0.003, 3); g.rotateX(Math.PI / 2); g.translate(-0.21, 1.12, BACKZ + 0.003 + 7 * 0.0035); det.push(paint(g, 0xffffff)); }
+      return;
+    }
+    case 'catbox': { // 고양이 아파트 박스: 2층 골판지 + 둥근 구멍들 + 꼭대기 구멍으로 나온 고양이 머리·귀 + 옆 구멍 앞발 + 꼬리
+      body(0xc89b64, 0.01);
+      backB(W - 0.02, 0.012, 0, CY, 0xa87d4a, 1);
+      for (const [x, y, r] of [[-0.14, 1.42, 0.06], [0.12, 1.2, 0.07], [-0.1, 1.18, 0.045]]) { backDisc(r, x, y, 0x3a2a1a, 1); }
+      for (const sx of [-1, 1]) det.push(paint(new THREE.SphereGeometry(0.03, 8, 6).scale(1, 0.7, 1.3).translate(0.12 + sx * 0.03, 1.15, BACKZ + 0.02), 0xf3a65a));
+      const cy = TOP + 0.08;
+      det.push(paint(new THREE.SphereGeometry(0.11, 14, 10).scale(1.15, 0.95, 1).translate(0, cy, CZ + 0.05), 0xf3a65a));
+      for (const sx of [-1, 1]) { det.push(paint(new THREE.ConeGeometry(0.04, 0.07, 4).translate(sx * 0.07, cy + 0.11, CZ + 0.05), 0xf3a65a)); det.push(paint(new THREE.ConeGeometry(0.022, 0.04, 4).translate(sx * 0.07, cy + 0.105, CZ + 0.07), 0xffc2c2)); }
+      for (const sx of [-1, 1]) det.push(paint(new THREE.SphereGeometry(0.018, 8, 6).translate(sx * 0.045, cy + 0.02, CZ + 0.15), 0x1b1b1b));
+      det.push(paint(new THREE.SphereGeometry(0.035, 8, 6).scale(1.3, 0.8, 0.8).translate(0, cy - 0.04, CZ + 0.15), 0xfff3e0));
+      det.push(paint(new THREE.SphereGeometry(0.012, 6, 4).translate(0, cy - 0.025, CZ + 0.18), 0xff8fab));
+      for (let k = 0; k < 3; k++) for (const sx of [-1, 1]) det.push(paint(new THREE.CylinderGeometry(0.002, 0.002, 0.09, 3).rotateZ(Math.PI / 2 + sx * (k - 1) * 0.15).translate(sx * 0.09, cy - 0.03 + (k - 1) * 0.012, CZ + 0.16), 0xffffff));
+      for (const x of [-0.03, 0, 0.03]) { // 이마 줄무늬: 머리 타원체 표면에 반쯤 묻힌 납작한 조각
+        const yy = cy + 0.06, zz = CZ + 0.05 + 0.11 * Math.sqrt(Math.max(0, 1 - (x / 0.1265) ** 2 - (0.06 / 0.1045) ** 2));
+        det.push(paint(new THREE.SphereGeometry(0.012, 8, 6).scale(0.7, 2.2, 0.5).translate(x, yy, zz), 0xd9822b));
+      }
+      const tail = []; for (let i = 0; i <= 6; i++) { const t = i / 6; tail.push(V(W / 2 + 0.02 + t * 0.05, 1.42 - t * 0.2, CZ + 0.15 + Math.sin(t * 3) * 0.05)); }
+      for (let i = 0; i < 6; i++) { const a = tail[i], b = tail[i + 1], len = a.distanceTo(b); const c = new THREE.CylinderGeometry(0.018, 0.02, len, 6); c.translate(0, len / 2, 0); c.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), b.clone().sub(a).normalize())); c.translate(a.x, a.y, a.z); det.push(paint(c, i % 2 ? 0xd9822b : 0xf3a65a)); }
+      return;
+    }
+    case 'goldbar': { // 순금 덩어리: 사다리꼴 금괴 4-2-1 피라미드 + 윗면 각인 + 검은 벨벳 받침
+      const ingot = (x, y, z, ry) => {
+        const g = taperTop(new THREE.BoxGeometry(0.26, 0.1, 0.2), 0.8, 0.72);
+        g.rotateY(ry);
+        g.translate(x, y, CZ + z);
+        metal.push(paint(g, 0xe6b422));
+        const st = new THREE.BoxGeometry(0.1, 0.004, 0.05); st.translate(0, 0.051, 0); st.rotateY(ry); st.translate(x, y, CZ + z); det.push(paint(st, 0xb8860b)); // 999.9 각인 (윗면에 살짝 돋음)
+        const ln = new THREE.BoxGeometry(0.07, 0.004, 0.008); ln.translate(0, 0.055, 0.012); ln.rotateY(ry); ln.translate(x, y, CZ + z); metal.push(paint(ln, 0xffe08a));
+      };
+      det.push(roundBox(0.58, 0.05, 0.5, 0.02, 0, 1.065, CZ, 0x1d1f22, 0.008));
+      det.push(box(0.5, 0.004, 0.44, 0, 1.0905, CZ, 0x5a0f1a)); // 벨벳
+      for (const x of [-0.14, 0.14]) for (const z of [-0.11, 0.11]) ingot(x, 1.1425, z, 0);
+      for (const z of [-0.105, 0.105]) ingot(0, 1.2425, z, 0);
+      ingot(0, 1.3425, 0, Math.PI / 2);
+      return;
+    }
+    case 'aquarium': { // 투명 어항 배달통: 유리 상자 + 물 + 자갈 + 수초 + 물고기 3마리 + 공기방울 + 검은 프레임
+      const glass = mats.glass || glow;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) det.push(box(0.025, H, 0.025, sx * (W / 2 - 0.0125), CY, CZ + sz * (D / 2 - 0.0125), 0x1d1f22));
+      for (const sy of [-1, 1]) for (const sz of [-1, 1]) det.push(box(W - 0.05, 0.025, 0.025, 0, CY + sy * (H / 2 - 0.0125), CZ + sz * (D / 2 - 0.0125), 0x1d1f22)); // 기둥 사이에만 (모서리 겹침 방지)
+      for (const sy of [-1, 1]) for (const sx of [-1, 1]) det.push(box(0.025, 0.025, D - 0.05, sx * (W / 2 - 0.0125), CY + sy * (H / 2 - 0.0125), CZ, 0x1d1f22));
+      glass.push(paint(new THREE.BoxGeometry(W - 0.03, H - 0.03, D - 0.03).translate(0, CY, CZ), 0x9fd8ff));
+      det.push(box(W - 0.06, 0.05, D - 0.06, 0, CY - H / 2 + 0.05, CZ, 0xc9b28a));
+      for (const [x, z, h] of [[-0.18, -0.12, 0.25], [-0.15, 0.1, 0.18], [0.2, 0.05, 0.22]]) for (let k = 0; k < 3; k++) det.push(paint(new THREE.ConeGeometry(0.015, h - k * 0.05, 4).translate(x + k * 0.015, CY - H / 2 + 0.066 - k * 0.004 + (h - k * 0.05) / 2, CZ + z), 0x2d9a4f)); // 밑동은 자갈 속에 묻음
+      const fish = (x, y, z, c, s) => { glow.push(paint(new THREE.SphereGeometry(0.04 * s, 10, 8).scale(1.6, 1, 0.6).translate(x, y, CZ + z), c)); glow.push(paint(new THREE.ConeGeometry(0.03 * s, 0.05 * s, 3).rotateZ(Math.PI / 2).scale(1, 1, 0.3).translate(x + 0.075 * s, y, CZ + z), c)); };
+      fish(-0.06, 1.35, 0.05, 0xff8c1a, 1); fish(0.08, 1.25, -0.08, 0xffd60a, 0.8); fish(0.0, 1.45, -0.05, 0xff4fa3, 0.7);
+      for (const [x, y] of [[0.15, 1.3], [0.16, 1.38], [0.14, 1.46]]) glow.push(paint(new THREE.SphereGeometry(0.012, 6, 4).translate(x, y, CZ + 0.1), 0xe6f7ff));
+      det.push(box(W, 0.03, D, 0, TOP + 0.015, CZ, 0x1d1f22));
+      return;
+    }
+    case 'icecream': { // 아이스크림 스티로폼 상자: 흰 상자 + 콘 그림 + 위로 솟은 3단 아이스크림 콘(흘러내림·체리)
+      body(0xf4f4ee, 0.04);
+      lid(0xe8f4ff, 0.04);
+      { const g = new THREE.CylinderGeometry(0.06, 0.0, 0.13, 3); g.rotateX(Math.PI / 2); g.rotateZ(Math.PI); g.scale(1, 1, 0.1); g.translate(-0.1, 1.22, BACKZ + 0.008); det.push(paint(g, 0xd9a35a)); }
+      backDisc(0.05, -0.1, 1.33, 0xff8fab, 2);
+      backDisc(0.05, 0.12, 1.3, 0x8b5a2b, 1);
+      backDisc(0.04, 0.12, 1.37, 0xfff3e0, 2);
+      backB(0.42, 0.03, 0, 1.13, 0xff8fab, 1);
+      for (let k = 0; k < 5; k++) backB(0.03, 0.03, -0.16 + k * 0.08, 1.13, 0xffffff, 2);
+      const cy = TOP + 0.1;
+      det.push(paint(new THREE.ConeGeometry(0.095, 0.22, 16).rotateX(Math.PI).translate(0, cy, CZ), 0xd9a35a));
+      for (let k = 0; k < 4; k++) { const a = k * 0.5; const g = new THREE.TorusGeometry(0.075 - k * 0.016, 0.004, 3, 16); g.rotateX(Math.PI / 2); g.translate(0, cy + 0.06 - k * 0.04, CZ); det.push(paint(g, 0xa8762e)); }
+      const scoops = [[cy + 0.15, 0.105, 0xff8fab], [cy + 0.27, 0.095, 0xfff3e0], [cy + 0.37, 0.085, 0x8b5a2b]];
+      scoops.forEach(([y, r, c], i) => {
+        det.push(paint(new THREE.SphereGeometry(r, 16, 12).scale(1, 0.85, 1).translate(i === 1 ? 0.01 : 0, y, CZ), c));
+        if (i === 0) for (let k = 0; k < 6; k++) { // 콘 가장자리로 흘러내린 방울
+          const a = (k / 6) * Math.PI * 2 + 0.3, len = 0.03 + (k % 3) * 0.015;
+          det.push(paint(new THREE.CapsuleGeometry(0.016, len, 3, 8).translate(Math.cos(a) * 0.088, y - 0.06 - len / 2, CZ + Math.sin(a) * 0.088), c));
+        }
+      });
+      for (let k = 0; k < 7; k++) { const a = k * 0.9; det.push(paint(new THREE.CapsuleGeometry(0.004, 0.014, 2, 4).rotateZ(a).translate(Math.cos(a * 1.7) * 0.06, cy + 0.4 + Math.sin(a) * 0.01, CZ + Math.sin(a * 1.7) * 0.06), [0xff3b30, 0x2a9df4, 0xffd60a, 0x39ff88][k % 4])); } // 스프링클
+      det.push(paint(new THREE.SphereGeometry(0.025, 10, 8).translate(0, cy + 0.455, CZ), 0xd62828));
+      { const st = new THREE.CylinderGeometry(0.003, 0.003, 0.05, 4); st.rotateZ(0.4); st.translate(-0.01, cy + 0.495, CZ); det.push(paint(st, 0x2d6a4f)); }
       return;
     }
     case 'cyber': { // 사이버 그리드: 검은 몸통 + 네온 격자 + 홀로 패널 + 발광 뚜껑 테두리
@@ -1845,13 +2578,16 @@ export function createBike(color, opts = {}) {
   }
 
   // 라이더 (의상 + 헤드기어)
-  rider(det, glow, out);
   const helmetShell = [];
-  headgear(det, glow, hel, opts.helmetPaint, helmetShell, { gloss, metal });
+  const glass = [], batik = []; // 투명 유리(어항) / 바틱 텍스처 헬멧
+  if (!opts.bare) { // bare: 상점 썸네일용 바이크만 (라이더·헤드기어·배달통 없음)
+    rider(det, glow, out);
+    headgear(det, glow, hel, opts.helmetPaint, helmetShell, { gloss, metal, batik });
+  }
 
   // 배달 박스 (뒷좌석 랙 위) — 외부 'box' 모델이 있으면 그것으로 교체
-  const extBox = models.instantiate('box');
-  if (!extBox) deliveryBox(det, glow, opts.box, { gloss, metal }, opts.box === 'national' ? opts.nationalCode : null);
+  const extBox = opts.bare ? null : models.instantiate('box');
+  if (!extBox && !opts.bare) deliveryBox(det, glow, opts.box, { gloss, metal, glass }, opts.box === 'national' ? opts.nationalCode : null);
   const nationalBox = !extBox && opts.box === 'national' && opts.nationalCode;
 
   head.push(box(0.18, 0.12, 0.05, 0, 0.92, -0.7));
@@ -1868,6 +2604,8 @@ export function createBike(color, opts = {}) {
   if (gloss.length) lean.add(new THREE.Mesh(merge(gloss), glossMat()));
   if (metal.length) lean.add(new THREE.Mesh(merge(metal), metalMat()));
   if (facet.length) lean.add(new THREE.Mesh(merge(facet), facetMat()));
+  if (batik.length) lean.add(new THREE.Mesh(merge(batik), batikMat()));
+  if (glass.length) { const gm = new THREE.Mesh(merge(glass), glassMat()); gm.renderOrder = 2; lean.add(gm); }
   // 네온 바이크: 차체 후광
   if (opts.paint && opts.paint.finish === 'neon' && !opts.national) lean.add(neonHalo(bodyGeo, opts.paint.hex, new THREE.Vector3(0, 0.88, -0.15), 1.1));
   // 메탈릭·네온 헤드기어 쉘
@@ -3323,4 +4061,38 @@ function makeShadowTexture() {
   x.fillStyle = g;
   x.fillRect(0, 0, 64, 64);
   return new THREE.CanvasTexture(c);
+}
+
+// ---------- 상점 타일용 단독 모델 (배경 없이 썸네일로 렌더)
+// kind: 'box' | 'helmet' | 'outfit' | 'bike'. 바이크는 라이더째, 의상은 헬멧 쓴 라이더, 헤드기어는 머리만, 배달통은 통만
+export function createItemModel(kind, id, color = 0x8b1e2d) {
+  if (kind === 'bike') {
+    const b = createBike(color, { style: id, bare: true }).root;
+    b.traverse((o) => { if (o.isMesh && o.renderOrder === -1) o.visible = false; }); // 바닥 그림자 제외
+    return b;
+  }
+  const det = [], glow = [], gloss = [], metal = [], glass = [], batik = [];
+  if (kind === 'box') deliveryBox(det, glow, id, { gloss, metal, glass });
+  else if (kind === 'helmet') {
+    const hel = HELMET_STYLES[id] || HELMET_STYLES.basic;
+    if (!hel.kind) { // 헬멧만 있는 경우 머리를 넣어 쓴 모습으로
+      const h = new THREE.SphereGeometry(0.14, 16, 12);
+      h.scale(0.95, 1.05, 1);
+      h.translate(0, 1.55, -0.2);
+      det.push(paint(h, 0xf1c8a0));
+    }
+    headgear(det, glow, hel, null, det, { gloss, metal, batik });
+  } else if (kind === 'outfit') {
+    rider(det, glow, OUTFIT_STYLES[id] || OUTFIT_STYLES.jacket);
+    headgear(det, glow, HELMET_STYLES.basic, null, det, { gloss, metal });
+  }
+  const g = new THREE.Group();
+  const add = (list, mat) => { if (list.length) g.add(new THREE.Mesh(merge(list), mat)); };
+  add(det, vcMat);
+  add(glow, new THREE.MeshBasicMaterial({ vertexColors: true }));
+  add(gloss, glossMat());
+  add(metal, metalMat());
+  add(batik, batikMat());
+  if (glass.length) { const m = new THREE.Mesh(merge(glass), glassMat()); m.renderOrder = 2; g.add(m); }
+  return g;
 }

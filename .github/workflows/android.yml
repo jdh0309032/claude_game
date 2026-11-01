@@ -1,0 +1,91 @@
+# 안드로이드 앱 자동 빌드 + 라이브 업데이트 배포
+# - 모든 브랜치 푸시: APK(폰에 직접 설치) / 서명 키가 있으면 AAB(플레이 스토어)까지
+# - main 푸시: 게임 웹 파일을 web.zip 으로 묶어 GitHub Release(web-<번호>)로 올림 → 설치된 앱이 실행 때 받아서 다음 실행부터 적용
+# 출시 서명 키는 저장소 Settings → Secrets and variables → Actions 에 등록:
+#   ANDROID_KEYSTORE_BASE64  (keystore 파일을 base64 로 인코딩한 문자열)
+#   ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD
+# 키가 없으면 디버그 서명 APK 만 만듦 (테스트 설치용)
+name: Android build
+
+on:
+  push:
+    branches: [main, 'ccr-*']
+    paths-ignore: ['**.md', 'supabase/**', 'tools/**', 'archive/**']
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # 라이브 업데이트 릴리스 생성
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERSION_CODE: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: npm ci
+      - name: Native level
+        run: echo "NATIVE_LEVEL=$(node -p "require('./package.json').nativeLevel")" >> "$GITHUB_ENV"
+      - run: npm run android:sync
+
+      - name: Release keystore
+        id: ks
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No release key secret: building debug APK only"
+          fi
+
+      - name: Build (release, signed)
+        if: steps.ks.outputs.signed == 'true'
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon assembleRelease bundleRelease
+
+      - name: Build (debug)
+        if: steps.ks.outputs.signed != 'true'
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grub-rider-${{ github.run_number }}
+          path: |
+            android/app/build/outputs/apk/**/*.apk
+            android/app/build/outputs/bundle/**/*.aab
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish live update (main only)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd www && zip -qr ../web.zip .)
+          cp www/build.json version.json
+          gh release create "web-${VERSION_CODE}" web.zip version.json \
+            --title "Live update ${VERSION_CODE}" \
+            --notes "{\"web\": ${VERSION_CODE}, \"nativeLevel\": ${NATIVE_LEVEL}}" \
+            --latest --target "${GITHUB_SHA}"

@@ -1,0 +1,343 @@
+0	MODE ADMIN · TIDAK TERCATAT
+1	GAS
+2	REM
+3	GAS
+4	ANTAR KILAT!
+5	KM/J
+6	JEDA
+7	JALUR TANTANGAN
+8	BERITA
+9	GARASI
+10	PERINGKAT
+11	MISI
+12	PENGATURAN
+13	MULAI NGANTAR
+14	TERBAIK
+15	TERAKHIR
+16	MODE ADMIN
+17	PANAH / A D setir · ATAS gas · BAWAH rem · P jeda
+18	AKUN DRIVER
+19	MASUK
+20	DAFTAR
+21	ID
+22	KATA SANDI
+23	ULANGI KATA SANDI
+24	Masuk sebagai
+25	Skor terbaikmu dikirim ke peringkat global setiap selesai berkendara.
+26	KELUAR
+27	KEMBALI
+28	GESER UNTUK MEMUTAR
+29	MOTOR
+30	DRIVER
+31	BOKS
+32	BENDERA
+33	PAPAN PERINGKAT
+34	KETUK DRIVER UNTUK MELIHAT
+35	NEGARA
+36	LIGA DUNIA
+37	PENGUMUMAN
+38	BANTUAN
+39	Selesaikan dalam satu kali main untuk koin langsung. Misi yang selesai diganti misi yang lebih sulit di permainan berikutnya.
+40	BAHASA
+41	EFEK SUARA
+42	MUSIK
+43	GETAR
+44	GRAFIS
+45	EFEK LAYAR BASAH
+46	KONTROL
+47	TUKAR POSISI KONTROL
+48	NEGARAKU
+49	CARA BERMAIN
+50	<b>NYARIS NABRAK</b> — lewati mobil dengan sangat dekat untuk poin bonus. Dalam jarak 0,35 m adalah <b class="gold">SEMPURNA</b> (x2).
+51	<b>KOMBO</b> — sambung nyaris nabrak dalam 3 detik untuk menaikkan pengali.
+52	<b>LAJUR KIRI / LAJUR KANAN</b> — Singapura, Malaysia, Indonesia, dan Thailand lajur kiri; Vietnam, Filipina, Kamboja, dan Myanmar lajur kanan. Perhatikan rambu di setiap gerbang perbatasan.
+53	<b>LAWAN ARAH</b> — berkendara di lajur berlawanan skornya x2. Awas kendaraan dari depan.
+54	<b>LOMPAT</b> — naiki truk ramp atau ramp lompat bergaris emas. Di udara, gas / rem = <b>SALTO</b> (+500), setir = <b>PUTAR 360</b> (+1.200), keduanya sekaligus = <b>MEGA SALTO DIAGONAL</b> (+3.000) per putaran. Mendarat rata dan kamu kebal sesaat; mendarat miring dan kamu jatuh.
+55	<b>BADAI</b> — 30 detik hujan deras (skor x1,3). Genangan air membuat motor tergelincir.
+56	Hindari lapak pinggir jalan, kerucut dan rambu di garis tengah, serta mobil yang melewati garis tengah.
+57	<b>POWER-UP</b> (setiap 100-150 m) — Perisai, Magnet, <b>Mode Raksasa</b> (besar dan tak terhentikan), Skor x2, Lambat.
+58	<b>BAHAYA JALAN</b> — lubang jalan memperlambatmu; gorong-gorong terbuka dan kardus kargo yang jatuh mengakhiri permainan.
+59	<b>ZONA ANTAR</b> — lewati lurus zona hijau bercahaya di tepi jalan untuk +50 koin.
+60	<b>MOTOR TIMNAS</b> — jadilah #1 di negaramu untuk mengendarainya. Kalau posisi #1 hilang, motor diambil kembali.
+61	TENTANG
+62	KEBIJAKAN PRIVASI
+63	KETENTUAN LAYANAN
+64	RESET PROGRES
+65	HAPUS AKUN
+66	STRUK PENGANTARAN · JEDA
+67	NO. PESANAN
+68	KENDARAAN
+69	PROGRES MISI
+70	SKOR
+71	LANJUTKAN
+72	KE MENU
+73	REKOR BARU
+74	TONTON IKLAN UNTUK HIDUP LAGI
+75	HIDUP LAGI (ADMIN)
+76	TONTON IKLAN UNTUK KOIN x2
+77	LANJUT
+78	TANTANG LEWAT WHATSAPP
+79	BERIKUTNYA
+80	HADIAH HARIAN
+81	Masuk 7 hari berturut-turut untuk helm Mahkota Beruntun.
+82	AMBIL
+83	TOKO KOIN
+84	beli 4, gratis 1
+85	Koin adalah mata uang virtual dalam game tanpa nilai tunai dan tidak dapat dikembalikan atau dipindahtangankan, kecuali diwajibkan oleh hukum atau kebijakan toko. Lihat <a href="terms.html" target="_blank" rel="noopener">Ketentuan</a> dan <a href="privacy.html" target="_blank" rel="noopener">Kebijakan Privasi</a>.
+86	KOTAK MISTERI
+87	PAKAI
+88	TUTUP
+89	3-12 huruf kecil / angka
+90	Minimal 6 karakter
+91	Belok kiri
+92	Belok kanan
+93	Rem
+94	Gas
+95	Jeda
+96	Toko koin
+97	Hapus tantangan
+98	Menu
+99	Bahasa
+100	Negara (admin)
+101	JALAN BERLUBANG!
+102	ZONA ANTAR!
+103	+{n} KOIN
+104	KALAHKAN DRIVER INI UNTUK MENGUASAI PAPAN
+105	JADILAH YANG PERTAMA DI {country}
+106	REKOR PRIBADI
+107	REKOR BARU!
+108	JARAK TERJAUH PRIBADI
+109	MENYALIP {name}!
+110	#1 DI {country}
+111	{n} m LAGI
+112	TERKIRIM!
+113	TERLAMBAT
+114	ANGIN BUNTUT
+115	MODE FEVER!
+116	SKOR x3 · MAGNET OTOMATIS
+117	CARA BERKENDARA
+118	Lewati mobil dengan sangat dekat untuk bonus NYARIS NABRAK
+119	JALAN!
+120	PERINGATAN BADAI  ·  30 DETIK HUJAN DERAS  ·  SKOR x1,3
+121	BADAI SUDAH LEWAT
+122	MELAYANG
+123	LOMPAT
+124	{n}x MEGA SALTO DIAGONAL
+125	MEGA SALTO DIAGONAL
+126	PUTAR {n}
+127	{n}x SALTO
+128	SALTO
+129	GAGAL MENDARAT!
+130	LOMPAT!
+131	MENDARAT MULUS · +{n}
+132	TERGELINCIR!
+133	SEMPURNA!
+134	NYARIS NABRAK!
+135	KOMBO x{n}
+136	PERISAI PECAH
+137	GORONG-GORONG TERBUKA!
+138	HANCUR!
+139	KESEMPATAN KEDUA!
+140	MISI SELESAI
+141	MOTORKU
+142	RAKSASA
+143	START KILAT
+144	MAGNET
+145	LAMBAT
+146	PERISAI
+147	KOMBO {n}
+148	TRIK x{n}
+149	BADAI
+150	TERGELINCIR
+151	OFFLINE · progres tidak tersimpan
+152	TAMU · masuk untuk menyimpan koin dan item
+153	Belum ada pengumuman.
+154	7 HARI
+155	Ketuk item untuk melihat
+156	Motormu saat ini tampil di atas
+157	MAKS {n} KM/J
+158	Dicat warna {country}
+159	Jadilah #1 di {country} untuk membuka
+160	Finishing {finish} · motor dan helm
+161	TERPASANG
+162	KHUSUS #1
+163	BERUNTUN 7 HARI
+164	PELUANG KOTAK MISTERI
+165	satu boks, kostum, atau helm acak yang belum kamu punya dari tingkat itu (jika semua item satu tingkat sudah kamu punya, peluangnya dibagi ke tingkat lain)
+166	TERBUKA
+167	SEMUA SUDAH TERKUMPUL!
+168	{n} koin dikembalikan
+169	BOOST
+170	{n} siap untuk permainan berikutnya
+171	Ketuk untuk dipakai di permainan berikutnya
+172	BELI {n}?
+173	KOIN TIDAK CUKUP  ·  BUTUH {n}
+174	SIAP UNTUK PERMAINAN BERIKUTNYA
+175	PEMBELIAN BERHASIL
+176	MEMUAT…
+177	Tidak tersedia di versi web.
+178	Toko sedang tidak tersedia. Coba lagi nanti.
+179	BONUS
+180	punya {n}
+181	Beli {name} x{n} seharga {price} koin?
+182	DITAMBAHKAN
+183	MASUK DULU  ·  KOIN DISIMPAN DI AKUNMU
+184	PEMBELIAN GAGAL
+185	PEMBELIAN UJI
+186	PEMBAYARAN DITERIMA  ·  KOIN SEDANG DIKIRIM…
+187	KOIN SEGERA MASUK  ·  BUKA ULANG APLIKASI JIKA BELUM
+188	KOIN GRATIS BERIKUTNYA DALAM {time}
+189	TONTON IKLAN DAPAT {n} KOIN
+190	DUNIA
+191	Memuat...
+192	Gagal memuat peringkat
+193	Belum ada rekor.
+194	Belum ada rekor di {country}.
+195	Jadilah driver pertama di papan!
+196	DUNIA
+197	Masuk untuk melihat peringkatmu
+198	PERINGKATMU DI {where}
+199	{name} belum punya rekor
+200	BUAT AKUN
+201	Akun disimpan di server. Perangkat ini hanya menyimpan token masuk otomatis.
+202	Server belum diatur: akun dan peringkat hanya disimpan di browser ini.
+203	Kata sandi tidak cocok
+204	Mohon tunggu...
+205	SELAMAT DATANG, {name}
+206	SUDAH KELUAR
+207	SERVER
+208	BANTUAN MEMBALAS  ·  CEK PENGATURAN → BANTUAN
+209	MODE ADMIN  ·  SEMUA ITEM TERBUKA  ·  SKOR TIDAK TERCATAT
+210	PAKET TIMNAS TERBUKA
+211	POSISI #1 HILANG  ·  PAKET TIMNAS DIAMBIL KEMBALI
+212	Masuk untuk menghubungi bantuan. Kami membalas dalam bahasamu.
+213	KATEGORI
+214	JUDUL
+215	Ringkasan singkat
+216	PESAN
+217	Ceritakan apa yang terjadi. Untuk masalah pembayaran, sertakan tanggal dan jumlahnya.
+218	KIRIM
+219	BATAL
+220	Silakan tulis pesan.
+221	TERKIRIM  ·  KAMI AKAN SEGERA MEMBALAS
+222	Kamu
+223	Bantuan Grub Rider
+224	Asli
+225	SEMUA PERTANYAAN
+226	Pertanyaan ini sudah ditutup. Buat yang baru jika masih butuh bantuan.
+227	Tulis balasan…
+228	PERTANYAAN BARU
+229	Belum ada pertanyaan. Ada pertanyaan soal pembayaran, bug, atau akun? Kirim pesan ke kami.
+230	NYALA
+231	MATI
+232	TINGGI
+233	RENDAH (CEPAT)
+234	Hapus akun secara permanen? Koin, item, rekor peringkat, dan pembelianmu tidak bisa dipulihkan.
+235	Ketik DELETE untuk konfirmasi.
+236	GAGAL MENGHAPUS
+237	AKUN DIHAPUS
+238	MODE ADMIN NYALA  ·  SKOR TIDAK TERCATAT
+239	MODE ADMIN MATI
+240	Reset koin, motor, skin, peringkat, dan misi? (Akun tetap ada)
+241	PROGRES DIRESET
+242	JARAK
+243	NYARIS NABRAK
+244	KOMBO MAKS
+245	LAWAN ARAH
+246	LOMPATAN
+247	KOIN
+248	Tekan kembali sekali lagi untuk keluar
+249	JATUH!
+250	NYARIS NABRAK
+251	KECEPATAN MAKS
+252	ULANGI
+253	MODE ADMIN · permainan ini tidak dicatat di peringkat
+254	Masuk untuk mengirim skormu ke peringkat {country}
+255	Mengirim ke peringkat {country}...
+256	Gagal mengirim skor
+257	PERINGKAT {country}
+258	KOIN DIGANDAKAN
+259	KEMBALI KE JALAN
+260	HARI {n}
+261	+ MAHKOTA
+262	HADIAH HARI {n}
+263	MAHKOTA BERUNTUN TERBUKA
+264	Nyaris nabrak {n} kali dalam satu permainan
+265	Tempuh {n} m dalam satu permainan
+266	Raih skor {n} dalam satu permainan
+267	Kumpulkan {n} koin dalam satu permainan
+268	Tempuh {n} m di lajur lawan arah
+269	Capai kombo nyaris nabrak x{n}
+270	Tembus {n} KM/J
+271	Hancurkan {n} mobil dalam Mode Raksasa
+272	Melayang {n} kali dari ramp
+273	MODE RAKSASA
+274	SKOR x2
+275	BOKS ANTAR
+276	KOSTUM
+277	PENUTUP KEPALA
+278	CAT MOTOR
+279	WARNA HELM
+280	HELM
+281	BIASA
+282	LANGKA
+283	EPIK
+284	LEGENDARIS
+285	SOLID
+286	METALIK
+287	NEON
+288	SATU TANGAN
+289	GESER + PEDAL
+290	PANAH + PEDAL
+291	TERKUNCI
+292	IP
+293	PERKIRAAN
+294	ADMIN
+295	Pembayaran / koin
+296	Bug / macet
+297	Akun / masuk
+298	Saran
+299	Lainnya
+300	MENUNGGU
+301	DIJAWAB
+302	DITUTUP
+303	PEMBARUAN
+304	EVENT
+305	PENGUMUMAN
+306	PEMELIHARAAN
+307	Tanpa bendera
+308	Berkendara tanpa bendera
+309	Warna Pabrik
+310	Warna asli
+311	Satu jari di mana saja: geser kiri / kanan untuk menyetir, ke atas untuk gas, ke bawah untuk rem. Tanpa tombol. Di udara, gerakan yang sama untuk trik.
+312	Geser di sisi setir, tombol GAS dan REM di sisi lainnya.
+313	Tombol KIRI / KANAN di satu sisi, GAS dan REM di sisi lainnya.
+314	Mendarat rata setelah salto agar tetap di jalan
+315	Setiap km dapat +50 koin
+316	Lawan arah untuk skor x2 - hati-hati!
+317	Jadilah #1 di negaramu untuk membuka motor Timnas
+318	Harus masuk
+319	ID ini sudah dipakai
+320	ID atau kata sandi salah
+321	Tidak bisa terhubung ke server
+322	Terlalu banyak percobaan, coba lagi nanti
+323	Negara belum terdeteksi
+324	ID harus 3-12 huruf kecil, angka, atau _
+325	Kata sandi minimal 6 karakter
+326	Masukkan ID dan kata sandimu
+327	Negara tidak valid
+328	Mode admin: skor tidak tercatat
+329	Akun admin: skor tidak tercatat
+330	Terlalu banyak pertanyaan hari ini. Silakan coba lagi besok.
+331	Terlalu banyak pesan. Tunggu sebentar.
+332	Coba lagi
+333	Item baru, tingkatan & hadiah lebih besar
+334	Kini setiap item punya tingkatan: Biasa, Langka, Epik, dan Legendaris.\n26 boks dan helm baru dari seluruh Asia Tenggara - Merlion, Menara Kembar Petronas, Pagoda Emas, boks kucing, akuarium, dan lainnya.\nHadiah per permainan naik: koin bernilai 2, zona antar +50, dan setiap km +50.\nBoost baru START KILAT: melesat dengan kecepatan 1,5x.
+335	Mulai dengan perisai yang menahan satu tabrakan
+336	Melesat dengan kecepatan maks 1,5x selama 5 detik, kebal, menyapu semua koin
+337	SKOR x2 30 DETIK
+338	Skor ganda selama 30 detik pertama
+339	START RAKSASA
+340	Mulai dalam wujud raksasa yang tak terhentikan
+341	KESEMPATAN KEDUA
+342	Kembali ke jalan sekali secara gratis setelah jatuh

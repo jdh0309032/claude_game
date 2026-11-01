@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#00b14f">
+  <title>Grub Rider 관리자</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="admin.webmanifest">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+  <!-- 로그인 -->
+  <section id="login" class="login">
+    <form id="loginForm" class="card login-card">
+      <h1><b>Grub</b>Rider <small>관리자</small></h1>
+      <label>아이디<input id="lgId" autocomplete="username" autocapitalize="off" spellcheck="false" required></label>
+      <label>비밀번호<input id="lgPw" type="password" autocomplete="current-password" required></label>
+      <p id="lgMsg" class="msg"></p>
+      <button class="btn primary" type="submit">로그인</button>
+      <p class="muted small">게임 관리자 계정(player_data.is_admin)으로만 들어올 수 있습니다. 모든 데이터는 서버의 관리자 전용 함수로만 읽고 씁니다.</p>
+    </form>
+  </section>
+
+  <!-- 본문 -->
+  <div id="app" class="app hidden">
+    <aside class="side">
+      <div class="logo"><b>Grub</b>Rider<small>ADMIN</small></div>
+      <nav id="nav">
+        <button data-tab="dash" class="on">📊 대시보드</button>
+        <button data-tab="inq">💬 1:1 문의 <em id="navInq" class="badge hidden"></em></button>
+        <button data-tab="notice">📢 공지</button>
+        <button data-tab="players">👤 플레이어</button>
+        <button data-tab="rank">🏆 지역별 순위</button>
+        <button data-tab="errors">🐞 오류</button>
+        <button data-tab="econ">⚙️ 가격·보상</button>
+      </nav>
+      <div class="side-foot">
+        <div id="mtStatus" class="mt-status">번역 엔진: 대기 (처음 쓸 때 받음)</div>
+        <div id="who" class="muted small"></div>
+        <button id="logout" class="btn ghost small">로그아웃</button>
+      </div>
+    </aside>
+    <main id="main" class="main"></main>
+  </div>
+
+  <div id="drawer" class="drawer hidden"><div class="drawer-panel"><button id="drawerClose" class="btn ghost small drawer-x">닫기 ✕</button><div id="drawerBody"></div></div></div>
+  <div id="toast" class="toast"></div>
+
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>
