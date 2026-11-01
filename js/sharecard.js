@@ -223,9 +223,12 @@ const blobToBase64 = (blob) => new Promise((resolve, reject) => {
 });
 
 /**
- * 이미지 + 문구 공유. 결과: 'shared' | 'cancelled' | 'saved'
+ * 이미지 + 문구 공유 (shareFile 참고). 결과: 'shared' | 'cancelled' | 'saved'
  */
-export async function shareImage(blob, text, filename = 'grub-rider.png') {
+export async function shareImage(blob, text, filename = 'grub-rider.png') { return shareFile(blob, text, filename); }
+
+// 이미지·영상 공통 공유
+export async function shareFile(blob, text, filename) {
   const cap = window.Capacitor;
   const Share = cap?.Plugins?.Share, Fs = cap?.Plugins?.Filesystem;
   // 앱: 캐시에 저장 → 안드로이드 공유 시트 (왓츠앱, 인스타 스토리 등)
@@ -239,7 +242,7 @@ export async function shareImage(blob, text, filename = 'grub-rider.png') {
     }
   }
   // 브라우저: 파일 공유 시트
-  const file = new File([blob], filename, { type: 'image/png' });
+  const file = new File([blob], filename, { type: blob.type || 'image/png' });
   if (navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], text });
