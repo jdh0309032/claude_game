@@ -21,7 +21,7 @@ import { t, setLang, getLang, LANGS, applyI18n, onLangChange } from './i18n.js';
 import {
   save, persist, resetSave, BIKES, BOXES, OUTFITS, HELMETS, PAINTS, getBike,
   replaceDoneMissions, missionText, auth, leaderboard, getSession, ONLINE, detectCountry,
-  loadPlayerData, flushSave, lockCountry, isServerReady, pullServerChanges, onServerOverride, adminSetCountry, claimPendingCoins, deleteAccount, loadAppConfig,
+  loadPlayerData, flushSave, lockCountry, isServerReady, pullServerChanges, onServerOverride, myNotices, adminSetCountry, claimPendingCoins, deleteAccount, loadAppConfig,
   submitInquiry, replyInquiry, myInquiries, logRun, logClientError,
 } from './storage.js';
 
@@ -1929,12 +1929,25 @@ function startRun(opts = {}) {
   G.cd = 3.2;
   G.cdShown = 0;
   $('countdown').classList.remove('hidden');
-  if (save.stats.runs === 0) showTutorial();
+  if (!tutorialSeen()) showTutorial();
+}
+
+// 조작 안내는 계정·기기마다 한 번만 (서버 설정 + 기기 저장소 둘 다 확인 → 게스트·중간에 그만둔 판도 다시 안 뜸)
+const TUT_KEY = 'gr.tutorialSeen';
+function tutorialSeen() {
+  if (save.settings.tutorialSeen || save.stats.runs > 0) return true;
+  try { return localStorage.getItem(TUT_KEY) === '1'; } catch (e) { return false; }
+}
+function markTutorialSeen() {
+  save.settings.tutorialSeen = true;
+  try { localStorage.setItem(TUT_KEY, '1'); } catch (e) { /* ignore */ }
+  persist();
 }
 
 // 첫 판: 조작 안내 카드 (손가락 애니메이션). 첫 조작을 하거나 6초가 지나면 사라짐
 let tutTimer = 0;
 function showTutorial() {
+  markTutorialSeen();
   const c = save.settings.controls || 'onehand';
   $('tutTitle').textContent = t('HOW TO RIDE');
   $('tutText').textContent = t(c === 'onehand' ? 'Slide left / right to steer. Slide up for gas, down to brake.' : c === 'slide' ? 'Slide to steer. Hold THROTTLE to go, BRAKE to slow down.' : 'Use the arrows to steer. Hold THROTTLE to go, BRAKE to slow down.');
@@ -2231,6 +2244,7 @@ function updateAirTricks(rdt, steer, throttle, brake) {
     // 착지 직전 + 일정 각도 안: 입력과 상관없이 바퀴가 바닥을 향하도록 빠르게 맞춤 (남은 시간 안에 수평이 되게)
     const k = Math.min(1, Math.max(LAND_ASSIST_RATE * rdt, rdt / Math.max(0.05, tLand - 0.04)));
     airQ.slerp(levelQ, k);
+    trickCredit(off - offLevelAngle()); // 보조가 마저 돌려 준 각도도 진행 중이던 바퀴에 포함
   } else if (mag > 0.15) {
     airAxis.set(ix, iy, 0).normalize();
     const ang = AIR_SPIN * mag * rdt;
@@ -2253,12 +2267,13 @@ function updateAirTricks(rdt, steer, throttle, brake) {
 }
 
 // ---------- 공중 회전 판정
-// - 바퀴 수: 실제로 한 방향으로 338°(94%) 이상 돌아야 1바퀴. 반대로 밀면 진행 중이던 회전을 되감음
+// - 바퀴 수: 한 방향으로 340° 이상 돌면 1바퀴. 착지 보조나 착지 순간 수평 맞춤이 마저 돌려 준 각도도 포함
+//   (그래서 화면에서 한 바퀴를 다 돈 것처럼 보이면 인정). 반대로 밀면 진행 중이던 회전을 되감음
 //   (반 바퀴 뒤로 → 반 바퀴 앞으로 = 제자리 = 0바퀴. 좌우로 흔들어도 바퀴 수가 늘지 않음)
 // - 바퀴마다의 동작: 그 바퀴 동안 가장 많이 돈 방향
 // - 꺾기(방향 전환): 새 방향을 90° 이상 유지했을 때만 1회. 바퀴 수 - 1 을 넘지 않음 (1바퀴로는 꺾기 배수 없음)
 //   완성한 바퀴까지의 꺾기만 셈 (착지 전에 못 채운 마지막 반 바퀴는 제외)
-const TRICK_FULL = TAU * 0.94;
+const TRICK_FULL = (TAU * 340) / 360; // 340° 이상이면 1바퀴
 const TRICK_SEG_MIN = Math.PI / 2;
 const trk = { p: 0, ax: 0, ay: 0, votes: {}, segs: [], types: [], turns: 0 };
 function trickReset() {
@@ -2307,14 +2322,24 @@ function trickFeed(ix, iy, ang) {
     trk.ax = ux;
     trk.ay = uy;
   }
+  trickCommit(dir);
+}
+function trickCommit(dir) {
   while (trk.p >= TRICK_FULL) {
-    let best = dir, most = -1;
+    let best = dir || trickDir(trk.ax, trk.ay), most = -1;
     for (const k in trk.votes) if (trk.votes[k] > most) { most = trk.votes[k]; best = k; }
     trk.types.push(best);
     trk.p = Math.max(0, trk.p - TAU);
     trk.votes = {};
     trk.turns = Math.min(trickTurnsFromSegs(), trk.types.length - 1);
   }
+}
+// 착지 보조·착지 순간 수평 맞춤이 돌려 준 각도: 바퀴를 절반 넘게 돈 상태(앞으로 마저 도는 중)일 때만 그 바퀴에 더함
+// (덜 돈 상태에서 수평으로 되돌아가는 건 되감기라서 더하지 않음)
+function trickCredit(ang) {
+  if (!(ang > 0) || trk.p <= Math.PI) return;
+  trk.p += ang;
+  trickCommit(null);
 }
 
 // 입력 방향 → 동작: 위(가속) = 전진(뒤로 돌기), 아래(브레이크) = 후진(앞으로 돌기), 좌/우 = 옆으로 돌기, 그 사이 = 사선
@@ -2360,6 +2385,13 @@ function land() {
   G.airVy = 0;
   // 착지 판정: 차체가 수평 자세에 가까워야 성공, 아니면 크래시
   const clean = offLevelAngle() < LAND_TOL;
+  if (clean) {
+    // 착지하면서 수평으로 맞춰지는 마지막 각도까지 포함해 바퀴 판정 (예: 330°까지 돌고 착지 = 1바퀴)
+    trickCredit(offLevelAngle());
+    G.rotTypes = trk.types;
+    G.rotTurns = trk.turns;
+    G.rotationCount = trk.types.length;
+  }
   const types = G.rotTypes.slice(0, G.rotationCount);
   if (!clean) {
     clips.finish(-1);
@@ -2866,18 +2898,45 @@ $('btnGarage').addEventListener('click', () => { garageSel = null; renderGarage(
 $('btnRanking').addEventListener('click', () => { openScreen('ranking'); renderRanking(); });
 $('btnMissions').addEventListener('click', () => { renderMissions(); openScreen('missions'); });
 // ---------- 공지 (서버 app_config 'notices' 우선, 없으면 기본 공지)
+// - 공개 공지에 countries 가 있으면 그 나라 플레이어에게만 / 개인 공지(서버 my_notices)는 맨 위에
 let notices = DEFAULT_NOTICES;
+let globalNotices = DEFAULT_NOTICES, personalNotices = [];
+const nstr = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
+function cleanNotice(n, id) {
+  return {
+    id: id || nstr(n.id, 60) || nstr(n.title, 60), date: nstr(n.date, 20), tag: nstr(n.tag, 16).toUpperCase() || 'NOTICE', title: nstr(n.title, 80), body: nstr(n.body, 2000),
+    countries: Array.isArray(n.countries) ? n.countries.filter((c) => typeof c === 'string' && /^[A-Z]{2}$/.test(c)) : [],
+    // 관리자 페이지가 자동 번역해 넣는 언어별 제목·본문 { vi: { title, body }, ... }
+    i18n: Object.fromEntries(Object.entries(n.i18n && typeof n.i18n === 'object' ? n.i18n : {}).map(([k, v]) => [k, { title: nstr(v?.title, 80), body: nstr(v?.body, 2000) }])),
+  };
+}
+function rebuildNotices() {
+  const mine = globalNotices.filter((n) => !n.countries?.length || n.countries.includes(save.country));
+  notices = [...personalNotices, ...mine].slice(0, 40);
+}
 function setNotices(raw) {
   const list = Array.isArray(raw) ? raw : Array.isArray(raw?.items) ? raw.items : null;
   if (!list) return;
-  const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
-  notices = list.filter((n) => n && typeof n === 'object' && str(n.title, 80))
-    .map((n) => ({
-      id: str(n.id, 60) || str(n.title, 60), date: str(n.date, 20), tag: str(n.tag, 16).toUpperCase() || 'NOTICE', title: str(n.title, 80), body: str(n.body, 2000),
-      // 관리자 페이지가 자동 번역해 넣는 언어별 제목·본문 { vi: { title, body }, ... }
-      i18n: Object.fromEntries(Object.entries(n.i18n && typeof n.i18n === 'object' ? n.i18n : {}).map(([k, v]) => [k, { title: str(v?.title, 80), body: str(v?.body, 2000) }])),
-    }))
-    .slice(0, 30);
+  globalNotices = list.filter((n) => n && typeof n === 'object' && nstr(n.title, 80)).map((n) => cleanNotice(n)).slice(0, 30);
+  rebuildNotices();
+}
+function setPersonalNotices(rows) {
+  personalNotices = (rows || []).filter((r) => r?.notice && nstr(r.notice.title, 80))
+    .map((r) => ({ ...cleanNotice(r.notice, `p${r.id}`), date: nstr(r.notice.date, 20) || nstr(r.created_at, 10), personal: true }));
+  rebuildNotices();
+}
+// 개인 공지 다시 받기 (로그인 직후 · 1분마다 · 앱 복귀)
+async function refreshPersonalNotices() {
+  const before = JSON.stringify(notices);
+  setPersonalNotices(getSession() ? await myNotices() : []);
+  noticesChanged(before);
+}
+function noticesChanged(before) {
+  updateNoticeDot();
+  if (currentScreen === 'notices' && JSON.stringify(notices) !== before) {
+    renderNotices();
+    if (notices.length && save.noticeSeen !== notices[0].id) { save.noticeSeen = notices[0].id; persist(); updateNoticeDot(); }
+  }
 }
 function updateNoticeDot() {
   $('noticeDot').classList.toggle('hidden', !notices.length || save.noticeSeen === notices[0].id);
@@ -3602,6 +3661,7 @@ $('btnLogout').addEventListener('click', async () => {
   authTab = 'login';
   sfx.click();
   toast(t('SIGNED OUT'));
+  refreshPersonalNotices(); // 개인 공지 지우기
   onDataReplaced();
   renderAuth();
 });
@@ -3645,6 +3705,7 @@ async function onSignedIn({ uploadBest = false } = {}) {
   if (!res.country) await lockCountry();
   if (save.settings.lang && save.settings.lang !== getLang()) setLang(save.settings.lang);
   refreshSupportBadge().then(() => { if (supportUnread) toast(t('SUPPORT REPLIED  ·  CHECK SETTINGS → HELP & SUPPORT')); });
+  refreshPersonalNotices(); // 국가가 정해진 뒤: 국가별 공지 거르기 + 개인 공지
   onDataReplaced();
   if (serverAdmin) toast(t('ADMIN MODE  ·  ALL ITEMS UNLOCKED  ·  SCORES NOT RECORDED'));
   // 새 계정이면 게스트로 세운 기록을 올림
@@ -3671,9 +3732,20 @@ function regionTopsDirty(code) {
   fetchRegionTop(code, true);
 }
 
+// 국가대표 지급 알림은 계정마다 한 번만 (1위를 잃었다가 다시 얻으면 다시 알림). 앱을 켤 때마다 순위를 다시 확인해도 알림 반복 없음
+const natKey = () => `gr.natAnnounced.${getSession()?.userId || 'guest'}`;
+function natAnnounced() { try { return localStorage.getItem(natKey()) || ''; } catch (e) { return ''; } }
+function setNatAnnounced(v) { try { if (v) localStorage.setItem(natKey(), v); else localStorage.removeItem(natKey()); } catch (e) { /* ignore */ } }
+
 // unlocked 가 바뀌었을 때만 처리. 지급 → 즉시 장착, 회수 → 원래 바이크로 리셋
 function applyNationalStatus(unlocked, code, { silent = false } = {}) {
+  code = code || save.country;
   const was = save.nationalUnlocked;
+  if (!unlocked && !was && !silent && natAnnounced()) {
+    // 앱을 꺼 둔 사이 1위를 잃음: 한 번 알리고 표시 지움 (다시 1위가 되면 다시 알림)
+    setNatAnnounced('');
+    toast(t('YOU LOST #1  ·  NATIONAL TEAM PACKAGE TAKEN BACK'));
+  }
   if (was === unlocked && (!unlocked || save.nationalCode === code)) return;
   save.nationalUnlocked = unlocked;
   save.nationalCode = unlocked ? code : '';
@@ -3683,16 +3755,21 @@ function applyNationalStatus(unlocked, code, { silent = false } = {}) {
     if (save.box !== 'national') save.prevBox = save.box;
     save.bike = 'national';
     save.box = 'national';
-    if (!silent) {
+    if (!silent && natAnnounced() !== code) {
       toast(`${t('#1 IN {country}', { country: countryName(code).toUpperCase() })}  ·  ${t('NATIONAL TEAM PACKAGE UNLOCKED')}`);
       sfx.fireworks();
     }
+    if (!silent) setNatAnnounced(code);
   } else {
     if (!isAdminMode()) {
       if (save.bike === 'national') save.bike = save.ownedBikes.includes(save.prevBike) ? save.prevBike : 'rookie';
       if (save.box === 'national') save.box = save.ownedBoxes.includes(save.prevBox) ? save.prevBox : 'basic';
     }
-    if (was && !silent) toast(t('YOU LOST #1  ·  NATIONAL TEAM PACKAGE TAKEN BACK'));
+    if (!silent) {
+      // 서버가 확인한 진짜 1위 상실만 알림 (로그아웃·불러오는 중의 임시 해제는 조용히)
+      if (was || natAnnounced()) toast(t('YOU LOST #1  ·  NATIONAL TEAM PACKAGE TAKEN BACK'));
+      setNatAnnounced('');
+    }
   }
   persist();
   syncMyLook();
@@ -3707,10 +3784,11 @@ function applyNationalStatus(unlocked, code, { silent = false } = {}) {
 let nationalChecking = false;
 async function checkNationalStatus() {
   if (nationalChecking) return;
-  if (!getSession() || !isServerReady()) {
+  if (!getSession()) {
     applyNationalStatus(false, '', { silent: true });
     return;
   }
+  if (!isServerReady()) return; // 로그인 데이터 불러오는 중: 상태를 건드리지 않음 (해제 → 재지급 알림 반복 방지)
   nationalChecking = true;
   try {
     const r = await leaderboard.myRank();
@@ -4108,7 +4186,10 @@ $('btnQuit').addEventListener('click', () => {
   finalizeRun();
   goMenu();
 });
+// 결과 화면에서 앱을 닫거나 다른 앱으로 가도 이번 판 기록을 남김 (예전엔 다시하기·홈을 눌러야만 기록돼 빠지는 판이 많았음)
+window.addEventListener('pagehide', () => { if (G.state === 'over') finalizeRun(); });
 document.addEventListener('visibilitychange', () => {
+  if (document.hidden && G.state === 'over') finalizeRun();
   if (document.hidden && G.state === 'playing') togglePause();
 });
 
@@ -4136,6 +4217,7 @@ function showGameOver() {
   $('hud').classList.add('hidden');
   $('brakeFx').classList.remove('on');
   const score = Math.floor(G.score);
+  clips.finalize(score); // 하이라이트 영상 마지막 화면에 이 판의 최종 점수
   const isRecord = score > save.best && score > 0;
   countUp($('goScore'), score);
   $('goNew').classList.toggle('hidden', !isRecord);
@@ -4219,15 +4301,18 @@ async function submitGlobal() {
   G.rankLine = `${t('{country} RANK', { country: countryName(save.country).toUpperCase() })} ${rank}`;
 }
 
+let buildNo = 0;
+webBuild().then((n) => { buildNo = n; });
 function finalizeRun() {
   if (G.finalized || !('score' in G)) return;
   G.finalized = true;
-  if (!isAdminMode()) {
-    webBuild().then((b) => logRun({
-      dist: G.distance, score: G.score, coins: G.earned, duration: G.time || 0, bike: save.bike,
-      theme: THEMES[G.themeIdx]?.code || '', country: save.country, appBuild: b ? `build ${b}` : APP_INFO.version,
-    }));
-  }
+  // 판 기록(관리자 페이지 '플레이 기록'): 관리자 계정 판도 남김(빌드 칸에 · admin 표시, 랭킹엔 여전히 안 올라감)
+  // 앱을 닫는 순간(pagehide)에도 바로 보낼 수 있게 빌드 번호는 미리 받아 둔 값 사용
+  const adm = isAdminMode();
+  logRun({
+    dist: G.distance, score: G.score, coins: G.earned, duration: G.time || 0, bike: save.bike,
+    theme: THEMES[G.themeIdx]?.code || '', country: save.country, appBuild: `${buildNo ? `build ${buildNo}` : APP_INFO.version}${adm ? ' · admin' : ''}`,
+  });
   const score = Math.floor(G.score);
   save.best = Math.max(save.best, score);
   save.stats.runs++;
@@ -4301,9 +4386,16 @@ function sceneShot() {
 
 let sharing = false;
 // 자랑하기: 이번 판 하이라이트 영상이 있으면 미리보기 창(영상 / 이미지 선택), 없으면 바로 이미지 카드
-$('btnShareCard').addEventListener('click', (e) => {
+$('btnShareCard').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  if (clips.ready && !clips.best) {
+    // 영상 마지막 화면(최종 점수)을 아직 만드는 중: 잠깐(최대 4초) 기다렸다가 열기
+    btn.classList.add('busy');
+    await Promise.race([clips.ready, new Promise((r) => setTimeout(r, 4000))]);
+    btn.classList.remove('busy');
+  }
   if (clips.best) openShareSheet();
-  else shareCard(e.currentTarget);
+  else shareCard(btn);
 });
 function openShareSheet() {
   const v = $('ssVideo');
@@ -4485,6 +4577,17 @@ if (DEBUG) {
       const sc = trickScore(trk.types, trk.turns);
       return { types: [...trk.types], turns: trk.turns, pts: sc.pts, title: trickTitle(trk.types, trk.turns) };
     },
+    // 착지 보조·착지 수평 맞춤이 더해 주는 각도 시험용
+    trickCreditSim: (seq, creditDeg) => {
+      trickReset();
+      for (const [ix, iy, deg] of seq) {
+        let left = (deg * Math.PI) / 180;
+        while (left > 1e-9) { const a = Math.min(left, AIR_SPIN / 60); trickFeed(ix, iy, a); left -= a; }
+      }
+      const before = trk.types.length;
+      trickCredit((creditDeg * Math.PI) / 180);
+      return { before, after: trk.types.length, types: [...trk.types] };
+    },
     jump: () => startJump({}),
     gameOver: () => showGameOver(),
     car: (type, lane, z) => spawnCar(z, { type, lane }),
@@ -4577,11 +4680,7 @@ function applyAppConfig(cfg) {
   if (cfg.notices) {
     const before = JSON.stringify(notices);
     setNotices(cfg.notices);
-    updateNoticeDot();
-    if (currentScreen === 'notices' && JSON.stringify(notices) !== before) {
-      renderNotices();
-      if (notices.length && save.noticeSeen !== notices[0].id) { save.noticeSeen = notices[0].id; persist(); updateNoticeDot(); }
-    }
+    noticesChanged(before);
   }
   // 가격·보상이 바뀌었을 때만 다시 그림 (1분마다 확인할 때 차고 화면이 튀지 않게)
   const eco = JSON.stringify(cfg.economy || null);
@@ -4597,7 +4696,7 @@ let configBusy = false;
 function pollConfig() {
   if (configBusy || document.hidden || G.state === 'playing') return;
   configBusy = true;
-  loadAppConfig().then(applyAppConfig).finally(() => { configBusy = false; });
+  Promise.all([loadAppConfig().then(applyAppConfig), refreshPersonalNotices()]).finally(() => { configBusy = false; });
 }
 setInterval(pollConfig, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { pollConfig(); pollSupport(true); } });

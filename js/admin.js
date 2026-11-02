@@ -45,8 +45,9 @@ async function http(path, { method = 'GET', body, auth = true } = {}) {
     // 테이블·함수가 아직 없을 때 (SQL 미실행) → 무엇을 실행해야 하는지 안내
     const miss = /Could not find the (table|function) '?public\.(\w+)/.exec(msg);
     if (miss) {
+      const v011 = ['my_notices', 'admin_send_notice', 'admin_list_sent_notices', 'admin_delete_player_notice'];
       const v010 = ['admin_list_runs', 'admin_update_run', 'admin_delete_run', 'admin_set_record', 'admin_update_player', 'admin_set_ban', 'admin_player_extra', 'admin_list_actions'];
-      const file = { app_config: '008_app_config.sql', admin_set_config: '008_app_config.sql' }[miss[2]] || (v010.includes(miss[2]) ? '010_admin_power.sql' : '009_ops.sql');
+      const file = { app_config: '008_app_config.sql', admin_set_config: '008_app_config.sql' }[miss[2]] || (v010.includes(miss[2]) ? '010_admin_power.sql' : v011.includes(miss[2]) ? '011_targeted_notices.sql' : '009_ops.sql');
       msg = `서버에 '${miss[2]}' ${miss[1] === 'table' ? '테이블' : '함수'}이 없어요. Supabase SQL Editor에서 supabase/migrations/${file} (또는 setup_all.sql) 를 실행한 뒤 새로고침하세요.`;
     }
     throw Object.assign(new Error(msg), { status: res.status });
@@ -171,7 +172,7 @@ function go(t) {
   $('nav').querySelector('.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   $('app').querySelector('.side').classList.remove('open');
   window.scrollTo(0, 0);
-  ({ dash: renderDash, inq: renderInq, notice: renderNotices, players: renderPlayers, runs: renderRuns, rank: renderRank, errors: renderErrors, econ: renderEcon, actions: renderActions })[t]();
+  return ({ dash: renderDash, inq: renderInq, notice: renderNotices, players: renderPlayers, runs: renderRuns, rank: renderRank, errors: renderErrors, econ: renderEcon, actions: renderActions })[t]();
 }
 $('moreBtn').onclick = (e) => { e.stopPropagation(); $('app').querySelector('.side').classList.toggle('open'); };
 document.addEventListener('click', (e) => { if (!e.target.closest('.side-foot')) $('app').querySelector('.side').classList.remove('open'); });
@@ -460,14 +461,16 @@ async function renderNotices() {
   const list = notices || DEFAULT_NOTICES;
   main().innerHTML = `<div class="head"><h2>공지</h2><div class="row"><button class="btn primary" id="nNew">+ 새 공지</button></div></div>
     ${stored ? '' : '<div class="card small">서버에 저장된 공지가 없어 게임에 들어 있는 기본 공지를 보여 줍니다. 새로 저장하면 서버 공지로 바뀝니다.</div>'}
-    <div class="card">${list.length ? list.map((n, i) => `<div class="notice-row"><div><span class="chip">${esc(n.tag)}</span> <b>${esc(n.i18n?.ko?.title || n.title)}</b> <span class="small muted">${esc(n.date)} · id ${esc(n.id)} · 번역 ${Object.keys(n.i18n || {}).length}개 언어</span>
+    <div class="card">${list.length ? list.map((n, i) => `<div class="notice-row"><div><span class="chip">${esc(n.tag)}</span> <b>${esc(n.i18n?.ko?.title || n.title)}</b> ${n.countries?.length ? `<span class="chip tgt">🎯 ${n.countries.map(esc).join(', ')}</span>` : '<span class="chip all">전체</span>'} <span class="small muted">${esc(n.date)} · id ${esc(n.id)} · 번역 ${Object.keys(n.i18n || {}).length}개 언어</span>
         <div class="small muted">${esc((n.i18n?.ko?.body || n.body).slice(0, 140))}</div></div>
         <div class="row"><button class="btn small" data-up="${i}" ${i ? '' : 'disabled'}>↑</button><button class="btn small" data-ed="${i}">수정</button><button class="btn small danger" data-del="${i}">삭제</button></div></div>`).join('') : '<p class="muted">공지가 없습니다.</p>'}</div>
-    <div id="nEditor"></div>`;
+    <div id="nEditor"></div>
+    <div class="card"><div class="head"><h3>📨 보낸 개인 공지</h3><span class="small muted">받는 사람만 게임 NEWS에서 볼 수 있어요</span></div><div id="nSent"><p class="muted small">불러오는 중…</p></div></div>`;
   $('nNew').onclick = () => editNotice(-1);
+  loadSentNotices();
   for (const b of main().querySelectorAll('[data-ed]')) b.onclick = () => editNotice(Number(b.dataset.ed));
   for (const b of main().querySelectorAll('[data-del]')) b.onclick = async () => {
-    if (!confirm('이 공지를 삭제할까요?')) return;
+    if (!(await confirmDialog('이 공지를 삭제할까요?', '', '삭제', true))) return;
     const arr = [...list];
     arr.splice(Number(b.dataset.del), 1);
     await saveNotices(arr);
@@ -478,6 +481,23 @@ async function renderNotices() {
     await saveNotices(arr);
   };
 }
+async function loadSentNotices() {
+  const box = $('nSent');
+  if (!box) return;
+  let rows;
+  try { rows = await rpc('admin_list_sent_notices', { p_limit: 100 }); } catch (e) {
+    box.innerHTML = `<p class="small msg">${/011_|my_notices|admin_list_sent_notices/.test(e.message) || e.status === 404 ? '개인 공지는 서버에 supabase/migrations/011_targeted_notices.sql 을 실행하면 켜집니다.' : esc(e.message)}</p>`;
+    return;
+  }
+  box.innerHTML = rows.length ? `<table><tr><th>보낸 시각</th><th>받는 사람</th><th>제목</th><th></th></tr>${rows.map((r) => `<tr><td>${when(r.created_at)}</td><td><a href="#" data-u="${r.user_id}">${esc(r.nickname || r.user_id.slice(0, 8))}</a></td>
+    <td><b>${esc(r.notice?.i18n?.ko?.title || r.notice?.title)}</b></td><td class="acts"><button class="btn small danger" data-pdel="${r.id}">삭제</button></td></tr>`).join('')}</table>`
+    : '<p class="muted small">아직 없어요.</p>';
+  for (const a of box.querySelectorAll('[data-u]')) a.onclick = (e) => { e.preventDefault(); openPlayer(a.dataset.u); };
+  for (const b of box.querySelectorAll('[data-pdel]')) b.onclick = async () => {
+    if (!(await confirmDialog('이 개인 공지를 삭제할까요?', '받는 사람의 NEWS에서도 사라집니다.', '삭제', true))) return;
+    try { await rpc('admin_delete_player_notice', { p_id: Number(b.dataset.pdel) }); toast('삭제했습니다'); loadSentNotices(); } catch (e) { toast(e.message); }
+  };
+}
 async function saveNotices(arr) {
   try {
     await rpc('admin_set_config', { p_key: 'notices', p_value: arr });
@@ -486,7 +506,8 @@ async function saveNotices(arr) {
     renderNotices();
   } catch (e) { toast(e.message); }
 }
-function editNotice(idx) {
+// preset: { users: [{ id, name }] } — 플레이어 상세에서 '개인 공지'로 열 때
+function editNotice(idx, preset = null) {
   editIdx = idx;
   const list = notices || DEFAULT_NOTICES;
   const n = idx >= 0 ? list[idx] : null;
@@ -496,6 +517,14 @@ function editNotice(idx) {
     <div class="notice-edit">
       <label>날짜<input id="neDate" value="${esc(n?.date || today)}"></label>
       <label>종류<select id="neTag">${TAGS.map((t) => `<option ${n?.tag === t ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      <div class="full tgt-box"><b>받는 사람</b>
+        <div class="row seg">${[['all', '🌏 전체'], ['country', '🎯 국가 선택'], ['users', '👤 특정 플레이어']].map(([v, l]) => `<label class="cb"><input type="radio" name="neTgt" value="${v}">${l}</label>`).join('')}</div>
+        <div id="neTgtCountry" class="hidden"><div class="chk-grid flags">${COUNTRY_CODES.map((c) => `<label class="chk"><input type="checkbox" data-nc value="${c}" ${n?.countries?.includes(c) ? 'checked' : ''}>${flag(c)}<span>${c}</span></label>`).join('')}</div>
+          <p class="small muted">고른 나라(랭킹 국가)의 플레이어에게만 보입니다.</p></div>
+        <div id="neTgtUsers" class="hidden"><div class="row"><input id="neUserQ" class="grow" placeholder="닉네임·아이디·UUID"><button type="button" class="btn small" id="neUserFind">찾기</button></div>
+          <div id="neUserRes" class="user-res"></div><div id="neUserSel" class="row"></div>
+          <p class="small muted">개인 공지는 받는 사람만 읽을 수 있게 서버에 따로 저장됩니다. 저장하면 바로 보내져요 (공개 공지 목록에는 들어가지 않음).</p></div>
+      </div>
       <label class="full">제목 (한국어로 쓰고 아래에서 번역)<input id="neTitle" maxlength="80" value="${esc(ko.title)}"></label>
       <label class="full">내용<textarea id="neBody" rows="5" maxlength="2000">${esc(ko.body)}</textarea></label>
       <div class="full row"><button class="btn" id="neTr">🌏 모든 언어로 번역</button><span class="small muted">게임은 플레이어 언어의 번역을 보여 주고, 없으면 영어를 보여 줍니다. 번역은 아래에서 고칠 수 있습니다.</span></div>
@@ -508,6 +537,33 @@ function editNotice(idx) {
     </div></div>`;
   $('nEditor').scrollIntoView({ behavior: 'smooth' });
   $('neCancel').onclick = () => { $('nEditor').innerHTML = ''; };
+  // 받는 사람
+  const picked = new Map((preset?.users || []).map((u) => [u.id, u.name]));
+  const tgt0 = preset?.users?.length ? 'users' : n?.countries?.length ? 'country' : 'all';
+  const radios = [...$('nEditor').querySelectorAll('[name=neTgt]')];
+  const syncTgt = () => {
+    const v = radios.find((r) => r.checked)?.value;
+    $('neTgtCountry').classList.toggle('hidden', v !== 'country');
+    $('neTgtUsers').classList.toggle('hidden', v !== 'users');
+    $('neSave').textContent = v === 'users' ? '📨 개인 공지 보내기' : '저장해서 게시';
+  };
+  for (const r of radios) { r.checked = r.value === tgt0; r.onchange = syncTgt; if (n && r.value === 'users') r.disabled = true; } // 공개 공지 수정 중엔 개인 공지로 못 바꿈
+  const paintPicked = () => {
+    $('neUserSel').innerHTML = [...picked].map(([id, name]) => `<span class="pill">👤 ${esc(name)} <button type="button" class="btn small" data-unpick="${id}">✕</button></span>`).join('') || '<span class="small muted">아직 고른 플레이어가 없어요.</span>';
+    for (const b of $('neUserSel').querySelectorAll('[data-unpick]')) b.onclick = () => { picked.delete(b.dataset.unpick); paintPicked(); };
+  };
+  const findUsers = async () => {
+    $('neUserRes').innerHTML = '<span class="small muted">찾는 중…</span>';
+    try {
+      const rows = await rpc('admin_search_players', { p_q: $('neUserQ').value.trim(), p_country: null, p_limit: 20 });
+      $('neUserRes').innerHTML = rows.map((r) => `<button type="button" class="btn small" data-pick="${r.user_id}" data-name="${esc(r.nickname)}">${flag(r.country_code)}${esc(r.nickname)} <span class="muted">${esc(r.login_id)}</span></button>`).join('') || '<span class="small muted">결과 없음</span>';
+      for (const b of $('neUserRes').querySelectorAll('[data-pick]')) b.onclick = () => { picked.set(b.dataset.pick, b.dataset.name); paintPicked(); };
+    } catch (e) { $('neUserRes').innerHTML = `<span class="small msg">${esc(e.message)}</span>`; }
+  };
+  $('neUserFind').onclick = findUsers;
+  $('neUserQ').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); findUsers(); } };
+  paintPicked();
+  syncTgt();
   $('neTr').onclick = (e) => withBusy(e.target, '번역 중… (언어 8개)', async () => {
     const title = $('neTitle').value.trim(), body = $('neBody').value.trim();
     if (!title) return toast('제목을 먼저 쓰세요');
@@ -531,6 +587,22 @@ function editNotice(idx) {
     const en = { title: get('en', 'title') || title, body: get('en', 'body') || body };
     const keepId = n && !$('neBump').checked;
     const item = { id: keepId ? n.id : `${$('neDate').value}-${Date.now().toString(36)}`, date: $('neDate').value, tag: $('neTag').value, title: en.title, body: en.body, i18n };
+    const tgt = radios.find((r) => r.checked)?.value || 'all';
+    if (tgt === 'users') {
+      if (!picked.size) return toast('받을 플레이어를 고르세요');
+      if (!(await confirmDialog('개인 공지를 보낼까요?', `${[...picked.values()].map(esc).join(', ')} (${picked.size}명)에게 「${esc(title)}」`, '보내기'))) return;
+      try {
+        const sent = await rpc('admin_send_notice', { p_users: [...picked.keys()], p_notice: { date: item.date, tag: item.tag, title: item.title, body: item.body, i18n } });
+        toast(`${fmt(sent)}명에게 보냈습니다`);
+        $('nEditor').innerHTML = '';
+        loadSentNotices();
+      } catch (e) { toast(e.message); }
+      return;
+    }
+    if (tgt === 'country') {
+      item.countries = [...$('nEditor').querySelectorAll('[data-nc]:checked')].map((c) => c.value);
+      if (!item.countries.length) return toast('나라를 하나 이상 고르세요');
+    }
     const arr = [...(notices || DEFAULT_NOTICES)];
     if (editIdx >= 0) arr.splice(editIdx, 1);
     arr.unshift(item); // 새로 저장한 공지가 맨 위 (게임의 '새 공지' 점 기준)
@@ -579,6 +651,7 @@ async function openPlayer(uid) {
       <button class="btn" id="dEdit" ${has010 ? '' : 'disabled'}>✏️ 재산·프로필 수정</button>
       <button class="btn" id="dRec" ${has010 ? '' : 'disabled'}>🏆 랭킹 기록 수정</button>
       <button class="btn" id="dRuns" ${has010 ? '' : 'disabled'}>🎮 플레이 기록</button>
+      <button class="btn" id="dNotice">📨 개인 공지</button>
       ${p.is_admin ? '' : `<button class="btn ${ex?.banned ? '' : 'danger'}" id="dBan" ${has010 ? '' : 'disabled'}>${ex?.banned ? '✅ 정지 해제' : '🚫 정지'}</button>`}
     </div>
     ${has010 ? '' : '<p class="small msg">수정·정지 기능은 서버에 supabase/migrations/010_admin_power.sql 을 실행하면 켜집니다.</p>'}
@@ -601,6 +674,7 @@ async function openPlayer(uid) {
     <div class="card"><h3>관리자 조치 기록</h3><table><tr><th>시간</th><th>작업</th><th>내용</th></tr>${p.admin_actions.map((x) => `<tr><td>${when(x.created_at)}</td><td>${esc(ACTION_NAMES[x.action] || x.action)}</td><td>${describeAction(x.action, x.detail)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">없음</td></tr>'}</table></div>
     <details class="card"><summary>저장 데이터 원본 (JSON)</summary><pre>${esc(JSON.stringify(d, null, 1))}</pre></details>`;
   $('dGrant').onclick = () => grantCoins(uid, '', () => openPlayer(uid));
+  $('dNotice').onclick = async () => { $('drawer').classList.add('hidden'); notices = null; await go('notice'); editNotice(-1, { users: [{ id: uid, name: p.nickname }] }); };
   if (!has010) return wireInq(body);
   $('dEdit').onclick = () => editAssets(p, uid);
   $('dRec').onclick = () => editRecord(p, uid);
@@ -775,7 +849,7 @@ async function renderRuns() {
   $('ruRes').innerHTML = rows.length ? `<div class="small muted">${fmt(total)}판 · ⚠ 표시는 속도·점수가 비정상적으로 높은 판</div><div class="scroll"><table><tr><th>시간</th><th>플레이어</th><th>맵</th><th class="num">점수</th><th class="num">거리</th><th class="num">코인</th><th class="num">플레이</th><th>바이크</th><th>빌드</th><th>관리</th></tr>
     ${rows.map((r) => `<tr><td>${when(r.created_at)}</td><td>${r.user_id ? `<a href="#" data-u="${r.user_id}"><b>${esc(r.nickname || r.login_id)}</b></a>` : '<span class="muted">게스트</span>'} ${flag(r.country_code)}</td>
       <td>${flag(r.theme)}${esc(r.theme)}</td><td class="num"><b>${fmt(r.score)}</b>${suspicious(r) ? ' <span class="chip warn" title="비정상적으로 빠름">⚠</span>' : ''}</td><td class="num">${fmt(r.dist)} m</td><td class="num">${fmt(r.coins)}</td>
-      <td class="num">${fmt(r.duration_s)}초</td><td>${esc(itemName(BIKES, r.bike))}</td><td class="small">${esc(r.app_build)}</td>
+      <td class="num">${fmt(r.duration_s)}초</td><td>${esc(itemName(BIKES, r.bike))}</td><td class="small">${/admin/.test(r.app_build) ? '<span class="chip">관리자 판</span> ' : ''}${esc(String(r.app_build || '').replace(' · admin', ''))}</td>
       <td class="acts"><button class="btn small" data-edit="${r.id}">수정</button> <button class="btn small danger" data-del="${r.id}">삭제</button></td></tr>`).join('')}</table></div>
     <div class="pager"><button class="btn small" id="ruPrev" ${runF.page ? '' : 'disabled'}>← 이전</button><span class="small muted">${fmt(from + 1)}–${fmt(from + rows.length)} / ${fmt(total)}</span><button class="btn small" id="ruNext" ${from + rows.length < total ? '' : 'disabled'}>다음 →</button></div>
     <p class="small muted">플레이 기록 수정·삭제는 통계용 기록만 바꿉니다. 랭킹 최고 기록은 플레이어 상세의 <b>랭킹 기록 수정</b>에서 바꾸세요.</p>`
@@ -806,12 +880,13 @@ async function renderRuns() {
 }
 
 // ---------------------------------------------------------------- 관리자 작업 기록 (admin_actions)
-const ACTION_NAMES = { grant_coins: '💰 코인 지급 예약', edit_run: '🎮 플레이 기록 수정', delete_run: '🗑 플레이 기록 삭제', edit_record: '🏆 랭킹 기록 수정', remove_record: '🏆 랭킹에서 제외', edit_player: '✏️ 재산·프로필 수정', ban: '🚫 정지', unban: '✅ 정지 해제' };
+const ACTION_NAMES = { send_notice: '📨 개인 공지', grant_coins: '💰 코인 지급 예약', edit_run: '🎮 플레이 기록 수정', delete_run: '🗑 플레이 기록 삭제', edit_record: '🏆 랭킹 기록 수정', remove_record: '🏆 랭킹에서 제외', edit_player: '✏️ 재산·프로필 수정', ban: '🚫 정지', unban: '✅ 정지 해제' };
 const KEY_NAMES = { coins: '코인', streak: '출석', boosts: '부스트', ownedBikes: '바이크', ownedBoxes: '배달통', ownedHelmets: '헤드기어', ownedOutfits: '의상', ownedPaints: '페인트', ownedFlags: '국기', bike: '장착 바이크', box: '장착 배달통', helmet: '장착 헤드기어', outfit: '장착 의상', flag: '장착 국기', nickname: '닉네임', country_code: '국가' };
 function describeAction(action, d = {}) {
   const why = d.reason ? ` <span class="muted">· 사유: ${esc(d.reason)}</span>` : '';
   const sv = (v) => (Array.isArray(v) ? `${v.length}개` : v && typeof v === 'object' ? Object.entries(v).filter(([, n]) => n).map(([k, n]) => `${k}×${n}`).join(' ') || '없음' : typeof v === 'number' ? fmt(v) : esc(v ?? '-'));
   if (action === 'grant_coins') return `+${fmt(d.amount)} 코인${why}`;
+  if (action === 'send_notice') return `「${esc(d.title)}」`;
   if (action === 'edit_run') return `#${d.run_id} 점수 ${fmt(d.before?.score)}→${fmt(d.after?.score)} · 거리 ${fmt(d.before?.dist)}→${fmt(d.after?.dist)} · 코인 ${fmt(d.before?.coins)}→${fmt(d.after?.coins)}${why}`;
   if (action === 'delete_run') return `#${d.run?.id} (${fmt(d.run?.score)}점 · ${fmt(d.run?.dist)} m)${why}`;
   if (action === 'edit_record') return `${fmt(d.before?.score)}점 → ${fmt(d.after?.score)}점 · ${fmt(d.before?.dist)} → ${fmt(d.after?.dist)} m${why}`;

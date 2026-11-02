@@ -1400,3 +1400,5 @@ body.touch #menu .help { display: none; }
 /* 자랑하기 창은 게임 UI 층(터치 무시) 안에 있으므로 창 전체가 터치를 받도록 (X·바깥 눌러 닫기) */
 .share-sheet, .share-sheet * { pointer-events: auto; }
 .ss-x { display: grid; place-items: center; touch-action: manipulation; }
+
+#btnShareCard.busy { opacity: 0.6; pointer-events: none; animation: pulse 0.8s ease-in-out infinite alternate; }

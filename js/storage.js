@@ -563,6 +563,17 @@ export function applyEconomy(e) {
     }
   }
 }
+// 나에게만 온 개인 공지 (011). 로그인 안 했거나 서버에 011 이 없으면 []
+export async function myNotices() {
+  if (!session || !ONLINE) return [];
+  try {
+    const r = await rpc('my_notices', {});
+    return Array.isArray(r) ? r : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 export async function loadAppConfig() {
   if (!ONLINE) return null;
   try {

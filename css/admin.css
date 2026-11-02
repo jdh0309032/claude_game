@@ -219,3 +219,14 @@ a[data-u]:hover b, a[data-u]:hover { color: var(--green-d); text-decoration: und
   .chk-grid.flags { grid-template-columns: repeat(4, 1fr); }
   .form-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* 공지 대상 */
+.chip.tgt { background: var(--blue); }
+.chip.all { background: #8d99ae; }
+.tgt-box { display: flex; flex-direction: column; gap: 8px; background: #f6f8f7; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.tgt-box > b { font-size: 12px; color: var(--muted); }
+.seg { gap: 14px; }
+.seg label.cb { font-weight: 700; }
+.user-res { display: flex; flex-wrap: wrap; gap: 6px; }
+#neUserSel { gap: 6px; }
+#neUserSel .pill { flex: 0 0 auto; }
