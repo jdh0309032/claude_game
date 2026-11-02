@@ -376,6 +376,7 @@ export default {
 "GET IT ON GOOGLE PLAY": "Google Play တွင် ရယူပါ",
 "UPDATING TO THE NEW VERSION...": "ဗားရှင်းအသစ်သို့ အပ်ဒိတ်လုပ်နေသည်...",
 "BARREL ROLL": "ဘေးလှိမ့်",
+"ACCOUNT UPDATED BY SUPPORT": "အကူအညီဌာနက သင့်အကောင့်ကို အပ်ဒိတ်လုပ်ပြီးပါပြီ",
 "Starter delivery scooter": "စတင်သူအတွက် ပို့ဆောင်ရေးစကူတာ",
 "Nimble in tight traffic": "ကားကြပ်ထဲတွင် လျင်မြန်သွက်လက်",
 "Chrome and leather charm": "ခရုမ်းနှင့် သားရေ၏ ဆွဲဆောင်မှု",

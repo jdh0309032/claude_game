@@ -3,7 +3,7 @@
 // - 데이터는 Supabase 관리자 전용 RPC(009_ops.sql)로만 읽고 씀 → 공개 키만 사용, 비밀 키 없음
 // - 번역: 기본은 온라인 번역(js/mt.js, 빠르고 휴대폰에서도 됨). 선택하면 오픈소스 M2M100 을 브라우저 워커에서 실행 (js/admin-mt-worker.js)
 // - 실시간: 문의·공지는 몇 초마다 서버를 다시 확인해 새로고침 없이 갱신
-import { SUPABASE_URL, SUPABASE_ANON_KEY, ID_EMAIL_DOMAIN, ECON, DEFAULT_NOTICES, BIKES, BOXES, OUTFITS, HELMETS } from './config.js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, ID_EMAIL_DOMAIN, ECON, DEFAULT_NOTICES, BIKES, BOXES, OUTFITS, HELMETS, PAINTS, BOOSTS, FLAG_SHOP_CODES } from './config.js';
 import { THEMES, countryName } from './themes.js';
 import { machineTranslate } from './mt.js';
 
@@ -45,7 +45,9 @@ async function http(path, { method = 'GET', body, auth = true } = {}) {
     // 테이블·함수가 아직 없을 때 (SQL 미실행) → 무엇을 실행해야 하는지 안내
     const miss = /Could not find the (table|function) '?public\.(\w+)/.exec(msg);
     if (miss) {
-      const file = { app_config: '008_app_config.sql', admin_set_config: '008_app_config.sql' }[miss[2]] || '009_ops.sql';
+      const v011 = ['my_notices', 'admin_send_notice', 'admin_list_sent_notices', 'admin_delete_player_notice'];
+      const v010 = ['admin_list_runs', 'admin_update_run', 'admin_delete_run', 'admin_set_record', 'admin_update_player', 'admin_set_ban', 'admin_player_extra', 'admin_list_actions'];
+      const file = { app_config: '008_app_config.sql', admin_set_config: '008_app_config.sql' }[miss[2]] || (v010.includes(miss[2]) ? '010_admin_power.sql' : v011.includes(miss[2]) ? '011_targeted_notices.sql' : '009_ops.sql');
       msg = `서버에 '${miss[2]}' ${miss[1] === 'table' ? '테이블' : '함수'}이 없어요. Supabase SQL Editor에서 supabase/migrations/${file} (또는 setup_all.sql) 를 실행한 뒤 새로고침하세요.`;
     }
     throw Object.assign(new Error(msg), { status: res.status });
@@ -167,8 +169,69 @@ function go(t) {
   tab = t;
   if (t === 'notice') notices = null; // 공지 탭을 열 때마다 서버의 최신 공지를 다시 받음
   for (const b of $('nav').children) b.classList.toggle('on', b.dataset.tab === t);
-  ({ dash: renderDash, inq: renderInq, notice: renderNotices, players: renderPlayers, rank: renderRank, errors: renderErrors, econ: renderEcon })[t]();
+  $('nav').querySelector('.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  $('app').querySelector('.side').classList.remove('open');
+  window.scrollTo(0, 0);
+  return ({ dash: renderDash, inq: renderInq, notice: renderNotices, players: renderPlayers, runs: renderRuns, rank: renderRank, errors: renderErrors, econ: renderEcon, actions: renderActions })[t]();
 }
+$('moreBtn').onclick = (e) => { e.stopPropagation(); $('app').querySelector('.side').classList.toggle('open'); };
+document.addEventListener('click', (e) => { if (!e.target.closest('.side-foot')) $('app').querySelector('.side').classList.remove('open'); });
+
+// ---------------------------------------------------------------- 휴대폰: 표 → 카드 (머리줄 글자를 각 칸의 이름표로)
+function labelize(root) {
+  if (!root) return;
+  for (const t of root.querySelectorAll('table')) {
+    if (t.dataset.lz === String(t.rows.length)) continue;
+    const head = t.rows[0];
+    if (!head || !head.querySelector('th')) continue;
+    const labels = [...head.cells].map((c) => c.textContent.trim());
+    t.classList.add('rt');
+    for (const r of [...t.rows].slice(1)) [...r.cells].forEach((c, i) => { if (!c.dataset.label && labels[i]) c.dataset.label = labels[i]; });
+    t.dataset.lz = String(t.rows.length);
+  }
+}
+new MutationObserver(() => { labelize($('main')); labelize($('drawerBody')); }).observe(document.body, { childList: true, subtree: true });
+
+// ---------------------------------------------------------------- 입력 대화상자 (prompt 대신. 휴대폰에선 아래에서 올라오는 시트)
+// fields: [{ key, label, type: text|number|checkbox|select|textarea, value, min, max, required, options: [[v, label]], hint }]
+function formDialog({ title, desc = '', fields = [], ok = '확인', danger = false }) {
+  return new Promise((resolve) => {
+    const f = $('dlgForm');
+    const input = (x) => {
+      const v = esc(x.value ?? '');
+      if (x.type === 'checkbox') return `<label class="cb"><input type="checkbox" name="${x.key}" ${x.value ? 'checked' : ''}>${esc(x.label)}</label>`;
+      if (x.type === 'select') return `<label>${esc(x.label)}<select name="${x.key}">${x.options.map(([o, l]) => `<option value="${esc(o)}" ${String(o) === String(x.value) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
+      if (x.type === 'textarea') return `<label>${esc(x.label)}<textarea name="${x.key}" rows="3">${v}</textarea></label>`;
+      return `<label>${esc(x.label)}<input name="${x.key}" type="${x.type || 'text'}" value="${v}" ${x.min != null ? `min="${x.min}"` : ''} ${x.max != null ? `max="${x.max}"` : ''} ${x.type === 'number' ? 'inputmode="numeric"' : ''} autocomplete="off">${x.hint ? `<small class="muted">${esc(x.hint)}</small>` : ''}</label>`;
+    };
+    f.innerHTML = `<h3>${esc(title)}</h3>${desc ? `<div class="small muted">${desc}</div>` : ''}${fields.map(input).join('')}
+      <p class="msg" id="dlgMsg"></p>
+      <div class="dlg-btns"><button type="button" class="btn" data-x>취소</button><button class="btn ${danger ? 'danger-fill' : 'primary'}">${esc(ok)}</button></div>`;
+    $('dlg').classList.remove('hidden');
+    const close = (v) => { $('dlg').classList.add('hidden'); f.onsubmit = null; resolve(v); };
+    f.querySelector('[data-x]').onclick = () => close(null);
+    $('dlg').onclick = (e) => { if (e.target === $('dlg')) close(null); };
+    f.onsubmit = (e) => {
+      e.preventDefault();
+      const out = {};
+      for (const x of fields) {
+        const el = f.elements[x.key];
+        let v = x.type === 'checkbox' ? el.checked : el.value.trim();
+        if (x.type === 'number') {
+          if (v === '' && !x.required) { out[x.key] = null; continue; }
+          v = Number(v);
+          if (!Number.isFinite(v) || (x.min != null && v < x.min) || (x.max != null && v > x.max)) { $('dlgMsg').textContent = `${x.label}: ${x.min ?? ''} ~ ${x.max ?? ''} 사이 숫자`; return; }
+          v = Math.round(v);
+        }
+        if (x.required && (v === '' || v == null)) { $('dlgMsg').textContent = `${x.label}을(를) 입력하세요`; el.focus(); return; }
+        out[x.key] = v;
+      }
+      close(out);
+    };
+    setTimeout(() => f.querySelector('input:not([type=checkbox]),select,textarea')?.focus(), 50);
+  });
+}
+const confirmDialog = (title, desc, ok = '확인', danger = false) => formDialog({ title, desc, ok, danger }).then((v) => v != null);
 const main = () => $('main');
 const fail = (e) => { main().innerHTML += `<div class="card msg">${esc(e.message)}</div>`; };
 
@@ -398,14 +461,16 @@ async function renderNotices() {
   const list = notices || DEFAULT_NOTICES;
   main().innerHTML = `<div class="head"><h2>공지</h2><div class="row"><button class="btn primary" id="nNew">+ 새 공지</button></div></div>
     ${stored ? '' : '<div class="card small">서버에 저장된 공지가 없어 게임에 들어 있는 기본 공지를 보여 줍니다. 새로 저장하면 서버 공지로 바뀝니다.</div>'}
-    <div class="card">${list.length ? list.map((n, i) => `<div class="notice-row"><div><span class="chip">${esc(n.tag)}</span> <b>${esc(n.i18n?.ko?.title || n.title)}</b> <span class="small muted">${esc(n.date)} · id ${esc(n.id)} · 번역 ${Object.keys(n.i18n || {}).length}개 언어</span>
+    <div class="card">${list.length ? list.map((n, i) => `<div class="notice-row"><div><span class="chip">${esc(n.tag)}</span> <b>${esc(n.i18n?.ko?.title || n.title)}</b> ${n.countries?.length ? `<span class="chip tgt">🎯 ${n.countries.map(esc).join(', ')}</span>` : '<span class="chip all">전체</span>'} <span class="small muted">${esc(n.date)} · id ${esc(n.id)} · 번역 ${Object.keys(n.i18n || {}).length}개 언어</span>
         <div class="small muted">${esc((n.i18n?.ko?.body || n.body).slice(0, 140))}</div></div>
         <div class="row"><button class="btn small" data-up="${i}" ${i ? '' : 'disabled'}>↑</button><button class="btn small" data-ed="${i}">수정</button><button class="btn small danger" data-del="${i}">삭제</button></div></div>`).join('') : '<p class="muted">공지가 없습니다.</p>'}</div>
-    <div id="nEditor"></div>`;
+    <div id="nEditor"></div>
+    <div class="card"><div class="head"><h3>📨 보낸 개인 공지</h3><span class="small muted">받는 사람만 게임 NEWS에서 볼 수 있어요</span></div><div id="nSent"><p class="muted small">불러오는 중…</p></div></div>`;
   $('nNew').onclick = () => editNotice(-1);
+  loadSentNotices();
   for (const b of main().querySelectorAll('[data-ed]')) b.onclick = () => editNotice(Number(b.dataset.ed));
   for (const b of main().querySelectorAll('[data-del]')) b.onclick = async () => {
-    if (!confirm('이 공지를 삭제할까요?')) return;
+    if (!(await confirmDialog('이 공지를 삭제할까요?', '', '삭제', true))) return;
     const arr = [...list];
     arr.splice(Number(b.dataset.del), 1);
     await saveNotices(arr);
@@ -416,6 +481,23 @@ async function renderNotices() {
     await saveNotices(arr);
   };
 }
+async function loadSentNotices() {
+  const box = $('nSent');
+  if (!box) return;
+  let rows;
+  try { rows = await rpc('admin_list_sent_notices', { p_limit: 100 }); } catch (e) {
+    box.innerHTML = `<p class="small msg">${/011_|my_notices|admin_list_sent_notices/.test(e.message) || e.status === 404 ? '개인 공지는 서버에 supabase/migrations/011_targeted_notices.sql 을 실행하면 켜집니다.' : esc(e.message)}</p>`;
+    return;
+  }
+  box.innerHTML = rows.length ? `<table><tr><th>보낸 시각</th><th>받는 사람</th><th>제목</th><th></th></tr>${rows.map((r) => `<tr><td>${when(r.created_at)}</td><td><a href="#" data-u="${r.user_id}">${esc(r.nickname || r.user_id.slice(0, 8))}</a></td>
+    <td><b>${esc(r.notice?.i18n?.ko?.title || r.notice?.title)}</b></td><td class="acts"><button class="btn small danger" data-pdel="${r.id}">삭제</button></td></tr>`).join('')}</table>`
+    : '<p class="muted small">아직 없어요.</p>';
+  for (const a of box.querySelectorAll('[data-u]')) a.onclick = (e) => { e.preventDefault(); openPlayer(a.dataset.u); };
+  for (const b of box.querySelectorAll('[data-pdel]')) b.onclick = async () => {
+    if (!(await confirmDialog('이 개인 공지를 삭제할까요?', '받는 사람의 NEWS에서도 사라집니다.', '삭제', true))) return;
+    try { await rpc('admin_delete_player_notice', { p_id: Number(b.dataset.pdel) }); toast('삭제했습니다'); loadSentNotices(); } catch (e) { toast(e.message); }
+  };
+}
 async function saveNotices(arr) {
   try {
     await rpc('admin_set_config', { p_key: 'notices', p_value: arr });
@@ -424,7 +506,8 @@ async function saveNotices(arr) {
     renderNotices();
   } catch (e) { toast(e.message); }
 }
-function editNotice(idx) {
+// preset: { users: [{ id, name }] } — 플레이어 상세에서 '개인 공지'로 열 때
+function editNotice(idx, preset = null) {
   editIdx = idx;
   const list = notices || DEFAULT_NOTICES;
   const n = idx >= 0 ? list[idx] : null;
@@ -434,6 +517,14 @@ function editNotice(idx) {
     <div class="notice-edit">
       <label>날짜<input id="neDate" value="${esc(n?.date || today)}"></label>
       <label>종류<select id="neTag">${TAGS.map((t) => `<option ${n?.tag === t ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      <div class="full tgt-box"><b>받는 사람</b>
+        <div class="row seg">${[['all', '🌏 전체'], ['country', '🎯 국가 선택'], ['users', '👤 특정 플레이어']].map(([v, l]) => `<label class="cb"><input type="radio" name="neTgt" value="${v}">${l}</label>`).join('')}</div>
+        <div id="neTgtCountry" class="hidden"><div class="chk-grid flags">${COUNTRY_CODES.map((c) => `<label class="chk"><input type="checkbox" data-nc value="${c}" ${n?.countries?.includes(c) ? 'checked' : ''}>${flag(c)}<span>${c}</span></label>`).join('')}</div>
+          <p class="small muted">고른 나라(랭킹 국가)의 플레이어에게만 보입니다.</p></div>
+        <div id="neTgtUsers" class="hidden"><div class="row"><input id="neUserQ" class="grow" placeholder="닉네임·아이디·UUID"><button type="button" class="btn small" id="neUserFind">찾기</button></div>
+          <div id="neUserRes" class="user-res"></div><div id="neUserSel" class="row"></div>
+          <p class="small muted">개인 공지는 받는 사람만 읽을 수 있게 서버에 따로 저장됩니다. 저장하면 바로 보내져요 (공개 공지 목록에는 들어가지 않음).</p></div>
+      </div>
       <label class="full">제목 (한국어로 쓰고 아래에서 번역)<input id="neTitle" maxlength="80" value="${esc(ko.title)}"></label>
       <label class="full">내용<textarea id="neBody" rows="5" maxlength="2000">${esc(ko.body)}</textarea></label>
       <div class="full row"><button class="btn" id="neTr">🌏 모든 언어로 번역</button><span class="small muted">게임은 플레이어 언어의 번역을 보여 주고, 없으면 영어를 보여 줍니다. 번역은 아래에서 고칠 수 있습니다.</span></div>
@@ -446,6 +537,33 @@ function editNotice(idx) {
     </div></div>`;
   $('nEditor').scrollIntoView({ behavior: 'smooth' });
   $('neCancel').onclick = () => { $('nEditor').innerHTML = ''; };
+  // 받는 사람
+  const picked = new Map((preset?.users || []).map((u) => [u.id, u.name]));
+  const tgt0 = preset?.users?.length ? 'users' : n?.countries?.length ? 'country' : 'all';
+  const radios = [...$('nEditor').querySelectorAll('[name=neTgt]')];
+  const syncTgt = () => {
+    const v = radios.find((r) => r.checked)?.value;
+    $('neTgtCountry').classList.toggle('hidden', v !== 'country');
+    $('neTgtUsers').classList.toggle('hidden', v !== 'users');
+    $('neSave').textContent = v === 'users' ? '📨 개인 공지 보내기' : '저장해서 게시';
+  };
+  for (const r of radios) { r.checked = r.value === tgt0; r.onchange = syncTgt; if (n && r.value === 'users') r.disabled = true; } // 공개 공지 수정 중엔 개인 공지로 못 바꿈
+  const paintPicked = () => {
+    $('neUserSel').innerHTML = [...picked].map(([id, name]) => `<span class="pill">👤 ${esc(name)} <button type="button" class="btn small" data-unpick="${id}">✕</button></span>`).join('') || '<span class="small muted">아직 고른 플레이어가 없어요.</span>';
+    for (const b of $('neUserSel').querySelectorAll('[data-unpick]')) b.onclick = () => { picked.delete(b.dataset.unpick); paintPicked(); };
+  };
+  const findUsers = async () => {
+    $('neUserRes').innerHTML = '<span class="small muted">찾는 중…</span>';
+    try {
+      const rows = await rpc('admin_search_players', { p_q: $('neUserQ').value.trim(), p_country: null, p_limit: 20 });
+      $('neUserRes').innerHTML = rows.map((r) => `<button type="button" class="btn small" data-pick="${r.user_id}" data-name="${esc(r.nickname)}">${flag(r.country_code)}${esc(r.nickname)} <span class="muted">${esc(r.login_id)}</span></button>`).join('') || '<span class="small muted">결과 없음</span>';
+      for (const b of $('neUserRes').querySelectorAll('[data-pick]')) b.onclick = () => { picked.set(b.dataset.pick, b.dataset.name); paintPicked(); };
+    } catch (e) { $('neUserRes').innerHTML = `<span class="small msg">${esc(e.message)}</span>`; }
+  };
+  $('neUserFind').onclick = findUsers;
+  $('neUserQ').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); findUsers(); } };
+  paintPicked();
+  syncTgt();
   $('neTr').onclick = (e) => withBusy(e.target, '번역 중… (언어 8개)', async () => {
     const title = $('neTitle').value.trim(), body = $('neBody').value.trim();
     if (!title) return toast('제목을 먼저 쓰세요');
@@ -469,6 +587,22 @@ function editNotice(idx) {
     const en = { title: get('en', 'title') || title, body: get('en', 'body') || body };
     const keepId = n && !$('neBump').checked;
     const item = { id: keepId ? n.id : `${$('neDate').value}-${Date.now().toString(36)}`, date: $('neDate').value, tag: $('neTag').value, title: en.title, body: en.body, i18n };
+    const tgt = radios.find((r) => r.checked)?.value || 'all';
+    if (tgt === 'users') {
+      if (!picked.size) return toast('받을 플레이어를 고르세요');
+      if (!(await confirmDialog('개인 공지를 보낼까요?', `${[...picked.values()].map(esc).join(', ')} (${picked.size}명)에게 「${esc(title)}」`, '보내기'))) return;
+      try {
+        const sent = await rpc('admin_send_notice', { p_users: [...picked.keys()], p_notice: { date: item.date, tag: item.tag, title: item.title, body: item.body, i18n } });
+        toast(`${fmt(sent)}명에게 보냈습니다`);
+        $('nEditor').innerHTML = '';
+        loadSentNotices();
+      } catch (e) { toast(e.message); }
+      return;
+    }
+    if (tgt === 'country') {
+      item.countries = [...$('nEditor').querySelectorAll('[data-nc]:checked')].map((c) => c.value);
+      if (!item.countries.length) return toast('나라를 하나 이상 고르세요');
+    }
     const arr = [...(notices || DEFAULT_NOTICES)];
     if (editIdx >= 0) arr.splice(editIdx, 1);
     arr.unshift(item); // 새로 저장한 공지가 맨 위 (게임의 '새 공지' 점 기준)
@@ -502,43 +636,290 @@ async function openPlayer(uid) {
   $('drawer').classList.remove('hidden');
   const body = $('drawerBody');
   body.innerHTML = '<p class="muted">불러오는 중…</p>';
-  let p;
-  try { p = await rpc('admin_player_detail', { p_user: uid }); } catch (e) { body.innerHTML = `<p class="msg">${esc(e.message)}</p>`; return; }
+  let p, ex = null;
+  try {
+    [p, ex] = await Promise.all([rpc('admin_player_detail', { p_user: uid }), rpc('admin_player_extra', { p_user: uid }).catch(() => null)]);
+  } catch (e) { body.innerHTML = `<p class="msg">${esc(e.message)}</p>`; return; }
   if (!p) { body.innerHTML = '<p class="msg">플레이어 없음</p>'; return; }
   const d = p.data || {};
   const own = (k) => (Array.isArray(d[k]) ? d[k].length : 0);
-  body.innerHTML = `<div class="card"><div class="head"><div><h2>${esc(p.nickname)} ${p.is_admin ? '<span class="chip">관리자</span>' : ''}</h2>
-      <div class="small muted">${esc(p.login_id)} · ${esc(p.user_id)}</div></div><button class="btn" id="dGrant">💰 코인 지급</button></div>
+  const has010 = Boolean(ex);
+  body.innerHTML = `<div class="card"><div class="head"><div><h2>${esc(p.nickname)} ${p.is_admin ? '<span class="chip">관리자</span>' : ''}${ex?.banned ? ' <span class="chip ban">정지됨</span>' : ''}</h2>
+      <div class="small muted">${esc(p.login_id)} · ${esc(p.user_id)}</div>${ex?.banned && ex.ban_reason ? `<div class="small msg">정지 사유: ${esc(ex.ban_reason)}</div>` : ''}</div></div>
+    <div class="act-row">
+      <button class="btn" id="dGrant">💰 코인 지급</button>
+      <button class="btn" id="dEdit" ${has010 ? '' : 'disabled'}>✏️ 재산·프로필 수정</button>
+      <button class="btn" id="dRec" ${has010 ? '' : 'disabled'}>🏆 랭킹 기록 수정</button>
+      <button class="btn" id="dRuns" ${has010 ? '' : 'disabled'}>🎮 플레이 기록</button>
+      <button class="btn" id="dNotice">📨 개인 공지</button>
+      ${p.is_admin ? '' : `<button class="btn ${ex?.banned ? '' : 'danger'}" id="dBan" ${has010 ? '' : 'disabled'}>${ex?.banned ? '✅ 정지 해제' : '🚫 정지'}</button>`}
+    </div>
+    ${has010 ? '' : '<p class="small msg">수정·정지 기능은 서버에 supabase/migrations/010_admin_power.sql 을 실행하면 켜집니다.</p>'}
     <dl class="kv">
       <dt>국가</dt><dd>${ctry(p.country_code)}</dd>
       <dt>순위</dt><dd>${p.rank_country ? `국가 #${fmt(p.rank_country)} · 전 세계 #${fmt(p.rank_global)}` : '기록 없음'}</dd>
-      <dt>최고 점수 / 거리</dt><dd>${fmt(p.leaderboard?.score)} · ${fmt(p.leaderboard?.dist ?? d.bestDist)} m</dd>
-      <dt>코인</dt><dd>${fmt(d.coins)} <span class="muted small">(받을 코인 ${fmt(p.pending_coins)} · 누적 결제 ${fmt(p.purchased_coins)})</span></dd>
+      <dt>최고 점수 / 거리</dt><dd>${fmt(p.leaderboard?.score ?? d.best)} · ${fmt(p.leaderboard?.dist ?? d.bestDist)} m</dd>
+      <dt>코인</dt><dd><b>${fmt(d.coins)}</b> <span class="muted small">(받을 코인 ${fmt(p.pending_coins)} · 누적 결제 ${fmt(p.purchased_coins)})</span></dd>
       <dt>장착</dt><dd>${esc(itemName(BIKES, d.bike))} · ${esc(itemName(BOXES, d.box))} · ${esc(itemName(HELMETS, d.helmet))} · ${esc(itemName(OUTFITS, d.outfit))}${d.flag ? ` · ${flag(d.flag)}` : ''}</dd>
       <dt>보유</dt><dd>바이크 ${own('ownedBikes')} · 배달통 ${own('ownedBoxes')} · 헤드기어 ${own('ownedHelmets')} · 의상 ${own('ownedOutfits')} · 국기 ${own('ownedFlags')} · 페인트 ${own('ownedPaints')}</dd>
-      <dt>부스트</dt><dd>${Object.entries(d.boosts || {}).map(([k, v]) => `${esc(k)} ${v}`).join(' · ') || '-'}</dd>
+      <dt>부스트</dt><dd>${Object.entries(d.boosts || {}).filter(([, v]) => v).map(([k, v]) => `${esc(BOOSTS.find((b) => b.id === k)?.name || k)} ×${v}`).join(' · ') || '-'}</dd>
       <dt>통계</dt><dd>판 ${fmt(d.stats?.runs ?? p.run_count)} · 총 거리 ${fmt(d.stats?.totalDist)} m · 니어미스 ${fmt(d.stats?.totalNear)} · 출석 연속 ${fmt(d.streak)}일</dd>
       <dt>가입 / 최근 로그인</dt><dd>${when(p.created_at)} / ${when(p.last_sign_in_at)} <span class="muted small">(저장 ${when(p.save_updated_at)})</span></dd>
+      ${has010 && ex.data_rev > ex.seen_rev ? '<dt>동기화</dt><dd><span class="chip warn">관리자 수정 대기</span> <span class="small muted">게임이 아직 새 값을 받지 않았어요 (다음 저장·앱 복귀 때 적용)</span></dd>' : ''}
     </dl></div>
-    <div class="card"><h3>최근 판 (${fmt(p.run_count)}판 중 30)</h3><div class="scroll"><table><tr><th>시간</th><th>맵</th><th class="num">거리</th><th class="num">점수</th><th class="num">코인</th><th class="num">시간</th><th>바이크</th></tr>
-      ${p.runs.map((r) => `<tr><td>${when(r.created_at)}</td><td>${flag(r.theme)}</td><td class="num">${fmt(r.dist)} m</td><td class="num">${fmt(r.score)}</td><td class="num">${fmt(r.coins)}</td><td class="num">${fmt(r.duration_s)}초</td><td>${esc(itemName(BIKES, r.bike))}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">기록 없음</td></tr>'}</table></div></div>
-    <div class="grid2"><div class="card"><h3>결제</h3><table>${p.purchases.map((x) => `<tr><td>${when(x.created_at)}</td><td>${esc(x.product_id)}</td><td class="num">${fmt(x.coins)}</td><td>${esc(x.platform)}</td></tr>`).join('') || '<tr><td class="muted">없음</td></tr>'}</table></div>
-      <div class="card"><h3>문의</h3><table>${p.inquiries.map((x) => `<tr class="click" data-q="${x.id}"><td>#${x.id}</td><td>${esc(x.subject || CATS[x.category])}</td><td><span class="chip ${x.status}">${STATUS[x.status]}</span></td></tr>`).join('') || '<tr><td class="muted">없음</td></tr>'}</table></div></div>
-    <div class="card"><h3>관리자 조치 기록</h3><table>${p.admin_actions.map((x) => `<tr><td>${when(x.created_at)}</td><td>${esc(x.action)}</td><td><code>${esc(JSON.stringify(x.detail))}</code></td></tr>`).join('') || '<tr><td class="muted">없음</td></tr>'}</table></div>
+    <div class="card"><div class="head"><h3>최근 판 (${fmt(p.run_count)}판 중 30)</h3>${has010 ? '<button class="btn small" id="dRuns2">전체 보기·수정 →</button>' : ''}</div><div class="scroll"><table><tr><th>시간</th><th>맵</th><th class="num">거리</th><th class="num">점수</th><th class="num">코인</th><th class="num">시간</th><th>바이크</th></tr>
+      ${p.runs.map((r) => `<tr><td>${when(r.created_at)}</td><td>${flag(r.theme)}${esc(r.theme)}</td><td class="num">${fmt(r.dist)} m</td><td class="num">${fmt(r.score)}</td><td class="num">${fmt(r.coins)}</td><td class="num">${fmt(r.duration_s)}초</td><td>${esc(itemName(BIKES, r.bike))}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">기록 없음</td></tr>'}</table></div></div>
+    <div class="grid2"><div class="card"><h3>결제</h3><table><tr><th>시간</th><th>상품</th><th class="num">코인</th><th>플랫폼</th></tr>${p.purchases.map((x) => `<tr><td>${when(x.created_at)}</td><td>${esc(x.product_id)}</td><td class="num">${fmt(x.coins)}</td><td>${esc(x.platform)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">없음</td></tr>'}</table></div>
+      <div class="card"><h3>문의</h3><table><tr><th>번호</th><th>제목</th><th>상태</th></tr>${p.inquiries.map((x) => `<tr class="click" data-q="${x.id}"><td>#${x.id}</td><td>${esc(x.subject || CATS[x.category])}</td><td><span class="chip ${x.status}">${STATUS[x.status]}</span></td></tr>`).join('') || '<tr><td colspan="3" class="muted">없음</td></tr>'}</table></div></div>
+    <div class="card"><h3>관리자 조치 기록</h3><table><tr><th>시간</th><th>작업</th><th>내용</th></tr>${p.admin_actions.map((x) => `<tr><td>${when(x.created_at)}</td><td>${esc(ACTION_NAMES[x.action] || x.action)}</td><td>${describeAction(x.action, x.detail)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">없음</td></tr>'}</table></div>
     <details class="card"><summary>저장 데이터 원본 (JSON)</summary><pre>${esc(JSON.stringify(d, null, 1))}</pre></details>`;
   $('dGrant').onclick = () => grantCoins(uid, '', () => openPlayer(uid));
+  $('dNotice').onclick = async () => { $('drawer').classList.add('hidden'); notices = null; await go('notice'); editNotice(-1, { users: [{ id: uid, name: p.nickname }] }); };
+  if (!has010) return wireInq(body);
+  $('dEdit').onclick = () => editAssets(p, uid);
+  $('dRec').onclick = () => editRecord(p, uid);
+  const toRuns = () => { $('drawer').classList.add('hidden'); Object.assign(runF, RUN_DEFAULT, { user: uid, userName: p.nickname, days: 3650 }); go('runs'); };
+  $('dRuns').onclick = toRuns;
+  if ($('dRuns2')) $('dRuns2').onclick = toRuns;
+  if ($('dBan')) $('dBan').onclick = () => setBan(uid, p.nickname, !ex.banned);
+  wireInq(body);
+}
+function wireInq(body) {
   for (const tr of body.querySelectorAll('[data-q]')) tr.onclick = () => { $('drawer').classList.add('hidden'); inqSel = Number(tr.dataset.q); inqFilter = ''; go('inq'); };
 }
 $('drawerClose').onclick = () => $('drawer').classList.add('hidden');
 $('drawer').addEventListener('click', (e) => { if (e.target === $('drawer')) $('drawer').classList.add('hidden'); });
-async function grantCoins(uid, reason = '', after) {
-  const amount = Number(prompt('지급할 코인 수 (1 ~ 1,000,000). 플레이어가 다음 접속 때 자동으로 받습니다.', '1000'));
-  if (!amount) return;
-  const why = prompt('사유 (기록에 남습니다)', reason || '보상');
-  if (why == null) return;
+
+// ---------------------------------------------------------------- 재산·프로필 수정 (010 admin_update_player)
+const OWN_CATS = [
+  ['ownedBikes', '바이크', BIKES.filter((x) => !x.special), 'bike', ['rookie']],
+  ['ownedBoxes', '배달통', BOXES.filter((x) => !x.special), 'box', ['basic']],
+  ['ownedHelmets', '헤드기어', HELMETS, 'helmet', ['basic']],
+  ['ownedOutfits', '의상', OUTFITS, 'outfit', ['jacket']],
+  ['ownedPaints', '페인트', PAINTS, null, []],
+];
+const COUNTRY_CODES = [...new Set([...SEA, ...FLAG_SHOP_CODES])];
+function editAssets(p, uid) {
+  const body = $('drawerBody');
+  const d = p.data || {};
+  const arr = (k) => (Array.isArray(d[k]) ? d[k] : []);
+  const chk = (k, id, label, extra = '') => `<label class="chk"><input type="checkbox" data-own="${k}" value="${esc(id)}" ${arr(k).includes(id) ? 'checked' : ''}>${extra}<span>${esc(label)}</span></label>`;
+  body.innerHTML = `<div class="card"><div class="head"><h2>✏️ ${esc(p.nickname)}</h2><button class="btn small" id="eaBack">← 상세로</button></div>
+      <p class="small muted">저장하면 게임이 다음 저장이나 앱 복귀 때 이 값으로 바뀌고, 플레이어 화면에 '고객지원에서 계정을 업데이트했어요'가 표시됩니다. 모든 변경은 작업 기록에 남습니다.</p>
+      <div class="form-grid">
+        <label>보유 코인<input id="eaCoins" type="number" inputmode="numeric" min="0" max="100000000" value="${Math.floor(d.coins || 0)}"></label>
+        <label>출석 연속(일)<input id="eaStreak" type="number" inputmode="numeric" min="0" value="${d.streak || 0}"></label>
+        <label>닉네임<input id="eaNick" maxlength="16" value="${esc(p.nickname)}"></label>
+        <label>랭킹 국가<select id="eaCC">${COUNTRY_CODES.map((c) => `<option value="${c}" ${c === p.country_code ? 'selected' : ''}>${c} · ${esc(countryName(c) || c)}</option>`).join('')}${p.country_code ? '' : '<option value="" selected>미정</option>'}</select></label>
+      </div>
+      <div class="row qbtn">${[1000, 10000, 100000].map((n) => `<button type="button" class="btn small" data-addc="${n}">+${fmt(n)}</button>`).join('')}<button type="button" class="btn small" data-addc="-1000">-1,000</button><button type="button" class="btn small" data-setc="0">0으로</button></div></div>
+    <div class="card"><h3>부스트 보유 개수</h3><div class="form-grid">${BOOSTS.map((b) => `<label>${esc(b.name)}<input type="number" inputmode="numeric" min="0" max="9999" data-boost="${b.id}" value="${d.boosts?.[b.id] || 0}"></label>`).join('')}</div></div>
+    <div class="card"><h3>장착</h3><div class="form-grid">${OWN_CATS.filter((c) => c[3]).map(([, label, list, eq]) => `<label>${label}<select data-eq="${eq}">${list.map((it) => `<option value="${it.id}" ${it.id === d[eq] ? 'selected' : ''}>${esc(it.name)}</option>`).join('')}</select></label>`).join('')}</div>
+      <p class="small muted">장착한 아이템은 저장할 때 자동으로 보유 목록에 들어갑니다.</p></div>
+    ${OWN_CATS.map(([k, label, list, , def]) => `<div class="card"><div class="head"><h3>${label} 보유 <small class="muted" data-cnt="${k}"></small></h3><div class="row"><button type="button" class="btn small" data-all="${k}">전체</button><button type="button" class="btn small" data-def="${k}" data-defv="${def.join(',')}">기본만</button></div></div>
+      <div class="chk-grid">${list.map((it) => chk(k, it.id, it.name)).join('')}</div></div>`).join('')}
+    <div class="card"><div class="head"><h3>국기 보유 <small class="muted" data-cnt="ownedFlags"></small></h3><div class="row"><button type="button" class="btn small" data-all="ownedFlags">전체</button><button type="button" class="btn small" data-def="ownedFlags" data-defv="">없음</button></div></div>
+      <div class="chk-grid flags">${FLAG_SHOP_CODES.map((c) => chk('ownedFlags', c, c, flag(c))).join('')}</div></div>
+    <div class="card sticky-save"><label>사유 (필수 · 작업 기록에 남음)<input id="eaWhy" placeholder="예: 결제 오류 보상, 버그 복구"></label>
+      <div class="row"><button class="btn primary" id="eaSave">변경 사항 저장</button><span id="eaMsg" class="msg"></span></div></div>`;
+  $('drawer').querySelector('.drawer-panel').scrollTop = 0;
+  const count = () => { for (const el of body.querySelectorAll('[data-cnt]')) el.textContent = `${body.querySelectorAll(`[data-own="${el.dataset.cnt}"]:checked`).length}개`; };
+  body.onchange = count;
+  count();
+  for (const b of body.querySelectorAll('[data-all]')) b.onclick = () => { for (const c of body.querySelectorAll(`[data-own="${b.dataset.all}"]`)) c.checked = true; count(); };
+  for (const b of body.querySelectorAll('[data-def]')) b.onclick = () => { const keep = b.dataset.defv.split(',').filter(Boolean); for (const c of body.querySelectorAll(`[data-own="${b.dataset.def}"]`)) c.checked = keep.includes(c.value); count(); };
+  for (const b of body.querySelectorAll('[data-addc]')) b.onclick = () => { $('eaCoins').value = Math.max(0, Number($('eaCoins').value || 0) + Number(b.dataset.addc)); };
+  for (const b of body.querySelectorAll('[data-setc]')) b.onclick = () => { $('eaCoins').value = b.dataset.setc; };
+  $('eaBack').onclick = () => openPlayer(uid);
+  $('eaSave').onclick = async () => {
+    $('eaMsg').textContent = '';
+    const patch = {}, lines = [];
+    const coins = Number($('eaCoins').value);
+    if (!Number.isFinite(coins) || coins < 0 || coins > 1e8) { $('eaMsg').textContent = '코인은 0 ~ 100,000,000'; return; }
+    if (Math.round(coins) !== Math.floor(d.coins || 0)) { patch.coins = Math.round(coins); lines.push(`코인 ${fmt(d.coins)} → ${fmt(patch.coins)}`); }
+    const streak = Math.max(0, Math.round(Number($('eaStreak').value) || 0));
+    if (streak !== (d.streak || 0)) { patch.streak = streak; lines.push(`출석 연속 ${fmt(d.streak)} → ${fmt(streak)}일`); }
+    const boosts = { ...(d.boosts || {}) };
+    for (const el of body.querySelectorAll('[data-boost]')) boosts[el.dataset.boost] = Math.max(0, Math.round(Number(el.value) || 0));
+    if (BOOSTS.some((b) => (boosts[b.id] || 0) !== (d.boosts?.[b.id] || 0))) { patch.boosts = boosts; lines.push(`부스트 ${BOOSTS.filter((b) => (boosts[b.id] || 0) !== (d.boosts?.[b.id] || 0)).map((b) => `${b.name} ${d.boosts?.[b.id] || 0} → ${boosts[b.id] || 0}`).join(', ')}`); }
+    const owned = {};
+    for (const [k, label, list] of [...OWN_CATS, ['ownedFlags', '국기', FLAG_SHOP_CODES.map((id) => ({ id }))]]) {
+      const listed = new Set(list.map((x) => x.id));
+      owned[k] = [...arr(k).filter((id) => !listed.has(id)), ...[...body.querySelectorAll(`[data-own="${k}"]:checked`)].map((c) => c.value)];
+      void label;
+    }
+    for (const el of body.querySelectorAll('[data-eq]')) {
+      const eq = el.dataset.eq, k = OWN_CATS.find((c) => c[3] === eq)[0];
+      if (!owned[k].includes(el.value)) owned[k].push(el.value);
+      if (el.value !== d[eq]) { patch[eq] = el.value; lines.push(`장착 ${eq}: ${d[eq] || '-'} → ${el.value}`); }
+    }
+    for (const [k, label] of [...OWN_CATS.map((c) => [c[0], c[1]]), ['ownedFlags', '국기']]) {
+      const a = [...arr(k)].sort().join(','), b = [...owned[k]].sort().join(',');
+      if (a !== b) {
+        patch[k] = owned[k];
+        const add = owned[k].filter((x) => !arr(k).includes(x)), del = arr(k).filter((x) => !owned[k].includes(x));
+        lines.push(`${label} ${add.length ? `+${add.length}` : ''}${del.length ? ` -${del.length}` : ''} (총 ${owned[k].length}개)`);
+      }
+    }
+    const nick = $('eaNick').value.trim();
+    if (nick !== p.nickname) {
+      if (nick.length < 2 || nick.length > 16) { $('eaMsg').textContent = '닉네임은 2~16자'; return; }
+      patch.nickname = nick; lines.push(`닉네임 ${p.nickname} → ${nick}`);
+    }
+    const cc = $('eaCC').value;
+    if (cc && cc !== p.country_code) { patch.country_code = cc; lines.push(`국가 ${p.country_code || '-'} → ${cc}`); }
+    if (!lines.length) { $('eaMsg').textContent = '바뀐 내용이 없어요'; return; }
+    const why = $('eaWhy').value.trim();
+    if (!why) { $('eaMsg').textContent = '사유를 입력하세요'; $('eaWhy').focus(); return; }
+    if (!(await confirmDialog('이대로 저장할까요?', `<ul class="diff">${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>사유: ${esc(why)}`, '저장'))) return;
+    await withBusy($('eaSave'), '저장 중…', async () => {
+      try {
+        await rpc('admin_update_player', { p_user: uid, p_patch: patch, p_reason: why });
+        toast('저장했습니다');
+        openPlayer(uid);
+      } catch (e) { $('eaMsg').textContent = e.message; }
+    });
+  };
+}
+
+// 랭킹 최고 기록 수정 / 랭킹에서 제외
+async function editRecord(p, uid) {
+  const lb = p.leaderboard;
+  const v = await formDialog({
+    title: '🏆 랭킹 기록 수정',
+    desc: `${esc(p.nickname)} · 현재 ${lb ? `${fmt(lb.score)}점 · ${fmt(lb.dist)} m` : '랭킹 기록 없음'}<br>게임 안의 최고 기록(BEST)도 같은 값으로 바뀝니다.`,
+    fields: [
+      { key: 'score', label: '최고 점수', type: 'number', value: lb?.score ?? 0, min: 0, max: 10000000 },
+      { key: 'dist', label: '최고 거리 (m)', type: 'number', value: lb?.dist ?? 0, min: 0, max: 1000000 },
+      { key: 'remove', label: '랭킹에서 완전히 제외 (최고 기록 0으로)', type: 'checkbox', value: false },
+      { key: 'why', label: '사유 (필수)', required: true },
+    ],
+    ok: '적용',
+  });
+  if (!v) return;
+  if (!v.remove && !lb) { toast('랭킹 기록이 없는 플레이어는 제외만 할 수 있어요'); return; }
   try {
-    await rpc('admin_grant_coins', { p_user: uid, p_amount: Math.round(amount), p_reason: why });
-    toast(`${fmt(amount)} 코인 지급 예약 완료`);
+    await rpc('admin_set_record', { p_user: uid, p_score: v.score ?? 0, p_dist: v.dist ?? 0, p_remove: v.remove, p_reason: v.why });
+    toast(v.remove ? '랭킹에서 제외했습니다' : '기록을 수정했습니다');
+    openPlayer(uid);
+  } catch (e) { toast(e.message); }
+}
+
+async function setBan(uid, name, banned) {
+  const v = await formDialog({
+    title: banned ? `🚫 ${name} 정지` : `✅ ${name} 정지 해제`,
+    desc: banned ? '정지하면 랭킹에서 지워지고 이후 점수가 랭킹에 올라가지 않습니다. 게임 플레이 자체는 막지 않아요.' : '다시 랭킹에 기록될 수 있습니다.',
+    fields: [{ key: 'why', label: '사유 (필수)', required: true }],
+    ok: banned ? '정지' : '해제', danger: banned,
+  });
+  if (!v) return;
+  try { await rpc('admin_set_ban', { p_user: uid, p_banned: banned, p_reason: v.why }); toast(banned ? '정지했습니다' : '해제했습니다'); openPlayer(uid); } catch (e) { toast(e.message); }
+}
+
+// ---------------------------------------------------------------- 플레이 기록 (run_logs) 조회·수정·삭제
+const RUN_DEFAULT = { q: '', user: null, userName: '', country: '', days: 30, min: 0, sort: 'recent', page: 0 };
+const runF = { ...RUN_DEFAULT };
+const RUN_PAGE = 50;
+const suspicious = (r) => r.duration_s > 0 && (r.dist / r.duration_s > 95 || r.score / r.duration_s > 4000); // 최고속(약 320km/h ≈ 89 m/s)보다 빠름 등
+async function renderRuns() {
+  main().innerHTML = `<div class="head"><h2>플레이 기록</h2><button class="btn small" id="ruRe">새로고침</button></div>
+    <form id="ruForm" class="card filters">
+      ${runF.user ? `<span class="pill">👤 ${esc(runF.userName)} <button type="button" class="btn small" id="ruClr">✕</button></span>` : `<input id="ruQ" placeholder="닉네임·아이디·UUID" value="${esc(runF.q)}">`}
+      <select id="ruC"><option value="">모든 국가</option>${SEA.map((c) => `<option value="${c}" ${c === runF.country ? 'selected' : ''}>${esc(countryName(c))}</option>`).join('')}</select>
+      <select id="ruD">${[[1, '오늘·어제'], [7, '최근 7일'], [30, '최근 30일'], [90, '최근 90일'], [365, '최근 1년'], [3650, '전체']].map(([v, l]) => `<option value="${v}" ${v === runF.days ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <input id="ruMin" type="number" inputmode="numeric" min="0" placeholder="최소 점수" value="${runF.min || ''}">
+      <select id="ruS">${[['recent', '최근순'], ['score', '점수 높은 순'], ['dist', '거리 긴 순'], ['coins', '코인 많은 순']].map(([v, l]) => `<option value="${v}" ${v === runF.sort ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <button class="btn primary">조회</button>
+    </form>
+    <div id="ruRes" class="card"><p class="muted">불러오는 중…</p></div>`;
+  $('ruRe').onclick = renderRuns;
+  if ($('ruClr')) $('ruClr').onclick = () => { runF.user = null; runF.userName = ''; runF.page = 0; renderRuns(); };
+  $('ruForm').onsubmit = (e) => {
+    e.preventDefault();
+    if ($('ruQ')) runF.q = $('ruQ').value.trim();
+    Object.assign(runF, { country: $('ruC').value, days: Number($('ruD').value), min: Number($('ruMin').value) || 0, sort: $('ruS').value, page: 0 });
+    renderRuns();
+  };
+  let res;
+  try {
+    res = await rpc('admin_list_runs', { p_user: runF.user, p_q: runF.user ? null : runF.q || null, p_country: runF.country || null, p_days: runF.days, p_min_score: runF.min || 0, p_sort: runF.sort, p_limit: RUN_PAGE, p_offset: runF.page * RUN_PAGE });
+  } catch (e) { $('ruRes').innerHTML = `<p class="msg">${esc(e.message)}</p>`; return; }
+  const rows = res.rows || [], total = Number(res.total) || 0;
+  const from = runF.page * RUN_PAGE;
+  $('ruRes').innerHTML = rows.length ? `<div class="small muted">${fmt(total)}판 · ⚠ 표시는 속도·점수가 비정상적으로 높은 판</div><div class="scroll"><table><tr><th>시간</th><th>플레이어</th><th>맵</th><th class="num">점수</th><th class="num">거리</th><th class="num">코인</th><th class="num">플레이</th><th>바이크</th><th>빌드</th><th>관리</th></tr>
+    ${rows.map((r) => `<tr><td>${when(r.created_at)}</td><td>${r.user_id ? `<a href="#" data-u="${r.user_id}"><b>${esc(r.nickname || r.login_id)}</b></a>` : '<span class="muted">게스트</span>'} ${flag(r.country_code)}</td>
+      <td>${flag(r.theme)}${esc(r.theme)}</td><td class="num"><b>${fmt(r.score)}</b>${suspicious(r) ? ' <span class="chip warn" title="비정상적으로 빠름">⚠</span>' : ''}</td><td class="num">${fmt(r.dist)} m</td><td class="num">${fmt(r.coins)}</td>
+      <td class="num">${fmt(r.duration_s)}초</td><td>${esc(itemName(BIKES, r.bike))}</td><td class="small">${/admin/.test(r.app_build) ? '<span class="chip">관리자 판</span> ' : ''}${esc(String(r.app_build || '').replace(' · admin', ''))}</td>
+      <td class="acts"><button class="btn small" data-edit="${r.id}">수정</button> <button class="btn small danger" data-del="${r.id}">삭제</button></td></tr>`).join('')}</table></div>
+    <div class="pager"><button class="btn small" id="ruPrev" ${runF.page ? '' : 'disabled'}>← 이전</button><span class="small muted">${fmt(from + 1)}–${fmt(from + rows.length)} / ${fmt(total)}</span><button class="btn small" id="ruNext" ${from + rows.length < total ? '' : 'disabled'}>다음 →</button></div>
+    <p class="small muted">플레이 기록 수정·삭제는 통계용 기록만 바꿉니다. 랭킹 최고 기록은 플레이어 상세의 <b>랭킹 기록 수정</b>에서 바꾸세요.</p>`
+    : '<p class="muted">기록 없음</p>';
+  if (!rows.length) return;
+  $('ruPrev').onclick = () => { runF.page--; renderRuns(); };
+  $('ruNext').onclick = () => { runF.page++; renderRuns(); };
+  for (const a of $('ruRes').querySelectorAll('[data-u]')) a.onclick = (e) => { e.preventDefault(); openPlayer(a.dataset.u); };
+  for (const b of $('ruRes').querySelectorAll('[data-edit]')) b.onclick = async () => {
+    const r = rows.find((x) => String(x.id) === b.dataset.edit);
+    const v = await formDialog({
+      title: `플레이 기록 #${r.id} 수정`, desc: `${esc(r.nickname || '게스트')} · ${when(r.created_at)}`,
+      fields: [{ key: 'score', label: '점수', type: 'number', value: r.score, min: 0, max: 10000000, required: true },
+        { key: 'dist', label: '거리 (m)', type: 'number', value: r.dist, min: 0, max: 1000000, required: true },
+        { key: 'coins', label: '코인', type: 'number', value: r.coins, min: 0, max: 1000000, required: true },
+        { key: 'why', label: '사유 (필수)', required: true }],
+      ok: '저장',
+    });
+    if (!v) return;
+    try { await rpc('admin_update_run', { p_id: r.id, p_score: v.score, p_dist: v.dist, p_coins: v.coins, p_reason: v.why }); toast('수정했습니다'); renderRuns(); } catch (e) { toast(e.message); }
+  };
+  for (const b of $('ruRes').querySelectorAll('[data-del]')) b.onclick = async () => {
+    const r = rows.find((x) => String(x.id) === b.dataset.del);
+    const v = await formDialog({ title: `플레이 기록 #${r.id} 삭제`, desc: `${esc(r.nickname || '게스트')} · ${fmt(r.score)}점 · ${fmt(r.dist)} m<br>삭제한 기록은 작업 기록에만 남습니다.`, fields: [{ key: 'why', label: '사유 (필수)', required: true }], ok: '삭제', danger: true });
+    if (!v) return;
+    try { await rpc('admin_delete_run', { p_id: r.id, p_reason: v.why }); toast('삭제했습니다'); renderRuns(); } catch (e) { toast(e.message); }
+  };
+}
+
+// ---------------------------------------------------------------- 관리자 작업 기록 (admin_actions)
+const ACTION_NAMES = { send_notice: '📨 개인 공지', grant_coins: '💰 코인 지급 예약', edit_run: '🎮 플레이 기록 수정', delete_run: '🗑 플레이 기록 삭제', edit_record: '🏆 랭킹 기록 수정', remove_record: '🏆 랭킹에서 제외', edit_player: '✏️ 재산·프로필 수정', ban: '🚫 정지', unban: '✅ 정지 해제' };
+const KEY_NAMES = { coins: '코인', streak: '출석', boosts: '부스트', ownedBikes: '바이크', ownedBoxes: '배달통', ownedHelmets: '헤드기어', ownedOutfits: '의상', ownedPaints: '페인트', ownedFlags: '국기', bike: '장착 바이크', box: '장착 배달통', helmet: '장착 헤드기어', outfit: '장착 의상', flag: '장착 국기', nickname: '닉네임', country_code: '국가' };
+function describeAction(action, d = {}) {
+  const why = d.reason ? ` <span class="muted">· 사유: ${esc(d.reason)}</span>` : '';
+  const sv = (v) => (Array.isArray(v) ? `${v.length}개` : v && typeof v === 'object' ? Object.entries(v).filter(([, n]) => n).map(([k, n]) => `${k}×${n}`).join(' ') || '없음' : typeof v === 'number' ? fmt(v) : esc(v ?? '-'));
+  if (action === 'grant_coins') return `+${fmt(d.amount)} 코인${why}`;
+  if (action === 'send_notice') return `「${esc(d.title)}」`;
+  if (action === 'edit_run') return `#${d.run_id} 점수 ${fmt(d.before?.score)}→${fmt(d.after?.score)} · 거리 ${fmt(d.before?.dist)}→${fmt(d.after?.dist)} · 코인 ${fmt(d.before?.coins)}→${fmt(d.after?.coins)}${why}`;
+  if (action === 'delete_run') return `#${d.run?.id} (${fmt(d.run?.score)}점 · ${fmt(d.run?.dist)} m)${why}`;
+  if (action === 'edit_record') return `${fmt(d.before?.score)}점 → ${fmt(d.after?.score)}점 · ${fmt(d.before?.dist)} → ${fmt(d.after?.dist)} m${why}`;
+  if (action === 'remove_record') return `이전 ${fmt(d.before?.score)}점${why}`;
+  if (action === 'edit_player') return Object.keys(d.after || {}).map((k) => `${KEY_NAMES[k] || esc(k)} ${sv(d.before?.[k])} → ${sv(d.after[k])}`).join(' · ') + why;
+  return d.reason ? `사유: ${esc(d.reason)}` : `<code>${esc(JSON.stringify(d))}</code>`;
+}
+let actPage = 0;
+async function renderActions() {
+  main().innerHTML = `<div class="head"><h2>관리자 작업 기록</h2><button class="btn small" id="acRe">새로고침</button></div><div id="acRes" class="card"><p class="muted">불러오는 중…</p></div>`;
+  $('acRe').onclick = renderActions;
+  let rows;
+  try { rows = await rpc('admin_list_actions', { p_limit: 100, p_offset: actPage * 100 }); } catch (e) { $('acRes').innerHTML = `<p class="msg">${esc(e.message)}</p>`; return; }
+  $('acRes').innerHTML = rows.length || actPage ? `<div class="scroll"><table><tr><th>시간</th><th>관리자</th><th>대상</th><th>작업</th><th>내용</th></tr>
+    ${rows.map((r) => `<tr><td>${when(r.created_at)}</td><td>${esc(r.admin_login || '-')}</td><td>${r.target_id ? `<a href="#" data-u="${r.target_id}">${esc(r.target_name || r.target_id.slice(0, 8))}</a>` : '-'}</td>
+      <td>${esc(ACTION_NAMES[r.action] || r.action)}</td><td class="wide">${describeAction(r.action, r.detail)}</td></tr>`).join('')}</table></div>
+    <div class="pager"><button class="btn small" id="acPrev" ${actPage ? '' : 'disabled'}>← 최근</button><span class="small muted">${actPage + 1}쪽</span><button class="btn small" id="acNext" ${rows.length === 100 ? '' : 'disabled'}>이전 기록 →</button></div>`
+    : '<p class="muted">아직 기록이 없어요.</p>';
+  for (const a of $('acRes').querySelectorAll('[data-u]')) a.onclick = (e) => { e.preventDefault(); openPlayer(a.dataset.u); };
+  if ($('acPrev')) { $('acPrev').onclick = () => { actPage--; renderActions(); }; $('acNext').onclick = () => { actPage++; renderActions(); }; }
+}
+
+async function grantCoins(uid, reason = '', after) {
+  const v = await formDialog({
+    title: '💰 코인 지급 예약', desc: '플레이어가 다음 접속(또는 앱 복귀) 때 자동으로 받습니다. 지금 보유 코인을 정확한 값으로 바꾸려면 <b>재산·프로필 수정</b>을 쓰세요.',
+    fields: [{ key: 'amount', label: '코인 수', type: 'number', value: 1000, min: 1, max: 1000000, required: true },
+      { key: 'why', label: '사유 (작업 기록에 남음)', value: reason || '보상', required: true }],
+    ok: '지급',
+  });
+  if (!v) return;
+  try {
+    await rpc('admin_grant_coins', { p_user: uid, p_amount: v.amount, p_reason: v.why });
+    toast(`${fmt(v.amount)} 코인 지급 예약 완료`);
     after?.();
   } catch (e) { toast(e.message); }
 }

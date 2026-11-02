@@ -5,6 +5,9 @@
 // - 판정: 한 판에서 **점수가 가장 높았던 기술**이 담긴 클립 하나만 보관 (클립 점수 = 그 클립 안 기술 중 최고 점수)
 // - 앞 클립이 마지막 화면을 그리는 동안 다음 점프가 오면, 앞 클립은 따로 끝까지 마무리하고 새 클립을 동시에 녹화
 //   (예전엔 이 사이의 점프가 녹화되지 않아 더 높은 기술이 빠질 수 있었음)
+// - 착지 후 자막(HOLD_MS)까지 다 찍은 클립은 녹화를 '일시정지'하고 기다림(대기 중 시간은 영상에 안 들어감).
+//   대기 클립은 이번 판 최고 기술 하나만 남기고, 판이 끝나면(finalize) 다시 이어서 **최종 점수**로 마지막 화면을 그림
+//   (예전: 착지 1.5초 뒤 그때 점수로 바로 마무리 → 최종 점수와 달랐고, 다음 점프대가 오면 착지 장면이 잘렸음)
 // - 형식: MP4(H.264+AAC) 우선, 안 되면 WebM
 const CW = 720, CH = 1280;
 const MIME = [
@@ -57,7 +60,7 @@ class Session {
     if (!rec) return;
     const chunks = [];
     rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-    rec.onstop = () => { owner._release(this.s); owner._done(chunks, this.final ?? -1); };
+    rec.onstop = () => { owner._release(this.s); owner._done(chunks, this.final ?? -1); owner.stopping--; owner._settle(); };
     rec.start();
   }
 
@@ -67,14 +70,16 @@ class Session {
     if (this.phase === 'stopped') return;
     this.phase = 'stopped';
     this.final = score;
-    try { this.rec.stop(); } catch (e) { this.o._release(this.s); }
+    if (!this.rec) return;
+    this.o.stopping++;
+    try { this.rec.stop(); } catch (e) { this.o.stopping--; this.o._release(this.s); this.o._settle(); }
   }
 
   // 착지: 이 클립의 최고 점수를 갱신하고 자막 → 잠시 뒤 마지막 화면
   land(score, title, sub) {
     if (score < 0) {
-      // 넘어진 착지: 앞서 성공한 기술이 있으면 넘어지는 장면 없이 바로 마지막 화면, 없으면 버림
-      if (this.best >= 0) this.toEnd(this.o.lastScore);
+      // 넘어진 착지: 앞서 성공한 기술이 있으면 넘어지는 장면 없이 대기(→ 판이 끝나면 마지막 화면), 없으면 버림
+      if (this.best >= 0) this.toWait();
       else this.stop(-1);
       return;
     }
@@ -84,7 +89,16 @@ class Session {
     this.stopAt = performance.now() + HOLD_MS;
   }
 
+  // 착지 자막까지 찍음: 녹화를 멈춰 두고 판이 끝나길 기다림 (일시정지가 안 되는 기기는 지금 점수로 바로 마무리)
+  toWait() {
+    try { this.rec.pause(); } catch (e) { /* 아래에서 확인 */ }
+    if (this.rec.state !== 'paused') { this.toEnd(this.o.lastScore); return; }
+    this.phase = 'wait';
+    this.o._wait(this);
+  }
+
   toEnd(score) {
+    if (this.phase === 'wait') { try { this.rec.resume(); } catch (e) { /* ignore */ } }
     this.phase = 'end';
     this.endScore = Math.floor(score || 0);
     const last = document.createElement('canvas');
@@ -102,8 +116,8 @@ class Session {
     if (this.phase === 'live') {
       this.draw(score);
       if (this.armedAt && now - this.armedAt > ARM_MS) { this.stop(-1); return; } // 점프 안 함
-      if (this.stopAt && now >= this.stopAt) this.toEnd(score);
-      else if (!this.stopAt && now - this.t0 > MAX_MS) { if (this.best >= 0) this.toEnd(score); else this.stop(-1); return; }
+      if (this.stopAt && now >= this.stopAt) this.toWait();
+      else if (!this.stopAt && now - this.t0 > MAX_MS) { if (this.best >= 0) this.toWait(); else this.stop(-1); return; }
     }
     if (this.phase === 'end') {
       this.drawEnd(now - this.endT);
@@ -263,11 +277,16 @@ export class ClipRecorder {
     this.pool = [];
     this.meta = {};
     this.lastScore = 0;
+    this.stopping = 0;     // rec.stop() 뒤 저장(onstop)을 기다리는 클립 수
+    this.waiting = null;   // 착지까지 찍고 판이 끝나길 기다리는 클립 (이번 판 최고 기술)
+    this.finalScore = null;
+    this.ready = null;     // finalize() 뒤 영상 준비 Promise
   }
 
   get supported() { return Boolean(this.mime); }
   get recording() { return this.sessions.some((s) => !s.done); }
-  get live() { return this.sessions.find((s) => s.phase === 'live' && !s.done) || null; }
+  // 지금 점프를 담는 클립 (미리 녹화 중이거나 공중). 착지 자막을 찍는 중인 클립은 따로 끝까지 진행
+  get live() { return this.sessions.find((s) => s.phase === 'live' && !s.stopAt && !s.done) || null; }
 
   // 마지막 화면용 라이더 그림을 미리 렌더 (판 시작 카운트다운 중에 호출 → 주행 중 끊김 없음)
   prepare() {
@@ -286,6 +305,10 @@ export class ClipRecorder {
   // 새 판: 지난 판 클립 정리
   reset() {
     this.cancel();
+    this.waiting = null;
+    this.finalScore = null;
+    this._resolveReady?.();
+    this.ready = null;
     if (this.best?.url) URL.revokeObjectURL(this.best.url);
     this.best = null;
   }
@@ -293,9 +316,7 @@ export class ClipRecorder {
   // 점프대가 곧 나옴: 미리 녹화 시작 (점프 직전 장면까지 담기)
   arm(meta = {}) {
     if (!this.enabled || !this.supported) return;
-    const cur = this.live;
-    if (cur && !cur.stopAt) return; // 이미 녹화 중 (미리 녹화 또는 공중)
-    if (cur) cur.toEnd(this.lastScore); // 앞 기술은 착지했음 → 앞 클립은 마지막 화면으로 마무리 (동시에 진행)
+    if (this.live || this.finalScore != null) return; // 이미 녹화 중 (미리 녹화 또는 공중) / 판 끝남
     const s = this._open(meta);
     if (s) s.armedAt = performance.now();
   }
@@ -304,9 +325,35 @@ export class ClipRecorder {
   start(meta = {}) {
     if (!this.enabled || !this.supported) return;
     const s = this.live;
-    if (s && !s.stopAt) { s.armedAt = 0; return; } // 미리 녹화하던 클립으로 이어감
-    if (s) s.toEnd(this.lastScore); // 앞 기술은 이미 착지 → 기술마다 클립을 따로 (판정은 기술 점수)
-    this._open(meta);
+    if (s) { s.armedAt = 0; return; } // 미리 녹화하던 클립으로 이어감
+    this._open(meta); // 앞 기술의 착지 자막은 그 클립이 따로 끝까지 찍음
+  }
+
+  // 대기 클립: 이번 판 최고 기술 하나만 남김 (같으면 먼저 것). 판이 이미 끝났으면 바로 마지막 화면
+  _wait(s) {
+    const w = this.waiting;
+    if (w && w !== s && !w.done) {
+      if (w.best >= s.best) { s.stop(-1); return; }
+      w.stop(-1);
+    }
+    this.waiting = s;
+    if (this.finalScore != null) s.toEnd(this.finalScore);
+  }
+
+  // 판이 끝남: 대기 클립을 이어서 최종 점수로 마지막 화면 → 완성. 반환: 영상이 준비되면(또는 없으면) 끝나는 Promise
+  finalize(score) {
+    this.finalScore = Math.floor(score || 0);
+    for (const s of this.sessions) if (s.phase === 'live' && !s.stopAt) { if (s.best >= 0) s.toWait(); else s.stop(-1); }
+    if (this.waiting && this.waiting.phase === 'wait') this.waiting.toEnd(this.finalScore);
+    this.ready = new Promise((res) => { this._resolveReady = () => { this._resolveReady = null; res(this.best); }; });
+    this._settle();
+    return this.ready;
+  }
+
+  // 판이 끝난 뒤 모든 클립이 저장까지 끝났으면 ready 를 풂
+  _settle() {
+    if (!this._resolveReady || this.stopping > 0 || this.sessions.some((s) => !s.done)) return;
+    this._resolveReady();
   }
 
   _open(meta) {
@@ -336,10 +383,9 @@ export class ClipRecorder {
     this.live?.land(score, title, sub);
   }
 
-  // 점프 전·공중에서 넘어짐: 착지 자막 대기 중이 아니면 처리
+  // 점프 전·공중에서 넘어짐 (착지 자막을 찍는 클립은 그대로 진행)
   crashed() {
-    const s = this.live;
-    if (s && !s.stopAt) s.land(-1);
+    this.live?.land(-1);
   }
 
   cancel() {
@@ -352,6 +398,7 @@ export class ClipRecorder {
     this.lastScore = score;
     for (const s of this.sessions) s.frame(score);
     this.sessions = this.sessions.filter((s) => !s.done);
+    this._settle();
   }
 
   _done(chunks, score) {

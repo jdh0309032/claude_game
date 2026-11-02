@@ -58,12 +58,12 @@ export const MODEL_CONFIG = {
 // style: 외형 변형 (models.js 의 BIKE_SHAPES 와 매칭)
 export const BIKES = [
   { id: 'rookie',  name: 'Rookie 125',         price: 0,     maxKmh: 170, accel: 1.0,  handling: 1.0,  color: 0xf2f2f2, style: 'scooter', desc: 'Starter delivery scooter' },
-  { id: 'city',    name: 'City Commuter',      price: 8000, tier: 'common',  maxKmh: 190, accel: 1.08, handling: 1.08, color: 0x2a9df4, style: 'scooter', desc: 'Nimble in tight traffic' },
+  { id: 'city',    name: 'City Commuter',      price: 8000, tier: 'common',  maxKmh: 190, accel: 1.08, handling: 1.08, color: 0x2a9df4, style: 'maxi', desc: 'Nimble in tight traffic' },
   { id: 'vintage', name: 'Vintage Classic',    price: 20000, tier: 'rare',  maxKmh: 200, accel: 1.05, handling: 1.15, color: 0x8b1e2d, style: 'classic', desc: 'Chrome and leather charm' },
-  { id: 'express', name: 'Delivery Express',   price: 35000, tier: 'rare',  maxKmh: 215, accel: 1.2,  handling: 1.15, color: 0x00b14f, style: 'express', desc: 'Built for long shifts' },
+  { id: 'express', name: 'Delivery Express',   price: 35000, tier: 'rare',  maxKmh: 215, accel: 1.2,  handling: 1.15, color: 0x00b14f, style: 'cub', desc: 'Built for long shifts' },
   { id: 'sport',   name: 'Sport Street 250',   price: 50000, tier: 'epic',  maxKmh: 240, accel: 1.3,  handling: 1.25, color: 0xff6b00, style: 'sport',   desc: 'Razor-sharp handling' },
   { id: 'enduro',  name: 'Off-Road Enduro',    price: 75000, tier: 'epic',  maxKmh: 235, accel: 1.35, handling: 1.42, color: 0xffd60a, style: 'enduro',  desc: 'Shrugs off puddles' },
-  { id: 'phantom', name: 'Phantom X',          price: 110000, tier: 'legendary', maxKmh: 280, accel: 1.5,  handling: 1.45, color: 0x7b2cbf, style: 'sport',   desc: 'Legendary hyperbike' },
+  { id: 'phantom', name: 'Phantom X',          price: 110000, tier: 'legendary', maxKmh: 280, accel: 1.5,  handling: 1.45, color: 0x7b2cbf, style: 'naked',   desc: 'Legendary hyperbike' },
   { id: 'cyber',   name: 'Cyber Pulse 3000',   price: 150000, tier: 'legendary', maxKmh: 310, accel: 1.65, handling: 1.55, color: 0x101820, style: 'cyber',   desc: 'Neon-lit future machine' },
   // 국가대표 바이크: 구매 불가. 내 국가 랭킹 실시간 1위일 때만 자동 지급·장착, 1위를 뺏기면 회수
   { id: 'national', name: 'National Team',    price: -1,    maxKmh: 320, accel: 1.7,  handling: 1.6,  color: 0xffffff, style: 'sport',   desc: 'Only for the current #1 rider of your country', special: 'national' },

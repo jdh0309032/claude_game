@@ -7,7 +7,8 @@
 import * as THREE from 'three';
 import * as M from '../js/models.js';
 import { BIKES, BOXES, OUTFITS, HELMETS } from '../js/config.js';
-const cat = new URLSearchParams(location.search).get('cat') || 'bikes';
+const QS = new URLSearchParams(location.search); const cat = QS.get('cat') || 'bikes';
+const VIEW = QS.get('view') ? QS.get('view').split(',').map(Number) : undefined; // 예: ?view=-1,0.2,0 (측면)
 const R = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 R.setSize(440, 440, false);
 R.setClearColor(0xcfe3ea, 1);
@@ -36,7 +37,7 @@ function shot(label, obj, view = [3.2, 2.0, -3.8]) {
   scene.remove(holder);
 }
 const L = {
-  bikes: () => BIKES.map((b) => [b.id, () => M.createBike(b.color, { style: b.style || b.id, national: b.id === 'national' ? 'TH' : undefined }).root]),
+  bikes: () => BIKES.map((b) => [b.id, () => M.createBike(b.color, { style: b.style || b.id, bare: QS.has('bare'), national: b.id === 'national' ? 'TH' : undefined }).root]),
   helmets: () => HELMETS.map((h) => [h.id, () => M.createItemModel('helmet', h.id)]),
   outfits: () => OUTFITS.map((o) => [o.id, () => M.createItemModel('outfit', o.id)]),
   boxes: () => BOXES.map((x) => [x.id, () => M.createItemModel('box', x.id)]),
@@ -59,7 +60,7 @@ const L = {
 }[cat]();
 (async () => {
   for (const [name, mk] of L) {
-    try { shot(name, meshOf(mk())); } catch (e) { const d = document.createElement('div'); d.className = 'c'; d.textContent = name + ' ERROR ' + e.message; document.getElementById('grid').append(d); }
+    try { shot(name, meshOf(mk()), VIEW); } catch (e) { const d = document.createElement('div'); d.className = 'c'; d.textContent = name + ' ERROR ' + e.message; document.getElementById('grid').append(d); }
     await new Promise((r) => setTimeout(r, cat === 'items' ? 120 : 0));
   }
   document.title = 'done';
